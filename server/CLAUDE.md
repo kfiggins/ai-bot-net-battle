@@ -3,7 +3,8 @@
 Node.js + TypeScript server that owns all game state. The client is just a renderer.
 
 ## Key Files
-- `src/index.ts` - Entry point, wires up sim + WS + AI + economy, runs tick loop
+- `src/index.ts` - Entry point, wires up sim + WS + AI + economy + boss, runs tick loop
+- `src/boss.ts` - Boss fight: mothership entity, phase gates (1→2→3), shield mechanics, win condition
 - `src/sim.ts` - Core simulation: player management, bullet spawning/movement, collision detection, entity lifecycle
 - `src/ws.ts` - WebSocket server, validates incoming messages with Zod, broadcasts snapshots
 - `src/ai.ts` - AI behavior for enemy entities (minions seek + shoot, towers shoot in range)
@@ -18,6 +19,7 @@ Node.js + TypeScript server that owns all game state. The client is just a rende
 - **AI runs after sim.update()** in the tick loop
 - **Economy runs after AI** in the tick loop (income accrual, build queue processing)
 - **Agent budget resets** checked after economy in tick loop
+- **Boss update** runs last: enforces shield, handles phase transitions, checks win condition
 - **Entity spawning**: `sim.addPlayer()`, `sim.spawnEnemy()`, `sim.spawnBullet()`
 - **Economy**: `economy.requestBuild()` validates funds/caps, queues build. `economy.update()` processes queue.
 
@@ -35,3 +37,4 @@ Node.js + TypeScript server that owns all game state. The client is just a rende
 - `ai.test.ts` - AI behavior tests (seeking, firing, cooldowns, cleanup)
 - `economy.test.ts` - Economy tests (income, build requests, validation, queue processing)
 - `agent.test.ts` - Agent API tests (commands, rate limiting, validation, budget)
+- `boss.test.ts` - Boss fight tests (shield, phase transitions, win condition, combat integration)

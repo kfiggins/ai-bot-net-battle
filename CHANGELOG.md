@@ -1,5 +1,18 @@
 # Changelog
 
+## Phase 5: Boss Fight Structure (Mothership + Phases)
+
+### Added
+- Entity kind: `mothership` added to protocol
+- Constants: mothership HP (500), radius (40)
+- Server: `BossManager` with phase gates, shield mechanics, win condition
+- Server: Phase transitions: Phase 1 (towers shield) → Phase 2 (minions shield) → Phase 3 (vulnerable)
+- Server: Shield prevents all mothership damage while active
+- Server: Match ends when mothership HP reaches 0
+- Snapshot schema updated with optional `phase` info (current phase, objectives, remaining, matchOver, mothershipShielded)
+- HTTP `/state/summary` includes phase info
+- Client: Mothership rendered as large magenta circle (r=40)
+
 ## Phase 4: Agent API (MCP-Ready)
 
 ### Added

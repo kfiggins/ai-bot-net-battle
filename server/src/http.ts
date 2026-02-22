@@ -2,6 +2,7 @@ import http from "node:http";
 import { Economy } from "./economy.js";
 import { Simulation } from "./sim.js";
 import { AgentAPI } from "./agent.js";
+import { BossManager } from "./boss.js";
 
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -16,7 +17,8 @@ export function createHTTPServer(
   port: number,
   sim: Simulation,
   economy: Economy,
-  agent: AgentAPI
+  agent: AgentAPI,
+  boss: BossManager
 ): http.Server {
   const server = http.createServer(async (req, res) => {
     res.setHeader("Content-Type", "application/json");
@@ -34,12 +36,14 @@ export function createHTTPServer(
     if (req.method === "GET" && req.url === "/state/summary") {
       const summary = economy.getSummary(sim);
       const budget = agent.getBudgetInfo();
+      const phase = boss.getPhaseInfo(sim);
       res.writeHead(200);
       res.end(
         JSON.stringify({
           ...summary,
           strategy: agent.strategy,
           agentBudget: budget,
+          phase,
         })
       );
       return;

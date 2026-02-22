@@ -15,6 +15,7 @@ Vite + TypeScript + Phaser 3 client. This is a **renderer + input device only** 
   - `bullet`: yellow (team 1) or red (team 2), r=4
   - `minion_ship`: orange (0xff6644), r=12
   - `tower`: red (0xff2222), r=20
+  - `mothership`: magenta (0xff00ff), r=40
 - **Networking**: Sends `player_input` messages every frame, receives `snapshot` messages from server
 - **Sprite lifecycle**: Creates sprites on first appearance, updates positions, destroys when entity leaves snapshot
 

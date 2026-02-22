@@ -15,15 +15,14 @@ pnpm dev
 ```
 
 ## Deliverables
-- [ ] Mothership entity with shield/vulnerability rules
-- [ ] Shield up while towers/ships alive
-- [ ] Phase gates:
-  - Phase 1: towers only
-  - Phase 2: minions unlocked
-  - Phase 3: elite minions (optional)
-  - Final: mothership vulnerable
-- [ ] State summary includes current phase + remaining objectives
-- [ ] Win condition: kill mothership ends match
+- [x] Mothership entity with shield/vulnerability rules
+- [x] Shield up while towers alive (phase 1), minions alive (phase 2)
+- [x] Phase gates:
+  - Phase 1: towers only (shield from towers)
+  - Phase 2: minions (shield from minions)
+  - Phase 3: mothership vulnerable
+- [x] State summary includes current phase + remaining objectives
+- [x] Win condition: kill mothership ends match
 
 ## Key Files to Create/Modify
 - `/shared/protocol.ts` - Mothership entity, phase state, objectives

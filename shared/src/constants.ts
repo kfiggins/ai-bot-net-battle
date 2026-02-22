@@ -25,6 +25,9 @@ export const TOWER_RADIUS = 20;
 export const TOWER_FIRE_COOLDOWN_TICKS = 20; // fires every ~0.67 seconds
 export const TOWER_FIRE_RANGE = 300; // pixels
 
+export const MOTHERSHIP_HP = 500;
+export const MOTHERSHIP_RADIUS = 40;
+
 export const ENEMY_TEAM = 2;
 
 // Economy

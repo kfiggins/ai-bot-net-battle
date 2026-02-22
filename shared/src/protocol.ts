@@ -8,7 +8,7 @@ export const Vec2Schema = z.object({
 });
 export type Vec2 = z.infer<typeof Vec2Schema>;
 
-export const EntityKind = z.enum(["player_ship", "bullet", "minion_ship", "tower"]);
+export const EntityKind = z.enum(["player_ship", "bullet", "minion_ship", "tower", "mothership"]);
 export type EntityKind = z.infer<typeof EntityKind>;
 
 export const EntitySchema = z.object({
@@ -42,11 +42,21 @@ export type PlayerInputMessage = z.infer<typeof PlayerInputMessageSchema>;
 
 // --- Server → Client ---
 
+export const PhaseInfoSchema = z.object({
+  current: z.number().int(),
+  objectives: z.array(z.string()),
+  remaining: z.record(z.string(), z.number()),
+  matchOver: z.boolean(),
+  mothershipShielded: z.boolean(),
+}).optional();
+export type PhaseInfo = z.infer<typeof PhaseInfoSchema>;
+
 export const SnapshotMessageSchema = z.object({
   v: z.literal(1),
   type: z.literal("snapshot"),
   tick: z.number().int(),
   entities: z.array(EntitySchema),
+  phase: PhaseInfoSchema,
 });
 export type SnapshotMessage = z.infer<typeof SnapshotMessageSchema>;
 

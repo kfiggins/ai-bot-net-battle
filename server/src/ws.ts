@@ -52,9 +52,16 @@ export function createWSServer(
 
 export function broadcastSnapshot(
   clients: Map<string, ConnectedClient>,
-  sim: Simulation
+  sim: Simulation,
+  phaseInfo?: {
+    current: number;
+    objectives: string[];
+    remaining: Record<string, number>;
+    matchOver: boolean;
+    mothershipShielded: boolean;
+  }
 ): void {
-  const snapshot = JSON.stringify(sim.getSnapshot());
+  const snapshot = JSON.stringify(sim.getSnapshot(phaseInfo));
   for (const client of clients.values()) {
     if (client.ws.readyState === WebSocket.OPEN) {
       client.ws.send(snapshot);

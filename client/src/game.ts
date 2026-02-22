@@ -95,6 +95,10 @@ export class GameScene extends Phaser.Scene {
         color = 0xff2222;
         radius = 20;
         break;
+      case "mothership":
+        color = 0xff00ff;
+        radius = 40;
+        break;
       default:
         color = 0xffffff;
         radius = 8;

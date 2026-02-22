@@ -17,6 +17,7 @@ import {
   MINION_RADIUS,
   TOWER_HP,
   TOWER_RADIUS,
+  MOTHERSHIP_RADIUS,
   ENEMY_TEAM,
   WORLD_WIDTH,
   WORLD_HEIGHT,
@@ -246,12 +247,19 @@ export class Simulation {
     }
   }
 
-  getSnapshot() {
+  getSnapshot(phaseInfo?: {
+    current: number;
+    objectives: string[];
+    remaining: Record<string, number>;
+    matchOver: boolean;
+    mothershipShielded: boolean;
+  }) {
     return {
       v: 1 as const,
       type: "snapshot" as const,
       tick: this.tick,
       entities: Array.from(this.entities.values()),
+      phase: phaseInfo,
     };
   }
 }
@@ -264,6 +272,8 @@ export function entityRadius(kind: string): number {
       return MINION_RADIUS;
     case "tower":
       return TOWER_RADIUS;
+    case "mothership":
+      return MOTHERSHIP_RADIUS;
     default:
       return PLAYER_RADIUS;
   }
