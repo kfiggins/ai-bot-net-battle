@@ -27,6 +27,23 @@ export const TOWER_FIRE_RANGE = 300; // pixels
 
 export const ENEMY_TEAM = 2;
 
+// Economy
+export const STARTING_BALANCE = 200;
+export const INCOME_PER_SECOND = 10;
+export const INCOME_PER_TICK = INCOME_PER_SECOND / TICK_RATE;
+
+export const UNIT_COSTS: Record<string, number> = {
+  minion_ship: 50,
+  tower: 100,
+};
+
+export const UNIT_CAPS: Record<string, number> = {
+  minion_ship: 20,
+  tower: 10,
+};
+
+export const BUILD_COOLDOWN_TICKS = 15; // 0.5 seconds between builds
+
 export const WORLD_WIDTH = 1024;
 export const WORLD_HEIGHT = 768;
 

@@ -1,5 +1,15 @@
 # Changelog
 
+## Phase 3: Economy + Build System
+
+### Added
+- Economy constants: starting balance, income rate, unit costs, unit caps, build cooldown
+- Server: `Economy` class with balance tracking, income accrual, build queue
+- Server: `requestBuild()` with validation (funds, caps, queued counts)
+- Server: Build queue processes on tick — spawns entities after cooldown
+- Server: HTTP server on port 3001 with `GET /state/summary` endpoint
+- Script: `scripts/print_summary.sh` for quick state inspection
+
 ## Phase 2: Enemy Basics (Non-LLM AI)
 
 ### Added

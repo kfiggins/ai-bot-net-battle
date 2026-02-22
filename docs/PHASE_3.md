@@ -15,11 +15,11 @@ pnpm dev
 ```
 
 ## Deliverables
-- [ ] Resource income per second (configurable rate)
-- [ ] Costs defined for `minion_ship` and `tower`
-- [ ] Build queue with cooldowns and unit caps
-- [ ] Server-side validation: insufficient funds → reject
-- [ ] `/state/summary` HTTP endpoint returns game state
+- [x] Resource income per second (configurable rate)
+- [x] Costs defined for `minion_ship` and `tower`
+- [x] Build queue with cooldowns and unit caps
+- [x] Server-side validation: insufficient funds → reject
+- [x] `/state/summary` HTTP endpoint returns game state (port 3001)
 
 ## Key Files to Create/Modify
 - `/shared/protocol.ts` - Add economy types, costs, build commands
@@ -59,7 +59,7 @@ pnpm dev
 2. Wait for resources to accumulate
 3. Issue spawn commands — verify they deduct resources
 4. Issue spawn when broke — verify rejection
-5. `curl http://localhost:3000/state/summary` — verify JSON response with balance, income, counts
+5. `curl http://localhost:3001/state/summary` — verify JSON response with balance, income, counts
 
 ## Notes
 - Economy runs on server tick, not wall clock

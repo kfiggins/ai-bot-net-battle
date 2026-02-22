@@ -2,12 +2,17 @@ import { TICK_MS, SNAPSHOT_INTERVAL, SERVER_PORT } from "shared";
 import { Simulation } from "./sim.js";
 import { createWSServer, broadcastSnapshot } from "./ws.js";
 import { AIManager } from "./ai.js";
+import { Economy } from "./economy.js";
+import { createHTTPServer } from "./http.js";
 
 const sim = new Simulation();
 const ai = new AIManager();
+const economy = new Economy();
 const { clients } = createWSServer(SERVER_PORT, sim);
 
+createHTTPServer(SERVER_PORT, sim, economy);
 console.log(`[server] WebSocket server listening on ws://localhost:${SERVER_PORT}`);
+console.log(`[server] HTTP server listening on http://localhost:${SERVER_PORT + 1}`);
 
 // Temporary: spawn some enemies for testing
 function spawnTestEnemies() {
@@ -25,6 +30,7 @@ spawnTestEnemies();
 setInterval(() => {
   sim.update();
   ai.update(sim);
+  economy.update(sim, ai);
 
   if (sim.tick % SNAPSHOT_INTERVAL === 0) {
     broadcastSnapshot(clients, sim);
