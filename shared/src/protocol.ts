@@ -40,14 +40,41 @@ export const PlayerInputMessageSchema = z.object({
 });
 export type PlayerInputMessage = z.infer<typeof PlayerInputMessageSchema>;
 
+export const JoinRoomMessageSchema = z.object({
+  v: z.literal(1),
+  type: z.literal("join_room"),
+  roomId: z.string().min(1).max(32),
+  displayName: z.string().min(1).max(20).optional(),
+  reconnectToken: z.string().optional(),
+});
+export type JoinRoomMessage = z.infer<typeof JoinRoomMessageSchema>;
+
 // --- Server → Client ---
+
+export const LobbyStateSchema = z.object({
+  state: z.enum(["waiting", "in_progress", "finished"]),
+  players: z.number().int(),
+  maxPlayers: z.number().int(),
+});
+export type LobbyState = z.infer<typeof LobbyStateSchema>;
 
 export const WelcomeMessageSchema = z.object({
   v: z.literal(1),
   type: z.literal("welcome"),
+  roomId: z.string(),
   entityId: z.string(),
+  reconnectToken: z.string(),
+  lobby: LobbyStateSchema,
 });
 export type WelcomeMessage = z.infer<typeof WelcomeMessageSchema>;
+
+export const RoomErrorMessageSchema = z.object({
+  v: z.literal(1),
+  type: z.literal("room_error"),
+  error: z.string(),
+  detail: z.string().optional(),
+});
+export type RoomErrorMessage = z.infer<typeof RoomErrorMessageSchema>;
 
 export const PhaseInfoSchema = z.object({
   current: z.number().int(),
@@ -111,11 +138,15 @@ export type AgentCommand = z.infer<typeof AgentCommandSchema>;
 
 // --- Union of all wire messages ---
 
-export const ClientMessageSchema = PlayerInputMessageSchema;
-export type ClientMessage = PlayerInputMessage;
+export const ClientMessageSchema = z.discriminatedUnion("type", [
+  PlayerInputMessageSchema,
+  JoinRoomMessageSchema,
+]);
+export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
 export const ServerMessageSchema = z.discriminatedUnion("type", [
   WelcomeMessageSchema,
+  RoomErrorMessageSchema,
   SnapshotMessageSchema,
 ]);
 export type ServerMessage = z.infer<typeof ServerMessageSchema>;

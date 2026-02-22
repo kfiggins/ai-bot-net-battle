@@ -1,5 +1,26 @@
 # Changelog
 
+## Phase 7: Multiplayer Rooms + Match Lifecycle
+
+### Added
+- Server: `Room` class encapsulating per-match state (sim, AI, economy, agent, boss, players, tick loop)
+- Server: `RoomManager` for creating, finding, and cleaning up rooms (max 10 rooms, 4 players each)
+- Protocol: `join_room` client message with roomId, displayName, reconnectToken
+- Protocol: `welcome` message now includes roomId, reconnectToken, lobby state
+- Protocol: `room_error` message for join failures (room_full, room_limit_reached, already_joined)
+- Protocol: `ClientMessageSchema` is now a discriminated union of `join_room` and `player_input`
+- Server: Reconnect support — disconnected players have 30s to rejoin with their token
+- Server: Room-scoped HTTP endpoints: `GET /rooms`, `GET /rooms/:id/summary`, `POST /rooms/:id/agent/command`
+- Client: Sends `join_room` on connect, room ID from URL hash (e.g. `#my-room`, defaults to "default")
+- Client: Auto-reconnect on disconnect using stored reconnectToken
+- Constants: MAX_ROOMS (10), MAX_PLAYERS_PER_ROOM (4), RECONNECT_TIMEOUT_MS (30s)
+- Room test suite (19 tests)
+
+### Changed
+- Server: Entry point simplified — no global sim/ai/economy, rooms manage their own tick loops
+- Server: WS server uses join_room handshake instead of auto-adding players on connect
+- Server: HTTP endpoints are now room-scoped (legacy `/state/summary` returns redirect hint)
+
 ## Phase 6: Polish for Playtests
 
 ### Added

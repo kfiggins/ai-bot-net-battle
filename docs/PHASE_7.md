@@ -16,13 +16,13 @@ pnpm dev
 ```
 
 ## Deliverables
-- [ ] Room model (`roomId`) with create/join/leave flow
-- [ ] Per-room simulation instances (no shared-state bleed between matches)
-- [ ] Room-scoped snapshot broadcast (`snapshot` includes `roomId`)
-- [ ] Basic lobby state: waiting, in_progress, finished
-- [ ] Reconnect support: player can rejoin same room and reclaim entity/role
-- [ ] Match start/end/reset lifecycle for each room
-- [ ] HTTP/WS validation that rejects cross-room input
+- [x] Room model (`roomId`) with create/join/leave flow
+- [x] Per-room simulation instances (no shared-state bleed between matches)
+- [x] Room-scoped snapshot broadcast (each room has its own tick loop)
+- [x] Basic lobby state: waiting, in_progress, finished
+- [x] Reconnect support: player can rejoin same room and reclaim entity/role
+- [x] Match start/end/reset lifecycle for each room
+- [x] HTTP/WS validation that rejects cross-room input
 
 ## Key Files to Create/Modify
 - `/shared/src/protocol.ts` - Add room/lobby message contracts

@@ -45,7 +45,10 @@ export class GameScene extends Phaser.Scene {
     this.net.setSnapshotHandler((snapshot) => {
       this.interpolator.pushSnapshot(snapshot);
     });
-    this.net.connect();
+
+    // Use URL hash as room ID, e.g. http://localhost:5173/#my-room
+    const roomId = window.location.hash.slice(1) || "default";
+    this.net.connect(roomId);
   }
 
   update(_time: number, dt: number): void {

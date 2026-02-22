@@ -12,14 +12,14 @@ Vite + TypeScript + Phaser 3 client. This is a **renderer + input device only** 
 - `index.html` - Vite entry HTML
 
 ## Architecture
-- **Input**: Arrow keys for movement, spacebar/mouse-click for firing, mouse position for aim angle
+- **Input**: Arrow keys or WASD for movement, spacebar/mouse-click for firing, mouse position for aim angle
 - **Rendering**: Entities rendered as colored circles based on `entity.kind` and `entity.team`
   - `player_ship`: green (0x00ff88), r=16
   - `bullet`: yellow (team 1) or red (team 2), r=4
   - `minion_ship`: orange (0xff6644), r=12
   - `tower`: red (0xff2222), r=20
   - `mothership`: magenta (0xff00ff), r=40
-- **Networking**: Sends `player_input` messages every frame, receives `snapshot` messages from server
+- **Networking**: Sends `join_room` on connect (room from URL hash, e.g. `#my-room`), then `player_input` each frame. Auto-reconnects with token on disconnect.
 - **Sprite lifecycle**: Creates sprites on first appearance, updates positions, destroys when entity leaves snapshot
 - **Interpolation**: SnapshotInterpolator lerps between last two snapshots at 15Hz for smooth 60fps rendering
 - **VFX**: Client-only visual effects — particle explosions on death, white hit flashes, pulsing spawn telegraphs

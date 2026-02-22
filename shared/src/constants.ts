@@ -56,3 +56,8 @@ export const WORLD_HEIGHT = 768;
 
 export const SERVER_PORT = 3000;
 export const CLIENT_PORT = 5173;
+
+// Rooms
+export const MAX_ROOMS = 10;
+export const MAX_PLAYERS_PER_ROOM = 4;
+export const RECONNECT_TIMEOUT_MS = 30_000; // 30 seconds to reconnect

@@ -1,8 +1,5 @@
 import http from "node:http";
-import { Economy } from "./economy.js";
-import { Simulation } from "./sim.js";
-import { AgentAPI } from "./agent.js";
-import { BossManager } from "./boss.js";
+import { RoomManager } from "./room-manager.js";
 
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -15,10 +12,7 @@ function readBody(req: http.IncomingMessage): Promise<string> {
 
 export function createHTTPServer(
   port: number,
-  sim: Simulation,
-  economy: Economy,
-  agent: AgentAPI,
-  boss: BossManager
+  roomManager: RoomManager
 ): http.Server {
   const server = http.createServer(async (req, res) => {
     res.setHeader("Content-Type", "application/json");
@@ -26,22 +20,39 @@ export function createHTTPServer(
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-    // Handle CORS preflight
     if (req.method === "OPTIONS") {
       res.writeHead(204);
       res.end();
       return;
     }
 
-    if (req.method === "GET" && req.url === "/state/summary") {
-      const summary = economy.getSummary(sim);
-      const budget = agent.getBudgetInfo();
-      const phase = boss.getPhaseInfo(sim);
+    // List all rooms
+    if (req.method === "GET" && req.url === "/rooms") {
+      res.writeHead(200);
+      res.end(JSON.stringify({ rooms: roomManager.getRoomSummaries() }));
+      return;
+    }
+
+    // Room-specific state summary: /rooms/:roomId/summary
+    const summaryMatch = req.url?.match(/^\/rooms\/([^/]+)\/summary$/);
+    if (req.method === "GET" && summaryMatch) {
+      const room = roomManager.getRoom(summaryMatch[1]);
+      if (!room) {
+        res.writeHead(404);
+        res.end(JSON.stringify({ error: "room_not_found" }));
+        return;
+      }
+
+      const summary = room.economy.getSummary(room.sim);
+      const budget = room.agent.getBudgetInfo();
+      const phase = room.boss.getPhaseInfo(room.sim);
       res.writeHead(200);
       res.end(
         JSON.stringify({
+          roomId: room.roomId,
+          state: room.state,
           ...summary,
-          strategy: agent.strategy,
+          strategy: room.agent.strategy,
           agentBudget: budget,
           phase,
         })
@@ -49,17 +60,36 @@ export function createHTTPServer(
       return;
     }
 
-    if (req.method === "POST" && req.url === "/agent/command") {
+    // Room-specific agent command: /rooms/:roomId/agent/command
+    const cmdMatch = req.url?.match(/^\/rooms\/([^/]+)\/agent\/command$/);
+    if (req.method === "POST" && cmdMatch) {
+      const room = roomManager.getRoom(cmdMatch[1]);
+      if (!room) {
+        res.writeHead(404);
+        res.end(JSON.stringify({ error: "room_not_found" }));
+        return;
+      }
+
       try {
         const body = await readBody(req);
         const data = JSON.parse(body);
-        const result = agent.processCommand(data, sim, economy);
+        const result = room.agent.processCommand(data, room.sim, room.economy);
         res.writeHead(result.ok ? 200 : 400);
         res.end(JSON.stringify(result));
       } catch {
         res.writeHead(400);
         res.end(JSON.stringify({ ok: false, error: "invalid_json" }));
       }
+      return;
+    }
+
+    // Legacy endpoints hint
+    if (req.url === "/state/summary" || req.url === "/agent/command") {
+      res.writeHead(400);
+      res.end(JSON.stringify({
+        error: "use_room_endpoints",
+        detail: "Use /rooms/:roomId/summary or /rooms/:roomId/agent/command",
+      }));
       return;
     }
 

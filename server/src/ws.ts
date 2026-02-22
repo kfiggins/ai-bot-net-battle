@@ -1,73 +1,137 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { ClientMessageSchema } from "shared";
-import { Simulation } from "./sim.js";
-
-export interface ConnectedClient {
-  ws: WebSocket;
-  playerId: string;
-}
+import { RoomManager } from "./room-manager.js";
 
 export function createWSServer(
   port: number,
-  sim: Simulation
-): { wss: WebSocketServer; clients: Map<string, ConnectedClient> } {
+  roomManager: RoomManager
+): WebSocketServer {
   const wss = new WebSocketServer({ port });
-  const clients = new Map<string, ConnectedClient>();
-  let nextId = 1;
 
   wss.on("connection", (ws) => {
-    const playerId = `player_${nextId++}`;
-    console.log(`[ws] ${playerId} connected`);
-
-    const entity = sim.addPlayer(playerId);
-    clients.set(playerId, { ws, playerId });
-
-    // Tell the client which entity they control
-    ws.send(JSON.stringify({ v: 1, type: "welcome", entityId: entity.id }));
+    let joined = false;
 
     ws.on("message", (raw) => {
       try {
         const data = JSON.parse(raw.toString());
         const result = ClientMessageSchema.safeParse(data);
         if (!result.success) {
-          console.warn(`[ws] Invalid message from ${playerId}:`, result.error.message);
+          ws.send(JSON.stringify({
+            v: 1,
+            type: "room_error",
+            error: "invalid_message",
+            detail: result.error.message,
+          }));
           return;
         }
 
         const msg = result.data;
-        if (msg.type === "player_input") {
-          sim.setInput(playerId, msg.input);
+
+        if (msg.type === "join_room") {
+          if (joined) {
+            ws.send(JSON.stringify({
+              v: 1,
+              type: "room_error",
+              error: "already_joined",
+              detail: "You are already in a room",
+            }));
+            return;
+          }
+
+          // Try reconnect first
+          if (msg.reconnectToken) {
+            for (const room of roomManager.rooms.values()) {
+              const player = room.reconnectPlayer(ws, msg.reconnectToken);
+              if (player) {
+                joined = true;
+                console.log(`[ws] ${player.playerId} reconnected to room ${room.roomId}`);
+                ws.send(JSON.stringify({
+                  v: 1,
+                  type: "welcome",
+                  roomId: room.roomId,
+                  entityId: player.entityId,
+                  reconnectToken: player.reconnectToken,
+                  lobby: room.getLobbyState(),
+                }));
+                return;
+              }
+            }
+          }
+
+          // Create or join room
+          const room = roomManager.getOrCreateRoom(msg.roomId);
+          if (!room) {
+            ws.send(JSON.stringify({
+              v: 1,
+              type: "room_error",
+              error: "room_limit_reached",
+              detail: "Maximum number of rooms reached",
+            }));
+            return;
+          }
+
+          const displayName = msg.displayName || "Player";
+          const player = room.addPlayer(ws, displayName);
+          if (!player) {
+            ws.send(JSON.stringify({
+              v: 1,
+              type: "room_error",
+              error: "room_full",
+              detail: "Room is full or match has ended",
+            }));
+            return;
+          }
+
+          joined = true;
+          console.log(`[ws] ${player.playerId} joined room ${room.roomId}`);
+
+          ws.send(JSON.stringify({
+            v: 1,
+            type: "welcome",
+            roomId: room.roomId,
+            entityId: player.entityId,
+            reconnectToken: player.reconnectToken,
+            lobby: room.getLobbyState(),
+          }));
+          return;
         }
-      } catch (err) {
-        console.warn(`[ws] Failed to parse message from ${playerId}`);
+
+        if (msg.type === "player_input") {
+          if (!joined) return;
+
+          const room = roomManager.findRoomByWs(ws);
+          if (!room) return;
+
+          const player = room.findPlayerByWs(ws);
+          if (!player) return;
+
+          room.sim.setInput(player.playerId, msg.input);
+        }
+      } catch {
+        ws.send(JSON.stringify({
+          v: 1,
+          type: "room_error",
+          error: "parse_error",
+        }));
       }
     });
 
     ws.on("close", () => {
-      console.log(`[ws] ${playerId} disconnected`);
-      sim.removePlayer(playerId);
-      clients.delete(playerId);
+      const room = roomManager.findRoomByWs(ws);
+      if (!room) return;
+
+      const player = room.findPlayerByWs(ws);
+      if (!player) return;
+
+      console.log(`[ws] ${player.playerId} disconnected from room ${room.roomId}`);
+      room.disconnectPlayer(player.playerId);
     });
   });
 
-  return { wss, clients };
-}
+  // Periodic cleanup of empty/finished rooms
+  setInterval(() => {
+    roomManager.cleanup();
+  }, 10_000);
 
-export function broadcastSnapshot(
-  clients: Map<string, ConnectedClient>,
-  sim: Simulation,
-  phaseInfo?: {
-    current: number;
-    objectives: string[];
-    remaining: Record<string, number>;
-    matchOver: boolean;
-    mothershipShielded: boolean;
-  }
-): void {
-  const snapshot = JSON.stringify(sim.getSnapshot(phaseInfo));
-  for (const client of clients.values()) {
-    if (client.ws.readyState === WebSocket.OPEN) {
-      client.ws.send(snapshot);
-    }
-  }
+  return wss;
 }
