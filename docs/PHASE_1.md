@@ -15,10 +15,10 @@ pnpm dev
 ```
 
 ## Deliverables
-- [ ] Player fires bullets (client sends "fire" input with aim angle)
-- [ ] Server spawns bullet entities and simulates them
-- [ ] Server handles collisions (bullet vs enemy, simple circle/rect)
-- [ ] Client renders bullet entities and hit effects from snapshots
+- [x] Player fires bullets (client sends "fire" input with aim angle)
+- [x] Server spawns bullet entities and simulates them
+- [x] Server handles collisions (bullet vs enemy, simple circle/rect)
+- [x] Client renders bullet entities and hit effects from snapshots
 
 ## Key Files to Create/Modify
 - `/shared/protocol.ts` - Add bullet entity kind, fire input

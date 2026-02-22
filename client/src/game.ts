@@ -6,7 +6,9 @@ export class GameScene extends Phaser.Scene {
   private net: NetClient;
   private entitySprites: Map<string, Phaser.GameObjects.Arc> = new Map();
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private fireKey!: Phaser.Input.Keyboard.Key;
   private latestSnapshot: SnapshotMessage | null = null;
+  private mouseWorldPos = { x: 0, y: 0 };
 
   constructor() {
     super({ key: "GameScene" });
@@ -16,6 +18,11 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.setBackgroundColor("#111122");
     this.cursors = this.input.keyboard!.createCursorKeys();
+    this.fireKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+
+    this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+      this.mouseWorldPos = { x: pointer.worldX, y: pointer.worldY };
+    });
 
     this.net.setSnapshotHandler((snapshot) => {
       this.latestSnapshot = snapshot;
@@ -24,18 +31,21 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(): void {
-    // Send input
+    const aimAngle = Math.atan2(
+      this.mouseWorldPos.y - (WORLD_HEIGHT / 2),
+      this.mouseWorldPos.x - (WORLD_WIDTH / 2)
+    );
+
     const input: PlayerInputData = {
       up: this.cursors.up.isDown,
       down: this.cursors.down.isDown,
       left: this.cursors.left.isDown,
       right: this.cursors.right.isDown,
-      fire: false,
-      aimAngle: 0,
+      fire: this.fireKey.isDown || this.input.activePointer.isDown,
+      aimAngle,
     };
     this.net.sendInput(input);
 
-    // Render latest snapshot
     if (this.latestSnapshot) {
       this.renderSnapshot(this.latestSnapshot);
     }
@@ -56,7 +66,6 @@ export class GameScene extends Phaser.Scene {
       sprite.setPosition(entity.pos.x, entity.pos.y);
     }
 
-    // Remove sprites for entities no longer in snapshot
     for (const [id, sprite] of this.entitySprites) {
       if (!activeIds.has(id)) {
         sprite.destroy();
@@ -66,7 +75,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createEntitySprite(entity: Entity): Phaser.GameObjects.Arc {
-    const color = entity.kind === "player_ship" ? 0x00ff88 : 0xff4444;
+    const color = entity.kind === "player_ship" ? 0x00ff88 : 0xffff44;
     const radius = entity.kind === "player_ship" ? 16 : 4;
     return this.add.circle(entity.pos.x, entity.pos.y, radius, color);
   }

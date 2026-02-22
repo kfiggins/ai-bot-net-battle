@@ -5,6 +5,13 @@ import {
   TICK_RATE,
   PLAYER_SPEED,
   PLAYER_HP,
+  PLAYER_RADIUS,
+  BULLET_SPEED,
+  BULLET_HP,
+  BULLET_RADIUS,
+  BULLET_TTL_TICKS,
+  BULLET_DAMAGE,
+  FIRE_COOLDOWN_TICKS,
   WORLD_WIDTH,
   WORLD_HEIGHT,
 } from "shared";
@@ -13,12 +20,20 @@ export interface PlayerState {
   id: string;
   entityId: string;
   input: PlayerInputData;
+  fireCooldown: number;
+}
+
+export interface BulletState {
+  entityId: string;
+  ownerId: string;
+  ttl: number;
 }
 
 export class Simulation {
   tick = 0;
   entities: Map<string, Entity> = new Map();
   players: Map<string, PlayerState> = new Map();
+  bullets: Map<string, BulletState> = new Map();
 
   private dt = 1 / TICK_RATE;
 
@@ -47,6 +62,7 @@ export class Simulation {
         fire: false,
         aimAngle: 0,
       },
+      fireCooldown: 0,
     });
     return entity;
   }
@@ -68,8 +84,13 @@ export class Simulation {
 
   update(): void {
     this.tick++;
+    this.updatePlayers();
+    this.updateBullets();
+    this.checkCollisions();
+    this.removeDeadEntities();
+  }
 
-    // Update player entities based on input
+  private updatePlayers(): void {
     for (const player of this.players.values()) {
       const entity = this.entities.get(player.entityId);
       if (!entity) continue;
@@ -97,6 +118,102 @@ export class Simulation {
       // Clamp to world bounds
       entity.pos.x = Math.max(0, Math.min(WORLD_WIDTH, entity.pos.x));
       entity.pos.y = Math.max(0, Math.min(WORLD_HEIGHT, entity.pos.y));
+
+      // Handle firing
+      if (player.fireCooldown > 0) {
+        player.fireCooldown--;
+      }
+      if (input.fire && player.fireCooldown <= 0) {
+        this.spawnBullet(entity, player.id, input.aimAngle);
+        player.fireCooldown = FIRE_COOLDOWN_TICKS;
+      }
+    }
+  }
+
+  private spawnBullet(
+    owner: Entity,
+    ownerId: string,
+    aimAngle: number
+  ): Entity {
+    const entityId = uuid();
+    const vx = Math.cos(aimAngle) * BULLET_SPEED;
+    const vy = Math.sin(aimAngle) * BULLET_SPEED;
+    const entity: Entity = {
+      id: entityId,
+      kind: "bullet",
+      pos: {
+        x: owner.pos.x + Math.cos(aimAngle) * (PLAYER_RADIUS + BULLET_RADIUS + 2),
+        y: owner.pos.y + Math.sin(aimAngle) * (PLAYER_RADIUS + BULLET_RADIUS + 2),
+      },
+      vel: { x: vx, y: vy },
+      hp: BULLET_HP,
+      team: owner.team,
+    };
+    this.entities.set(entityId, entity);
+    this.bullets.set(entityId, {
+      entityId,
+      ownerId,
+      ttl: BULLET_TTL_TICKS,
+    });
+    return entity;
+  }
+
+  private updateBullets(): void {
+    for (const [entityId, bullet] of this.bullets) {
+      const entity = this.entities.get(entityId);
+      if (!entity) {
+        this.bullets.delete(entityId);
+        continue;
+      }
+
+      // Move bullet
+      entity.pos.x += entity.vel.x * this.dt;
+      entity.pos.y += entity.vel.y * this.dt;
+
+      // Decrement TTL
+      bullet.ttl--;
+
+      // Remove if expired or out of bounds
+      if (
+        bullet.ttl <= 0 ||
+        entity.pos.x < -BULLET_RADIUS ||
+        entity.pos.x > WORLD_WIDTH + BULLET_RADIUS ||
+        entity.pos.y < -BULLET_RADIUS ||
+        entity.pos.y > WORLD_HEIGHT + BULLET_RADIUS
+      ) {
+        entity.hp = 0;
+      }
+    }
+  }
+
+  checkCollisions(): void {
+    for (const [bulletId] of this.bullets) {
+      const bulletEntity = this.entities.get(bulletId);
+      if (!bulletEntity || bulletEntity.hp <= 0) continue;
+
+      for (const [entityId, target] of this.entities) {
+        if (entityId === bulletId) continue;
+        if (target.kind === "bullet") continue;
+        if (target.team === bulletEntity.team) continue;
+        if (target.hp <= 0) continue;
+
+        const targetRadius = entityRadius(target.kind);
+
+        if (circlesOverlap(bulletEntity.pos, BULLET_RADIUS, target.pos, targetRadius)) {
+          target.hp -= BULLET_DAMAGE;
+          bulletEntity.hp = 0;
+          break;
+        }
+      }
+    }
+  }
+
+  private removeDeadEntities(): void {
+    for (const [id, entity] of this.entities) {
+      if (entity.hp <= 0) {
+        this.entities.delete(id);
+        this.bullets.delete(id);
+      }
     }
   }
 
@@ -108,4 +225,26 @@ export class Simulation {
       entities: Array.from(this.entities.values()),
     };
   }
+}
+
+export function entityRadius(kind: string): number {
+  switch (kind) {
+    case "bullet":
+      return BULLET_RADIUS;
+    default:
+      return PLAYER_RADIUS;
+  }
+}
+
+export function circlesOverlap(
+  a: { x: number; y: number },
+  ar: number,
+  b: { x: number; y: number },
+  br: number
+): boolean {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const distSq = dx * dx + dy * dy;
+  const radSum = ar + br;
+  return distSq <= radSum * radSum;
 }

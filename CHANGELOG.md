@@ -1,5 +1,22 @@
 # Changelog
 
+## Phase 1: Real Game Loop, Minimal Combat
+
+### Added
+- Bullet constants: speed, radius, TTL, damage, fire cooldown
+- Server: Bullet spawning from player fire input with aim angle
+- Server: Bullet movement simulation with TTL and out-of-bounds removal
+- Server: Circle-based collision detection (bullet vs entity)
+- Server: Damage application and dead entity cleanup
+- Server: Fire cooldown per player
+- Client: Spacebar and mouse-click firing
+- Client: Mouse-based aim angle
+- `entityRadius()` helper for extensible collision radii
+
+### Changed
+- Simulation `update()` refactored into `updatePlayers()`, `updateBullets()`, `checkCollisions()`, `removeDeadEntities()`
+- PlayerState now tracks `fireCooldown`
+
 ## Phase 0: Monorepo Boot + Hello Multiplayer
 
 ### Added
