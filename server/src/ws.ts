@@ -19,8 +19,11 @@ export function createWSServer(
     const playerId = `player_${nextId++}`;
     console.log(`[ws] ${playerId} connected`);
 
-    sim.addPlayer(playerId);
+    const entity = sim.addPlayer(playerId);
     clients.set(playerId, { ws, playerId });
+
+    // Tell the client which entity they control
+    ws.send(JSON.stringify({ v: 1, type: "welcome", entityId: entity.id }));
 
     ws.on("message", (raw) => {
       try {

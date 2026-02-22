@@ -42,6 +42,13 @@ export type PlayerInputMessage = z.infer<typeof PlayerInputMessageSchema>;
 
 // --- Server → Client ---
 
+export const WelcomeMessageSchema = z.object({
+  v: z.literal(1),
+  type: z.literal("welcome"),
+  entityId: z.string(),
+});
+export type WelcomeMessage = z.infer<typeof WelcomeMessageSchema>;
+
 export const PhaseInfoSchema = z.object({
   current: z.number().int(),
   objectives: z.array(z.string()),
@@ -107,5 +114,8 @@ export type AgentCommand = z.infer<typeof AgentCommandSchema>;
 export const ClientMessageSchema = PlayerInputMessageSchema;
 export type ClientMessage = PlayerInputMessage;
 
-export const ServerMessageSchema = SnapshotMessageSchema;
-export type ServerMessage = SnapshotMessage;
+export const ServerMessageSchema = z.discriminatedUnion("type", [
+  WelcomeMessageSchema,
+  SnapshotMessageSchema,
+]);
+export type ServerMessage = z.infer<typeof ServerMessageSchema>;

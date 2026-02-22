@@ -10,6 +10,7 @@ export class GameScene extends Phaser.Scene {
   private interpolator: SnapshotInterpolator;
   private entitySprites: Map<string, Phaser.GameObjects.Arc> = new Map();
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private wasd!: { w: Phaser.Input.Keyboard.Key; a: Phaser.Input.Keyboard.Key; s: Phaser.Input.Keyboard.Key; d: Phaser.Input.Keyboard.Key };
   private fireKey!: Phaser.Input.Keyboard.Key;
   private mouseWorldPos = { x: 0, y: 0 };
   private vfx!: VFXManager;
@@ -26,6 +27,12 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.setBackgroundColor("#111122");
     this.cursors = this.input.keyboard!.createCursorKeys();
+    this.wasd = {
+      w: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
+      a: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
+      s: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.S),
+      d: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+    };
     this.fireKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
     this.vfx = new VFXManager(this);
@@ -42,16 +49,28 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, dt: number): void {
+    // Calculate aim angle from player's position toward cursor
+    let playerX = WORLD_WIDTH / 2;
+    let playerY = WORLD_HEIGHT / 2;
+    const selfId = this.net.selfEntityId;
+    if (selfId) {
+      const sprite = this.entitySprites.get(selfId);
+      if (sprite) {
+        playerX = sprite.x;
+        playerY = sprite.y;
+      }
+    }
+
     const aimAngle = Math.atan2(
-      this.mouseWorldPos.y - (WORLD_HEIGHT / 2),
-      this.mouseWorldPos.x - (WORLD_WIDTH / 2)
+      this.mouseWorldPos.y - playerY,
+      this.mouseWorldPos.x - playerX
     );
 
     const input: PlayerInputData = {
-      up: this.cursors.up.isDown,
-      down: this.cursors.down.isDown,
-      left: this.cursors.left.isDown,
-      right: this.cursors.right.isDown,
+      up: this.cursors.up.isDown || this.wasd.w.isDown,
+      down: this.cursors.down.isDown || this.wasd.s.isDown,
+      left: this.cursors.left.isDown || this.wasd.a.isDown,
+      right: this.cursors.right.isDown || this.wasd.d.isDown,
       fire: this.fireKey.isDown || this.input.activePointer.isDown,
       aimAngle,
     };

@@ -1,8 +1,9 @@
-import { PlayerInputData, SnapshotMessage, SnapshotMessageSchema, SERVER_PORT } from "shared";
+import { PlayerInputData, SnapshotMessage, ServerMessageSchema, SERVER_PORT } from "shared";
 
 export class NetClient {
   private ws: WebSocket | null = null;
   private onSnapshot: ((snapshot: SnapshotMessage) => void) | null = null;
+  selfEntityId: string | null = null;
 
   connect(): void {
     this.ws = new WebSocket(`ws://localhost:${SERVER_PORT}`);
@@ -14,9 +15,15 @@ export class NetClient {
     this.ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        const result = SnapshotMessageSchema.safeParse(data);
-        if (result.success && this.onSnapshot) {
-          this.onSnapshot(result.data);
+        const result = ServerMessageSchema.safeParse(data);
+        if (!result.success) return;
+
+        const msg = result.data;
+        if (msg.type === "welcome") {
+          this.selfEntityId = msg.entityId;
+          console.log("[net] Assigned entity:", msg.entityId);
+        } else if (msg.type === "snapshot" && this.onSnapshot) {
+          this.onSnapshot(msg);
         }
       } catch {
         console.warn("[net] Failed to parse server message");
