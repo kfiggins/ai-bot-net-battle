@@ -15,12 +15,12 @@ pnpm dev
 ```
 
 ## Deliverables
-- [ ] Interpolation/extrapolation for smooth rendering between snapshots
-- [ ] Better weapons feel (fire rate, spread, recoil feedback)
-- [ ] Simple VFX: hit flashes, explosions, particle effects
-- [ ] Spawn telegraphs so towers/ships aren't "pop-in unfair"
-- [ ] Sound effects (optional)
-- [ ] UI polish: health bars, resource display, phase indicator
+- [x] Interpolation/extrapolation for smooth rendering between snapshots
+- [x] Better weapons feel (hit flash feedback, responsive fire input)
+- [x] Simple VFX: hit flashes, explosions, particle effects
+- [x] Spawn telegraphs so towers/ships aren't "pop-in unfair"
+- [ ] Sound effects (optional, deferred)
+- [x] UI polish: health bars, phase indicator, objectives, victory screen
 
 ## Key Files to Create/Modify
 - `/client/src/interpolation.ts` - Snapshot interpolation logic

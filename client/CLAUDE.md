@@ -4,8 +4,11 @@ Vite + TypeScript + Phaser 3 client. This is a **renderer + input device only** 
 
 ## Key Files
 - `src/main.ts` - Entry point, creates the Phaser game
-- `src/game.ts` - Main game scene: handles input, renders snapshots, manages entity sprites
+- `src/game.ts` - Main game scene: handles input, renders snapshots, manages entity sprites, VFX, HUD
 - `src/net.ts` - WebSocket client, sends player input, receives/validates snapshots with Zod
+- `src/interpolation.ts` - Snapshot interpolation: lerps entity positions between server snapshots for smooth rendering
+- `src/vfx.ts` - Visual effects: death explosions (particle bursts), hit flashes (white tint), spawn telegraphs (pulsing rings)
+- `src/ui.ts` - HUD: phase indicator, objectives display, health bars (color-coded by HP ratio), victory screen
 - `index.html` - Vite entry HTML
 
 ## Architecture
@@ -18,6 +21,9 @@ Vite + TypeScript + Phaser 3 client. This is a **renderer + input device only** 
   - `mothership`: magenta (0xff00ff), r=40
 - **Networking**: Sends `player_input` messages every frame, receives `snapshot` messages from server
 - **Sprite lifecycle**: Creates sprites on first appearance, updates positions, destroys when entity leaves snapshot
+- **Interpolation**: SnapshotInterpolator lerps between last two snapshots at 15Hz for smooth 60fps rendering
+- **VFX**: Client-only visual effects — particle explosions on death, white hit flashes, pulsing spawn telegraphs
+- **HUD**: Phase indicator with shield status, objective text, per-entity health bars (hidden at full HP), victory overlay
 
 ## Rules
 - **Never** compute game state client-side (no local bullet spawning, no local collision)

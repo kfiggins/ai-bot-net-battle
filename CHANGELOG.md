@@ -1,5 +1,17 @@
 # Changelog
 
+## Phase 6: Polish for Playtests
+
+### Added
+- Client: `SnapshotInterpolator` — lerps entity positions between 15Hz snapshots for smooth 60fps rendering
+- Client: `VFXManager` — particle burst explosions on entity death, white hit flash on damage, pulsing ring spawn telegraphs
+- Client: `HUD` — phase indicator with shield status, objectives display, per-entity health bars (color-coded, hidden at full HP), victory overlay
+- Client: Event detection — tracks HP changes for hit flashes, entity disappearance for death explosions
+- Interpolation test suite (8 tests)
+
+### Changed
+- `game.ts` refactored: extracted `getColor()` / `getRadius()` helpers, split rendering into `detectEvents()` + `renderEntities()`, integrated interpolation pipeline
+
 ## Phase 5: Boss Fight Structure (Mothership + Phases)
 
 ### Added
