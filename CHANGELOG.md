@@ -1,5 +1,15 @@
 # Changelog
 
+## Phase 4: Agent API (MCP-Ready)
+
+### Added
+- Zod schemas: `SpawnShipCommandSchema`, `BuildTowerCommandSchema`, `SetStrategyCommandSchema`, `AgentCommandSchema` (discriminated union)
+- Server: `AgentAPI` class with command processing, rate limiting (10 cmds / 30s), budget tracking
+- Server: `POST /agent/command` endpoint with Zod validation and structured responses
+- Server: Enhanced `/state/summary` with strategy and agent budget info
+- Agent constants: budget max, budget reset period
+- Scripts: `curl_spawn_minions.sh`, `curl_build_tower.sh`
+
 ## Phase 3: Economy + Build System
 
 ### Added

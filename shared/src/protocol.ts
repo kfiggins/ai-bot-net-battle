@@ -50,6 +50,48 @@ export const SnapshotMessageSchema = z.object({
 });
 export type SnapshotMessage = z.infer<typeof SnapshotMessageSchema>;
 
+// --- Agent → Server ---
+
+export const SpawnShipCommandSchema = z.object({
+  v: z.literal(1),
+  type: z.literal("agent_command"),
+  command: z.literal("spawn_ship"),
+  params: z.object({
+    kind: z.enum(["minion_ship"]),
+    count: z.number().int().min(1).max(5),
+    lane: z.enum(["top", "mid", "bottom"]).optional(),
+  }),
+});
+export type SpawnShipCommand = z.infer<typeof SpawnShipCommandSchema>;
+
+export const BuildTowerCommandSchema = z.object({
+  v: z.literal(1),
+  type: z.literal("agent_command"),
+  command: z.literal("build_tower"),
+  params: z.object({
+    x: z.number(),
+    y: z.number(),
+  }),
+});
+export type BuildTowerCommand = z.infer<typeof BuildTowerCommandSchema>;
+
+export const SetStrategyCommandSchema = z.object({
+  v: z.literal(1),
+  type: z.literal("agent_command"),
+  command: z.literal("set_strategy"),
+  params: z.object({
+    mode: z.enum(["aggressive", "defensive", "balanced"]),
+  }),
+});
+export type SetStrategyCommand = z.infer<typeof SetStrategyCommandSchema>;
+
+export const AgentCommandSchema = z.discriminatedUnion("command", [
+  SpawnShipCommandSchema,
+  BuildTowerCommandSchema,
+  SetStrategyCommandSchema,
+]);
+export type AgentCommand = z.infer<typeof AgentCommandSchema>;
+
 // --- Union of all wire messages ---
 
 export const ClientMessageSchema = PlayerInputMessageSchema;

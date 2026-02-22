@@ -15,12 +15,12 @@ pnpm dev
 ```
 
 ## Deliverables
-- [ ] `POST /agent/command` endpoint
-- [ ] `GET /state/summary` endpoint (enhanced from Phase 3)
-- [ ] Rate limiting + command budget (anti-spam)
-- [ ] Command types: `spawn_ship`, `build_tower`, `set_strategy`
-- [ ] Structured, terse command results
-- [ ] Commands applied on tick boundaries (not immediately)
+- [x] `POST /agent/command` endpoint (port 3001)
+- [x] `GET /state/summary` endpoint enhanced with strategy and agent budget
+- [x] Rate limiting + command budget (10 per 30 seconds)
+- [x] Command types: `spawn_ship`, `build_tower`, `set_strategy`
+- [x] Structured, terse command results
+- [x] Commands applied via build queue (tick boundary spawning)
 
 ## Key Files to Create/Modify
 - `/shared/protocol.ts` - Agent command schemas

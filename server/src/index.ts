@@ -3,14 +3,16 @@ import { Simulation } from "./sim.js";
 import { createWSServer, broadcastSnapshot } from "./ws.js";
 import { AIManager } from "./ai.js";
 import { Economy } from "./economy.js";
+import { AgentAPI } from "./agent.js";
 import { createHTTPServer } from "./http.js";
 
 const sim = new Simulation();
 const ai = new AIManager();
 const economy = new Economy();
+const agent = new AgentAPI();
 const { clients } = createWSServer(SERVER_PORT, sim);
 
-createHTTPServer(SERVER_PORT, sim, economy);
+createHTTPServer(SERVER_PORT, sim, economy, agent);
 console.log(`[server] WebSocket server listening on ws://localhost:${SERVER_PORT}`);
 console.log(`[server] HTTP server listening on http://localhost:${SERVER_PORT + 1}`);
 
@@ -31,6 +33,7 @@ setInterval(() => {
   sim.update();
   ai.update(sim);
   economy.update(sim, ai);
+  agent.update(sim);
 
   if (sim.tick % SNAPSHOT_INTERVAL === 0) {
     broadcastSnapshot(clients, sim);

@@ -1,0 +1,179 @@
+import {
+  AgentCommand,
+  AgentCommandSchema,
+} from "shared";
+import {
+  AGENT_BUDGET_MAX,
+  AGENT_BUDGET_RESET_TICKS,
+  UNIT_COSTS,
+  WORLD_WIDTH,
+  WORLD_HEIGHT,
+} from "shared";
+import { Simulation } from "./sim.js";
+import { Economy } from "./economy.js";
+
+export interface AgentCommandResult {
+  ok: boolean;
+  applied_at_tick?: number;
+  cost?: number;
+  remaining_balance?: number;
+  remaining_budget?: number;
+  error?: string;
+  detail?: string;
+}
+
+export class AgentAPI {
+  private budgetRemaining = AGENT_BUDGET_MAX;
+  private budgetResetAtTick = AGENT_BUDGET_RESET_TICKS;
+  strategy: "aggressive" | "defensive" | "balanced" = "balanced";
+
+  update(sim: Simulation): void {
+    if (sim.tick >= this.budgetResetAtTick) {
+      this.budgetRemaining = AGENT_BUDGET_MAX;
+      this.budgetResetAtTick = sim.tick + AGENT_BUDGET_RESET_TICKS;
+    }
+  }
+
+  processCommand(
+    raw: unknown,
+    sim: Simulation,
+    economy: Economy
+  ): AgentCommandResult {
+    // Validate schema
+    const parsed = AgentCommandSchema.safeParse(raw);
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: "invalid_command",
+        detail: parsed.error.message,
+      };
+    }
+
+    // Check budget
+    if (this.budgetRemaining <= 0) {
+      return {
+        ok: false,
+        error: "rate_limited",
+        detail: `Budget exhausted. Resets at tick ${this.budgetResetAtTick}`,
+        remaining_budget: 0,
+      };
+    }
+
+    const cmd = parsed.data;
+    let result: AgentCommandResult;
+
+    switch (cmd.command) {
+      case "spawn_ship":
+        result = this.handleSpawnShip(cmd, sim, economy);
+        break;
+      case "build_tower":
+        result = this.handleBuildTower(cmd, sim, economy);
+        break;
+      case "set_strategy":
+        result = this.handleSetStrategy(cmd, sim);
+        break;
+    }
+
+    if (result.ok) {
+      this.budgetRemaining--;
+      result.remaining_budget = this.budgetRemaining;
+      result.applied_at_tick = sim.tick;
+    }
+
+    return result;
+  }
+
+  private handleSpawnShip(
+    cmd: Extract<AgentCommand, { command: "spawn_ship" }>,
+    sim: Simulation,
+    economy: Economy
+  ): AgentCommandResult {
+    const { kind, count, lane } = cmd.params;
+    let totalCost = 0;
+
+    for (let i = 0; i < count; i++) {
+      const y = this.laneToY(lane);
+      const buildResult = economy.requestBuild(
+        { unitKind: kind, x: WORLD_WIDTH - 80, y },
+        sim
+      );
+      if (!buildResult.ok) {
+        return {
+          ok: false,
+          error: buildResult.error,
+          detail: buildResult.detail,
+        };
+      }
+      totalCost += UNIT_COSTS[kind] || 0;
+    }
+
+    return {
+      ok: true,
+      cost: totalCost,
+      remaining_balance: Math.floor(economy.balance),
+    };
+  }
+
+  private handleBuildTower(
+    cmd: Extract<AgentCommand, { command: "build_tower" }>,
+    sim: Simulation,
+    economy: Economy
+  ): AgentCommandResult {
+    const { x, y } = cmd.params;
+
+    // Clamp to world bounds
+    const cx = Math.max(0, Math.min(WORLD_WIDTH, x));
+    const cy = Math.max(0, Math.min(WORLD_HEIGHT, y));
+
+    const buildResult = economy.requestBuild(
+      { unitKind: "tower", x: cx, y: cy },
+      sim
+    );
+
+    if (!buildResult.ok) {
+      return {
+        ok: false,
+        error: buildResult.error,
+        detail: buildResult.detail,
+      };
+    }
+
+    return {
+      ok: true,
+      cost: UNIT_COSTS.tower,
+      remaining_balance: Math.floor(economy.balance),
+    };
+  }
+
+  private handleSetStrategy(
+    cmd: Extract<AgentCommand, { command: "set_strategy" }>,
+    sim: Simulation
+  ): AgentCommandResult {
+    this.strategy = cmd.params.mode;
+    return {
+      ok: true,
+      cost: 0,
+      remaining_balance: undefined,
+    };
+  }
+
+  private laneToY(lane?: "top" | "mid" | "bottom"): number {
+    switch (lane) {
+      case "top":
+        return WORLD_HEIGHT * 0.2;
+      case "bottom":
+        return WORLD_HEIGHT * 0.8;
+      case "mid":
+      default:
+        return WORLD_HEIGHT * 0.5;
+    }
+  }
+
+  getBudgetInfo() {
+    return {
+      remaining: this.budgetRemaining,
+      max: AGENT_BUDGET_MAX,
+      resetAtTick: this.budgetResetAtTick,
+    };
+  }
+}

@@ -5,6 +5,7 @@ import {
   EntitySchema,
   Vec2Schema,
   ClientMessageSchema,
+  AgentCommandSchema,
 } from "./protocol.js";
 
 describe("Vec2Schema", () => {
@@ -175,5 +176,67 @@ describe("ClientMessageSchema", () => {
       },
     };
     expect(ClientMessageSchema.parse(msg)).toEqual(msg);
+  });
+});
+
+describe("AgentCommandSchema", () => {
+  it("accepts spawn_ship command", () => {
+    const cmd = {
+      v: 1,
+      type: "agent_command",
+      command: "spawn_ship",
+      params: { kind: "minion_ship", count: 2, lane: "top" },
+    };
+    expect(AgentCommandSchema.parse(cmd)).toEqual(cmd);
+  });
+
+  it("accepts build_tower command", () => {
+    const cmd = {
+      v: 1,
+      type: "agent_command",
+      command: "build_tower",
+      params: { x: 500, y: 300 },
+    };
+    expect(AgentCommandSchema.parse(cmd)).toEqual(cmd);
+  });
+
+  it("accepts set_strategy command", () => {
+    const cmd = {
+      v: 1,
+      type: "agent_command",
+      command: "set_strategy",
+      params: { mode: "aggressive" },
+    };
+    expect(AgentCommandSchema.parse(cmd)).toEqual(cmd);
+  });
+
+  it("rejects unknown command", () => {
+    const cmd = {
+      v: 1,
+      type: "agent_command",
+      command: "unknown",
+      params: {},
+    };
+    expect(() => AgentCommandSchema.parse(cmd)).toThrow();
+  });
+
+  it("rejects spawn count over max", () => {
+    const cmd = {
+      v: 1,
+      type: "agent_command",
+      command: "spawn_ship",
+      params: { kind: "minion_ship", count: 10 },
+    };
+    expect(() => AgentCommandSchema.parse(cmd)).toThrow();
+  });
+
+  it("rejects invalid strategy mode", () => {
+    const cmd = {
+      v: 1,
+      type: "agent_command",
+      command: "set_strategy",
+      params: { mode: "invalid_mode" },
+    };
+    expect(() => AgentCommandSchema.parse(cmd)).toThrow();
   });
 });

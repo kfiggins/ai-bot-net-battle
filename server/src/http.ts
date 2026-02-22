@@ -1,20 +1,61 @@
 import http from "node:http";
 import { Economy } from "./economy.js";
 import { Simulation } from "./sim.js";
+import { AgentAPI } from "./agent.js";
+
+function readBody(req: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", (chunk) => (body += chunk));
+    req.on("end", () => resolve(body));
+    req.on("error", reject);
+  });
+}
 
 export function createHTTPServer(
   port: number,
   sim: Simulation,
-  economy: Economy
+  economy: Economy,
+  agent: AgentAPI
 ): http.Server {
-  const server = http.createServer((req, res) => {
+  const server = http.createServer(async (req, res) => {
     res.setHeader("Content-Type", "application/json");
     res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+    // Handle CORS preflight
+    if (req.method === "OPTIONS") {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
 
     if (req.method === "GET" && req.url === "/state/summary") {
       const summary = economy.getSummary(sim);
+      const budget = agent.getBudgetInfo();
       res.writeHead(200);
-      res.end(JSON.stringify(summary));
+      res.end(
+        JSON.stringify({
+          ...summary,
+          strategy: agent.strategy,
+          agentBudget: budget,
+        })
+      );
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/agent/command") {
+      try {
+        const body = await readBody(req);
+        const data = JSON.parse(body);
+        const result = agent.processCommand(data, sim, economy);
+        res.writeHead(result.ok ? 200 : 400);
+        res.end(JSON.stringify(result));
+      } catch {
+        res.writeHead(400);
+        res.end(JSON.stringify({ ok: false, error: "invalid_json" }));
+      }
       return;
     }
 
@@ -22,6 +63,6 @@ export function createHTTPServer(
     res.end(JSON.stringify({ error: "not_found" }));
   });
 
-  server.listen(port + 1); // HTTP on port 3001
+  server.listen(port + 1);
   return server;
 }

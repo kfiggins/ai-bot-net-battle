@@ -44,6 +44,10 @@ export const UNIT_CAPS: Record<string, number> = {
 
 export const BUILD_COOLDOWN_TICKS = 15; // 0.5 seconds between builds
 
+// Agent API
+export const AGENT_BUDGET_MAX = 10; // commands per budget window
+export const AGENT_BUDGET_RESET_TICKS = 30 * 30; // 30 seconds at 30Hz
+
 export const WORLD_WIDTH = 1024;
 export const WORLD_HEIGHT = 768;
 
