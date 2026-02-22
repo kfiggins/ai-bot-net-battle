@@ -1,6 +1,7 @@
 import { v4 as uuid } from "uuid";
 import {
   Entity,
+  EntityKind,
   PlayerInputData,
   TICK_RATE,
   PLAYER_SPEED,
@@ -12,6 +13,11 @@ import {
   BULLET_TTL_TICKS,
   BULLET_DAMAGE,
   FIRE_COOLDOWN_TICKS,
+  MINION_HP,
+  MINION_RADIUS,
+  TOWER_HP,
+  TOWER_RADIUS,
+  ENEMY_TEAM,
   WORLD_WIDTH,
   WORLD_HEIGHT,
 } from "shared";
@@ -82,6 +88,29 @@ export class Simulation {
     }
   }
 
+  spawnEnemy(kind: "minion_ship" | "tower", x: number, y: number): Entity {
+    const entityId = uuid();
+    const hp = kind === "minion_ship" ? MINION_HP : TOWER_HP;
+    const entity: Entity = {
+      id: entityId,
+      kind,
+      pos: { x, y },
+      vel: { x: 0, y: 0 },
+      hp,
+      team: ENEMY_TEAM,
+    };
+    this.entities.set(entityId, entity);
+    return entity;
+  }
+
+  getEntitiesByKind(kind: EntityKind): Entity[] {
+    return Array.from(this.entities.values()).filter((e) => e.kind === kind);
+  }
+
+  getEntitiesByTeam(team: number): Entity[] {
+    return Array.from(this.entities.values()).filter((e) => e.team === team);
+  }
+
   update(): void {
     this.tick++;
     this.updatePlayers();
@@ -130,7 +159,7 @@ export class Simulation {
     }
   }
 
-  private spawnBullet(
+  spawnBullet(
     owner: Entity,
     ownerId: string,
     aimAngle: number
@@ -231,6 +260,10 @@ export function entityRadius(kind: string): number {
   switch (kind) {
     case "bullet":
       return BULLET_RADIUS;
+    case "minion_ship":
+      return MINION_RADIUS;
+    case "tower":
+      return TOWER_RADIUS;
     default:
       return PLAYER_RADIUS;
   }

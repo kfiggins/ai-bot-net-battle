@@ -14,6 +14,19 @@ export const BULLET_TTL_TICKS = 90; // 3 seconds at 30Hz
 export const BULLET_DAMAGE = 10;
 export const FIRE_COOLDOWN_TICKS = 6; // ~5 shots/second at 30Hz
 
+export const MINION_SPEED = 120; // pixels per second
+export const MINION_HP = 30;
+export const MINION_RADIUS = 12;
+export const MINION_FIRE_COOLDOWN_TICKS = 30; // fires every 1 second
+export const MINION_FIRE_RANGE = 250; // pixels
+
+export const TOWER_HP = 100;
+export const TOWER_RADIUS = 20;
+export const TOWER_FIRE_COOLDOWN_TICKS = 20; // fires every ~0.67 seconds
+export const TOWER_FIRE_RANGE = 300; // pixels
+
+export const ENEMY_TEAM = 2;
+
 export const WORLD_WIDTH = 1024;
 export const WORLD_HEIGHT = 768;
 

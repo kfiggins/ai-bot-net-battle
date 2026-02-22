@@ -8,7 +8,7 @@ export const Vec2Schema = z.object({
 });
 export type Vec2 = z.infer<typeof Vec2Schema>;
 
-export const EntityKind = z.enum(["player_ship", "bullet"]);
+export const EntityKind = z.enum(["player_ship", "bullet", "minion_ship", "tower"]);
 export type EntityKind = z.infer<typeof EntityKind>;
 
 export const EntitySchema = z.object({

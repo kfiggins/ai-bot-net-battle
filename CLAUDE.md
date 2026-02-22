@@ -64,5 +64,13 @@ Deterministic update order in the tick loop.
 - No client-side game state cheating
 - CHANGELOG.md tracks what changed per phase
 
+## Agent Context Files
+Each major directory has its own `CLAUDE.md` with package-specific context:
+- `/shared/CLAUDE.md` - Schema conventions, entity model, how to add new types
+- `/server/CLAUDE.md` - Simulation architecture, update order, key classes
+- `/client/CLAUDE.md` - Rendering approach, input handling, sprite management
+
+These files are kept up-to-date as each phase is completed so any agent can quickly understand the codebase.
+
 ## Current Phase
 Check `/docs/` for the latest PHASE_X.md to understand current progress.

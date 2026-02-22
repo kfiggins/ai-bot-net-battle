@@ -1,5 +1,19 @@
 # Changelog
 
+## Phase 2: Enemy Basics (Non-LLM AI)
+
+### Added
+- Entity kinds: `minion_ship`, `tower` added to protocol
+- Constants: minion/tower HP, speed, radius, fire cooldown, fire range
+- Server: `AIManager` class with per-entity AI states and fire cooldowns
+- Server: Minion AI — seeks nearest player, stops when close, shoots periodically
+- Server: Tower AI — stationary, shoots nearest player in range
+- Server: `sim.spawnEnemy()`, `sim.getEntitiesByKind()`, `sim.getEntitiesByTeam()`
+- Server: `entityRadius()` extended for minion_ship and tower
+- Client: Distinct colors/sizes for all entity types (player=green, minion=orange, tower=red)
+- CLAUDE.md files in `/shared`, `/server`, `/client` for quick agent context
+- Root CLAUDE.md updated with agent context file convention
+
 ## Phase 1: Real Game Loop, Minimal Combat
 
 ### Added

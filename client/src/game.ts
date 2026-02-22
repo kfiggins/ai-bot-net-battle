@@ -75,8 +75,31 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createEntitySprite(entity: Entity): Phaser.GameObjects.Arc {
-    const color = entity.kind === "player_ship" ? 0x00ff88 : 0xffff44;
-    const radius = entity.kind === "player_ship" ? 16 : 4;
+    let color: number;
+    let radius: number;
+
+    switch (entity.kind) {
+      case "player_ship":
+        color = 0x00ff88;
+        radius = 16;
+        break;
+      case "bullet":
+        color = entity.team === 1 ? 0xffff44 : 0xff4444;
+        radius = 4;
+        break;
+      case "minion_ship":
+        color = 0xff6644;
+        radius = 12;
+        break;
+      case "tower":
+        color = 0xff2222;
+        radius = 20;
+        break;
+      default:
+        color = 0xffffff;
+        radius = 8;
+    }
+
     return this.add.circle(entity.pos.x, entity.pos.y, radius, color);
   }
 }

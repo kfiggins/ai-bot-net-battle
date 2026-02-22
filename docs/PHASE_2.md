@@ -14,10 +14,10 @@ pnpm dev
 ```
 
 ## Deliverables
-- [ ] Minion ship AI: seek nearest player, shoot periodically
-- [ ] Tower AI: stationary turret, shoots nearest player in range
-- [ ] Enemy spawning via server console command (temporary)
-- [ ] Entity kinds: `minion_ship`, `tower` added to protocol
+- [x] Minion ship AI: seek nearest player, shoot periodically
+- [x] Tower AI: stationary turret, shoots nearest player in range
+- [x] Enemy spawning via server (test enemies spawned on startup)
+- [x] Entity kinds: `minion_ship`, `tower` added to protocol
 
 ## Key Files to Create/Modify
 - `/shared/protocol.ts` - Add `minion_ship`, `tower` kinds
