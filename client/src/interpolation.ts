@@ -1,4 +1,4 @@
-import { Entity, SnapshotMessage } from "shared";
+import { Entity, SnapshotMessage, SNAPSHOT_RATE } from "shared";
 
 export interface InterpolatedEntity extends Entity {
   prevPos: { x: number; y: number };
@@ -9,7 +9,7 @@ export class SnapshotInterpolator {
   private prev: SnapshotMessage | null = null;
   private current: SnapshotMessage | null = null;
   private snapshotTime = 0;
-  private snapshotInterval = 1000 / 15; // ~66ms at 15Hz snapshot rate
+  private snapshotInterval = 1000 / SNAPSHOT_RATE;
 
   pushSnapshot(snapshot: SnapshotMessage): void {
     this.prev = this.current;

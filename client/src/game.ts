@@ -187,7 +187,7 @@ export class GameScene extends Phaser.Scene {
       if (selfId && !this.cameraFollowing) {
         const selfSprite = this.entitySprites.get(selfId);
         if (selfSprite) {
-          this.cameras.main.startFollow(selfSprite, true, 0.1, 0.1);
+          this.cameras.main.startFollow(selfSprite, true, 0.25, 0.25);
           this.cameraFollowing = true;
         }
       }
