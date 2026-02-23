@@ -103,8 +103,7 @@ export class Room {
 
     const playerNum = this.nextPlayerId++;
     const playerId = `player_${playerNum}`;
-    const label = `Player ${playerNum}`;
-    const entity = this.sim.addPlayer(playerId, label, playerNum);
+    const entity = this.sim.addPlayer(playerId, displayName, playerNum);
     const reconnectToken = uuid();
 
     const player: RoomPlayer = {
@@ -136,8 +135,7 @@ export class Room {
 
         // Re-add player entity if it was removed
         if (!this.sim.entities.has(player.entityId)) {
-          const label = `Player ${player.playerIndex}`;
-          const entity = this.sim.addPlayer(player.playerId, label, player.playerIndex);
+          const entity = this.sim.addPlayer(player.playerId, player.displayName, player.playerIndex);
           player.entityId = entity.id;
         }
 
@@ -248,8 +246,7 @@ export class Room {
     // Re-add player entities for everyone still connected
     for (const player of this.players.values()) {
       if (player.ws !== null) {
-        const label = `Player ${player.playerIndex}`;
-        const entity = this.sim.addPlayer(player.playerId, label, player.playerIndex);
+        const entity = this.sim.addPlayer(player.playerId, player.displayName, player.playerIndex);
         player.entityId = entity.id;
         player.disconnectedAt = null;
       }
@@ -367,7 +364,7 @@ export class Room {
     const players: LobbyPlayer[] = [];
     for (const p of this.players.values()) {
       if (p.ws !== null) {
-        players.push({ name: `Player ${p.playerIndex}`, playerIndex: p.playerIndex });
+        players.push({ name: p.displayName, playerIndex: p.playerIndex });
       }
     }
     const msg = JSON.stringify({ v: 1, type: "lobby_update", players, mode: this.agentControlMode });

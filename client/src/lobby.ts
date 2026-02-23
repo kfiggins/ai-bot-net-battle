@@ -19,9 +19,20 @@ export class LobbyScene extends Phaser.Scene {
   private modeLabel!: Phaser.GameObjects.Text;
   private mode: AgentControlMode = "builtin_fake_ai";
   private players: LobbyPlayer[] = [];
+  private displayName = "Player";
 
   constructor() {
     super({ key: "LobbyScene" });
+  }
+
+  init(data: { displayName?: string }): void {
+    if (data?.displayName) {
+      this.displayName = data.displayName;
+      this.registry.set("displayName", data.displayName);
+    } else {
+      // Returning from game — recover stored name
+      this.displayName = this.registry.get("displayName") ?? "Player";
+    }
   }
 
   create(): void {
@@ -169,7 +180,7 @@ export class LobbyScene extends Phaser.Scene {
 
     // Only connect if we don't already have a connection
     if (!this.net.roomId) {
-      this.net.connect(roomId);
+      this.net.connect(roomId, this.displayName);
     } else {
       // Already connected (returning from game) — show lobby immediately
       this.statusText.setText("Waiting for players...");
