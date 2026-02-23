@@ -160,6 +160,16 @@ export function createHTTPServer(
       }
 
       try {
+        if (room.state !== "in_progress") {
+          res.writeHead(409);
+          res.end(JSON.stringify({
+            ok: false,
+            error: "room_not_in_progress",
+            detail: `Room is '${room.state}'. Start a match before issuing agent commands.`,
+          }));
+          return;
+        }
+
         const body = await readBody(req);
         const data = JSON.parse(body);
         const result = room.agent.processCommand(data, room.sim, room.economy);
