@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { LobbyPlayer, WORLD_WIDTH, WORLD_HEIGHT } from "shared";
+import { LobbyPlayer, VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from "shared";
 import { NetClient } from "./net.js";
 
 const PLAYER_COLORS = [0x00ff88, 0x44aaff, 0xffaa00, 0xff44ff];
@@ -26,7 +26,7 @@ export class LobbyScene extends Phaser.Scene {
 
     // Title
     this.add
-      .text(WORLD_WIDTH / 2, 120, "AI BOT NET BATTLE", {
+      .text(VIEWPORT_WIDTH / 2, 120, "AI BOT NET BATTLE", {
         fontSize: "48px",
         color: "#00ff88",
         fontFamily: "monospace",
@@ -36,7 +36,7 @@ export class LobbyScene extends Phaser.Scene {
 
     // Subtitle
     this.statusText = this.add
-      .text(WORLD_WIDTH / 2, 180, "Connecting...", {
+      .text(VIEWPORT_WIDTH / 2, 180, "Connecting...", {
         fontSize: "18px",
         color: "#888888",
         fontFamily: "monospace",
@@ -45,7 +45,7 @@ export class LobbyScene extends Phaser.Scene {
 
     // "Players" header
     this.add
-      .text(WORLD_WIDTH / 2, 260, "PLAYERS", {
+      .text(VIEWPORT_WIDTH / 2, 260, "PLAYERS", {
         fontSize: "16px",
         color: "#666666",
         fontFamily: "monospace",
@@ -55,11 +55,11 @@ export class LobbyScene extends Phaser.Scene {
     // Divider line under "PLAYERS"
     const gfx = this.add.graphics();
     gfx.lineStyle(1, 0x333344);
-    gfx.lineBetween(WORLD_WIDTH / 2 - 120, 280, WORLD_WIDTH / 2 + 120, 280);
+    gfx.lineBetween(VIEWPORT_WIDTH / 2 - 120, 280, VIEWPORT_WIDTH / 2 + 120, 280);
 
     // Start button
     this.startButton = this.add
-      .text(WORLD_WIDTH / 2, 520, "START GAME", {
+      .text(VIEWPORT_WIDTH / 2, 520, "START GAME", {
         fontSize: "28px",
         color: "#111122",
         fontFamily: "monospace",
@@ -86,7 +86,7 @@ export class LobbyScene extends Phaser.Scene {
     // Room info (bottom)
     const roomId = window.location.hash.slice(1) || "default";
     this.add
-      .text(WORLD_WIDTH / 2, WORLD_HEIGHT - 50, `Room: ${roomId}`, {
+      .text(VIEWPORT_WIDTH / 2, VIEWPORT_HEIGHT - 50, `Room: ${roomId}`, {
         fontSize: "14px",
         color: "#444466",
         fontFamily: "monospace",
@@ -94,7 +94,7 @@ export class LobbyScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(WORLD_WIDTH / 2, WORLD_HEIGHT - 28, `Client ${CLIENT_VERSION}`, {
+      .text(VIEWPORT_WIDTH / 2, VIEWPORT_HEIGHT - 28, `Client ${CLIENT_VERSION}`, {
         fontSize: "13px",
         color: "#6c6ca2",
         fontFamily: "monospace",
@@ -159,13 +159,13 @@ export class LobbyScene extends Phaser.Scene {
       const color = PLAYER_COLORS[(p.playerIndex - 1) % PLAYER_COLORS.length];
 
       // Color dot
-      const dot = this.add.circle(WORLD_WIDTH / 2 - 80, y, 8, color);
+      const dot = this.add.circle(VIEWPORT_WIDTH / 2 - 80, y, 8, color);
       this.playerDots.push(dot);
 
       // Player name + "(you)" indicator
       const isSelf = p.playerIndex === this.net.selfPlayerIndex;
       const label = isSelf ? `${p.name}  (you)` : p.name;
-      const text = this.add.text(WORLD_WIDTH / 2 - 60, y, label, {
+      const text = this.add.text(VIEWPORT_WIDTH / 2 - 60, y, label, {
         fontSize: "22px",
         color: colorToHex(color),
         fontFamily: "monospace",

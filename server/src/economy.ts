@@ -93,9 +93,27 @@ export class Economy {
       }
     }
 
-    // Determine spawn position
-    const x = request.x ?? Math.random() * (WORLD_WIDTH - 100) + 50;
-    const y = request.y ?? Math.random() * (WORLD_HEIGHT - 100) + 50;
+    // Determine spawn position (default: near map center for minions, random for towers)
+    const cx = WORLD_WIDTH / 2;
+    const cy = WORLD_HEIGHT / 2;
+    let x: number;
+    let y: number;
+    if (request.x !== undefined && request.y !== undefined) {
+      x = request.x;
+      y = request.y;
+    } else if (unitKind === "minion_ship") {
+      // Spawn minions near center with some spread
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 100 + Math.random() * 300;
+      x = cx + Math.cos(angle) * dist;
+      y = cy + Math.sin(angle) * dist;
+    } else {
+      // Towers default to near center
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 100 + Math.random() * 400;
+      x = cx + Math.cos(angle) * dist;
+      y = cy + Math.sin(angle) * dist;
+    }
 
     // Deduct cost and queue build
     this.balance -= cost;

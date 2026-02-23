@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { Entity, PlayerInputData, WORLD_WIDTH, WORLD_HEIGHT, PLAYER_SPEED } from "shared";
+import { Entity, PlayerInputData, WORLD_WIDTH, WORLD_HEIGHT, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, GRID_SPACING, PLAYER_SPEED } from "shared";
 import { NetClient } from "./net.js";
 import { SnapshotInterpolator, InterpolatedEntity } from "./interpolation.js";
 import { VFXManager } from "./vfx.js";
@@ -22,6 +22,7 @@ export class GameScene extends Phaser.Scene {
   private predictedPos: { x: number; y: number } | null = null;
   private matchStartMs = 0;
   private victoryShown = false;
+  private cameraFollowing = false;
 
   constructor() {
     super({ key: "GameScene" });
@@ -29,6 +30,16 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBackgroundColor("#111122");
+
+    // Set up world bounds and camera
+    this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    this.cameraFollowing = false;
+
+    // Draw background grid for spatial awareness
+    this.drawGrid();
+
+    // Draw visible world boundary
+    this.drawWorldBoundary();
 
     // Get shared NetClient from lobby scene via registry
     this.net = this.registry.get("net") as NetClient;
@@ -48,9 +59,9 @@ export class GameScene extends Phaser.Scene {
     this.matchStartMs = performance.now();
     this.victoryShown = false;
 
-    // Leave Game button (top-right)
+    // Leave Game button (top-right, viewport-relative)
     const leaveBtn = this.add
-      .text(WORLD_WIDTH - 10, 10, "LEAVE", {
+      .text(VIEWPORT_WIDTH - 10, 10, "LEAVE", {
         fontSize: "14px",
         color: "#ff4444",
         fontFamily: "monospace",
@@ -79,6 +90,7 @@ export class GameScene extends Phaser.Scene {
     // Reset prediction when entity ID changes (reconnect / new player)
     this.net.setEntityChangeHandler(() => {
       this.predictedPos = null;
+      this.cameraFollowing = false;
     });
 
     // Server ended the match — go back to lobby
@@ -171,6 +183,15 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
+      // Start camera follow once we have the player sprite
+      if (selfId && !this.cameraFollowing) {
+        const selfSprite = this.entitySprites.get(selfId);
+        if (selfSprite) {
+          this.cameras.main.startFollow(selfSprite, true, 0.1, 0.1);
+          this.cameraFollowing = true;
+        }
+      }
+
       this.detectEvents(entities);
       this.renderEntities(entities);
       this.hud.updateHealthBars(entities);
@@ -192,6 +213,31 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.vfx.update(dt);
+  }
+
+  /** Draw agar.io-style grid lines across the entire world */
+  private drawGrid(): void {
+    const gfx = this.add.graphics();
+    gfx.setDepth(-1);
+    gfx.lineStyle(1, 0x222244, 0.5);
+
+    // Vertical lines
+    for (let x = 0; x <= WORLD_WIDTH; x += GRID_SPACING) {
+      gfx.lineBetween(x, 0, x, WORLD_HEIGHT);
+    }
+
+    // Horizontal lines
+    for (let y = 0; y <= WORLD_HEIGHT; y += GRID_SPACING) {
+      gfx.lineBetween(0, y, WORLD_WIDTH, y);
+    }
+  }
+
+  /** Draw visible boundary at the edges of the world */
+  private drawWorldBoundary(): void {
+    const gfx = this.add.graphics();
+    gfx.setDepth(1);
+    gfx.lineStyle(4, 0xff4444, 0.8);
+    gfx.strokeRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
   }
 
   private detectEvents(entities: InterpolatedEntity[]): void {
@@ -315,4 +361,3 @@ function getRadius(kind: string): number {
     default: return 8;
   }
 }
-

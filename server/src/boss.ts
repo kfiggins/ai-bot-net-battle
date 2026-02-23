@@ -27,7 +27,7 @@ export class BossManager {
     const entity: Entity = {
       id: entityId,
       kind: "mothership",
-      pos: { x: WORLD_WIDTH - 60, y: WORLD_HEIGHT / 2 },
+      pos: { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 },
       vel: { x: 0, y: 0 },
       hp: MOTHERSHIP_HP,
       team: ENEMY_TEAM,

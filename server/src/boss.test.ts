@@ -23,10 +23,10 @@ describe("BossManager", () => {
       expect(boss.mothershipId).toBe(entity.id);
     });
 
-    it("places mothership on the right side", () => {
+    it("places mothership at center of the map", () => {
       const entity = boss.spawnMothership(sim);
-      expect(entity.pos.x).toBeGreaterThan(WORLD_WIDTH / 2);
-      expect(entity.pos.y).toBeCloseTo(WORLD_HEIGHT / 2, 0);
+      expect(entity.pos.x).toBe(WORLD_WIDTH / 2);
+      expect(entity.pos.y).toBe(WORLD_HEIGHT / 2);
     });
   });
 

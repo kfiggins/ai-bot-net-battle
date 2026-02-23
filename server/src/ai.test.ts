@@ -14,6 +14,12 @@ import {
   BULLET_DAMAGE,
 } from "shared";
 
+/** Helper: register entity with AI and force fire cooldown to 0 for deterministic tests */
+function registerReady(ai: AIManager, entityId: string): void {
+  ai.registerEntity(entityId);
+  ai.aiStates.get(entityId)!.fireCooldown = 0;
+}
+
 describe("AIManager", () => {
   let sim: Simulation;
   let ai: AIManager;
@@ -30,7 +36,7 @@ describe("AIManager", () => {
       player.pos.y = 300;
 
       const minion = sim.spawnEnemy("minion_ship", 500, 300);
-      ai.registerEntity(minion.id);
+      registerReady(ai, minion.id);
 
       const startX = minion.pos.x;
 
@@ -41,7 +47,7 @@ describe("AIManager", () => {
       expect(minion.pos.x).toBeLessThan(startX);
     });
 
-    it("stops moving when close enough to fire", () => {
+    it("orbits/strafes when close enough to fire (not chasing)", () => {
       const player = sim.addPlayer("p1");
       player.pos.x = 100;
       player.pos.y = 300;
@@ -49,13 +55,18 @@ describe("AIManager", () => {
       // Place minion within 70% of fire range
       const closeRange = MINION_FIRE_RANGE * 0.5;
       const minion = sim.spawnEnemy("minion_ship", 100 + closeRange, 300);
-      ai.registerEntity(minion.id);
+      registerReady(ai, minion.id);
+
+      const startX = minion.pos.x;
 
       sim.update();
       ai.update(sim);
 
-      expect(minion.vel.x).toBe(0);
-      expect(minion.vel.y).toBe(0);
+      // Minion should not be chasing (moving significantly toward player)
+      // It strafes with small velocity — the forward component should be near 0
+      const dx = minion.pos.x - startX;
+      // Should not have moved more than a few pixels toward player
+      expect(Math.abs(dx)).toBeLessThan(MINION_SPEED / TICK_RATE);
     });
 
     it("fires at player when in range", () => {
@@ -64,7 +75,7 @@ describe("AIManager", () => {
       player.pos.y = 300;
 
       const minion = sim.spawnEnemy("minion_ship", 200, 300);
-      ai.registerEntity(minion.id);
+      registerReady(ai, minion.id);
 
       const bulletsBefore = sim.bullets.size;
 
@@ -81,7 +92,7 @@ describe("AIManager", () => {
       player.team = 1;
 
       const minion = sim.spawnEnemy("minion_ship", 200, 300);
-      ai.registerEntity(minion.id);
+      registerReady(ai, minion.id);
 
       // First update: fires
       sim.update();
@@ -97,7 +108,7 @@ describe("AIManager", () => {
 
     it("does not move when no players exist", () => {
       const minion = sim.spawnEnemy("minion_ship", 500, 300);
-      ai.registerEntity(minion.id);
+      registerReady(ai, minion.id);
 
       sim.update();
       ai.update(sim);
@@ -117,7 +128,7 @@ describe("AIManager", () => {
 
       // Place minion far enough away that it needs to move
       const minion = sim.spawnEnemy("minion_ship", 700, 300);
-      ai.registerEntity(minion.id);
+      registerReady(ai, minion.id);
 
       sim.update();
       ai.update(sim);
@@ -134,7 +145,7 @@ describe("AIManager", () => {
       player.pos.y = 300;
 
       const tower = sim.spawnEnemy("tower", 500, 300);
-      ai.registerEntity(tower.id);
+      registerReady(ai, tower.id);
 
       sim.update();
       ai.update(sim);
@@ -151,7 +162,7 @@ describe("AIManager", () => {
       player.pos.y = 300;
 
       const tower = sim.spawnEnemy("tower", 500, 300);
-      ai.registerEntity(tower.id);
+      registerReady(ai, tower.id);
 
       sim.update();
       ai.update(sim);
@@ -165,7 +176,7 @@ describe("AIManager", () => {
       player.pos.y = 300;
 
       const tower = sim.spawnEnemy("tower", 800, 300);
-      ai.registerEntity(tower.id);
+      registerReady(ai, tower.id);
 
       sim.update();
       ai.update(sim);
@@ -179,7 +190,7 @@ describe("AIManager", () => {
       player.pos.y = 300;
 
       const tower = sim.spawnEnemy("tower", 500, 300);
-      ai.registerEntity(tower.id);
+      registerReady(ai, tower.id);
 
       // First update: fires
       sim.update();
@@ -313,7 +324,7 @@ describe("combat integration", () => {
     player.pos.y = 300;
 
     const tower = sim.spawnEnemy("tower", 500, 300);
-    ai.registerEntity(tower.id);
+    registerReady(ai, tower.id);
 
     const startHp = player.hp;
 

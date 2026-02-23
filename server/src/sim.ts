@@ -49,10 +49,7 @@ export class Simulation {
     const entity: Entity = {
       id: entityId,
       kind: "player_ship",
-      pos: {
-        x: Math.random() * (WORLD_WIDTH - 100) + 50,
-        y: Math.random() * (WORLD_HEIGHT - 100) + 50,
-      },
+      pos: playerSpawnPosition(),
       vel: { x: 0, y: 0 },
       hp: PLAYER_HP,
       team: 1,
@@ -264,6 +261,18 @@ export class Simulation {
       phase: phaseInfo,
     };
   }
+}
+
+/** Spawn players in a ring 1500-1800px from map center */
+function playerSpawnPosition(): { x: number; y: number } {
+  const cx = WORLD_WIDTH / 2;
+  const cy = WORLD_HEIGHT / 2;
+  const angle = Math.random() * Math.PI * 2;
+  const dist = 1500 + Math.random() * 300;
+  return {
+    x: Math.max(50, Math.min(WORLD_WIDTH - 50, cx + Math.cos(angle) * dist)),
+    y: Math.max(50, Math.min(WORLD_HEIGHT - 50, cy + Math.sin(angle) * dist)),
+  };
 }
 
 export function entityRadius(kind: string): number {

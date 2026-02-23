@@ -6,6 +6,8 @@ import {
   SNAPSHOT_INTERVAL,
   MAX_PLAYERS_PER_ROOM,
   RECONNECT_TIMEOUT_MS,
+  WORLD_WIDTH,
+  WORLD_HEIGHT,
   LobbyPlayer,
 } from "shared";
 import { Simulation } from "./sim.js";
@@ -272,13 +274,15 @@ export class Room {
 
   private initGameState(): void {
     this.boss.spawnMothership(this.sim);
-    const m1 = this.sim.spawnEnemy("minion_ship", 700, 200);
+    const cx = WORLD_WIDTH / 2;
+    const cy = WORLD_HEIGHT / 2;
+    const m1 = this.sim.spawnEnemy("minion_ship", cx - 200, cy - 150);
     this.ai.registerEntity(m1.id);
-    const m2 = this.sim.spawnEnemy("minion_ship", 750, 400);
+    const m2 = this.sim.spawnEnemy("minion_ship", cx + 150, cy + 200);
     this.ai.registerEntity(m2.id);
-    const t1 = this.sim.spawnEnemy("tower", 800, 300);
+    const t1 = this.sim.spawnEnemy("tower", cx + 250, cy - 100);
     this.ai.registerEntity(t1.id);
-    const t2 = this.sim.spawnEnemy("tower", 750, 500);
+    const t2 = this.sim.spawnEnemy("tower", cx - 150, cy + 250);
     this.ai.registerEntity(t2.id);
   }
 

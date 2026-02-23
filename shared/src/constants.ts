@@ -51,8 +51,15 @@ export const BUILD_COOLDOWN_TICKS = 15; // 0.5 seconds between builds
 export const AGENT_BUDGET_MAX = 10; // commands per budget window
 export const AGENT_BUDGET_RESET_TICKS = 30 * 30; // 30 seconds at 30Hz
 
-export const WORLD_WIDTH = 1024;
-export const WORLD_HEIGHT = 768;
+export const WORLD_WIDTH = 4000;
+export const WORLD_HEIGHT = 4000;
+
+// Viewport (canvas) size — what the player sees at any moment
+export const VIEWPORT_WIDTH = 1024;
+export const VIEWPORT_HEIGHT = 768;
+
+// Background grid spacing for spatial awareness
+export const GRID_SPACING = 100;
 
 export const SERVER_PORT = 3000;
 export const CLIENT_PORT = 5173;

@@ -7,6 +7,7 @@ import {
   AGENT_BUDGET_RESET_TICKS,
   UNIT_COSTS,
   STARTING_BALANCE,
+  WORLD_HEIGHT,
 } from "shared";
 
 describe("AgentAPI", () => {
@@ -72,8 +73,8 @@ describe("AgentAPI", () => {
       );
 
       expect(result.ok).toBe(true);
-      // Top lane should have low Y
-      expect(economy.buildQueue[0].y).toBeLessThan(300);
+      // Top lane should be in upper portion of the map
+      expect(economy.buildQueue[0].y).toBeLessThan(WORLD_HEIGHT * 0.35);
     });
 
     it("fails with insufficient funds", () => {
@@ -128,7 +129,7 @@ describe("AgentAPI", () => {
       );
 
       expect(economy.buildQueue[0].x).toBe(0);
-      expect(economy.buildQueue[0].y).toBe(768); // WORLD_HEIGHT
+      expect(economy.buildQueue[0].y).toBe(WORLD_HEIGHT);
     });
   });
 
