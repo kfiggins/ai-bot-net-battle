@@ -97,6 +97,7 @@ describe("AgentAPI", () => {
 
   describe("build_tower command", () => {
     it("successfully builds a tower", () => {
+      const mothershipPos = { x: 500, y: 300 };
       const result = agent.processCommand(
         {
           v: 1,
@@ -105,7 +106,8 @@ describe("AgentAPI", () => {
           params: { x: 500, y: 300 },
         },
         sim,
-        economy
+        economy,
+        mothershipPos
       );
 
       expect(result.ok).toBe(true);
@@ -117,6 +119,7 @@ describe("AgentAPI", () => {
 
     it("clamps coordinates to world bounds", () => {
       economy.balance = 1000;
+      const mothershipPos = { x: 0, y: WORLD_HEIGHT };
       agent.processCommand(
         {
           v: 1,
@@ -125,7 +128,8 @@ describe("AgentAPI", () => {
           params: { x: -100, y: 9999 },
         },
         sim,
-        economy
+        economy,
+        mothershipPos
       );
 
       expect(economy.buildQueue[0].x).toBe(0);

@@ -61,6 +61,18 @@ export const VIEWPORT_HEIGHT = 768;
 // Background grid spacing for spatial awareness
 export const GRID_SPACING = 100;
 
+// Bullet range
+export const BULLET_MAX_RANGE = 600; // pixels from spawn point
+
+// Tower placement
+export const TOWER_MAX_SPAWN_DISTANCE = 500; // max pixels from mothership
+
+// Enemy AI
+export const ENEMY_AGGRO_RANGE = 700;   // pixels — start chasing when player enters
+export const ENEMY_DEAGGRO_RANGE = 900;  // pixels — stop chasing when player leaves (hysteresis)
+export const ENEMY_PATROL_RADIUS = 400;  // pixels — wander radius around mothership
+export const ENEMY_PATROL_SPEED = 60;    // pixels/second — slower than chase speed
+
 export const SERVER_PORT = 3000;
 export const CLIENT_PORT = 5173;
 

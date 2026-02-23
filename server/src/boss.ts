@@ -102,6 +102,13 @@ export class BossManager {
     }
   }
 
+  getMothershipPos(sim: Simulation): { x: number; y: number } | undefined {
+    const mothership = this.mothershipId
+      ? sim.entities.get(this.mothershipId)
+      : undefined;
+    return mothership ? { x: mothership.pos.x, y: mothership.pos.y } : undefined;
+  }
+
   getPhaseInfo(sim: Simulation) {
     const towers = sim.getEntitiesByKind("tower");
     const minions = sim.getEntitiesByKind("minion_ship");

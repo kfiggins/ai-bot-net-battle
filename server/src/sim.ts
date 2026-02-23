@@ -21,6 +21,7 @@ import {
   ENEMY_TEAM,
   WORLD_WIDTH,
   WORLD_HEIGHT,
+  BULLET_MAX_RANGE,
 } from "shared";
 
 export interface PlayerState {
@@ -34,6 +35,7 @@ export interface BulletState {
   entityId: string;
   ownerId: string;
   ttl: number;
+  originPos: { x: number; y: number };
 }
 
 export class Simulation {
@@ -183,6 +185,7 @@ export class Simulation {
       entityId,
       ownerId,
       ttl: BULLET_TTL_TICKS,
+      originPos: { x: entity.pos.x, y: entity.pos.y },
     });
     return entity;
   }
@@ -202,8 +205,14 @@ export class Simulation {
       // Decrement TTL
       bullet.ttl--;
 
-      // Remove if expired or out of bounds
+      // Check distance from origin (max range)
+      const dx = entity.pos.x - bullet.originPos.x;
+      const dy = entity.pos.y - bullet.originPos.y;
+      const distSq = dx * dx + dy * dy;
+
+      // Remove if max range exceeded, expired, or out of bounds
       if (
+        distSq > BULLET_MAX_RANGE * BULLET_MAX_RANGE ||
         bullet.ttl <= 0 ||
         entity.pos.x < -BULLET_RADIUS ||
         entity.pos.x > WORLD_WIDTH + BULLET_RADIUS ||

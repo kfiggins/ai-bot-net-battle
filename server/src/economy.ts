@@ -6,6 +6,7 @@ import {
   BUILD_COOLDOWN_TICKS,
   WORLD_WIDTH,
   WORLD_HEIGHT,
+  TOWER_MAX_SPAWN_DISTANCE,
 } from "shared";
 import { Simulation } from "./sim.js";
 import { AIManager } from "./ai.js";
@@ -60,7 +61,8 @@ export class Economy {
 
   requestBuild(
     request: BuildRequest,
-    sim: Simulation
+    sim: Simulation,
+    mothershipPos?: { x: number; y: number }
   ): BuildResult {
     const { unitKind } = request;
 
@@ -93,26 +95,39 @@ export class Economy {
       }
     }
 
-    // Determine spawn position (default: near map center for minions, random for towers)
-    const cx = WORLD_WIDTH / 2;
-    const cy = WORLD_HEIGHT / 2;
+    // Determine spawn position relative to mothership (or map center as fallback)
+    const basePos = mothershipPos ?? { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 };
     let x: number;
     let y: number;
     if (request.x !== undefined && request.y !== undefined) {
       x = request.x;
       y = request.y;
     } else if (unitKind === "minion_ship") {
-      // Spawn minions near center with some spread
+      // Spawn minions near mothership with some spread
       const angle = Math.random() * Math.PI * 2;
       const dist = 100 + Math.random() * 300;
-      x = cx + Math.cos(angle) * dist;
-      y = cy + Math.sin(angle) * dist;
+      x = basePos.x + Math.cos(angle) * dist;
+      y = basePos.y + Math.sin(angle) * dist;
     } else {
-      // Towers default to near center
+      // Towers default to within allowed distance of mothership
       const angle = Math.random() * Math.PI * 2;
-      const dist = 100 + Math.random() * 400;
-      x = cx + Math.cos(angle) * dist;
-      y = cy + Math.sin(angle) * dist;
+      const dist = 100 + Math.random() * (TOWER_MAX_SPAWN_DISTANCE - 100);
+      x = basePos.x + Math.cos(angle) * dist;
+      y = basePos.y + Math.sin(angle) * dist;
+    }
+
+    // Validate tower distance from mothership
+    if (unitKind === "tower") {
+      const dx = x - basePos.x;
+      const dy = y - basePos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > TOWER_MAX_SPAWN_DISTANCE) {
+        return {
+          ok: false,
+          error: "too_far",
+          detail: `Tower must be within ${TOWER_MAX_SPAWN_DISTANCE}px of mothership (distance: ${Math.round(dist)})`,
+        };
+      }
     }
 
     // Deduct cost and queue build

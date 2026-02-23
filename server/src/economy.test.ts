@@ -8,6 +8,9 @@ import {
   UNIT_COSTS,
   UNIT_CAPS,
   BUILD_COOLDOWN_TICKS,
+  WORLD_WIDTH,
+  WORLD_HEIGHT,
+  TOWER_MAX_SPAWN_DISTANCE,
 } from "shared";
 
 describe("Economy", () => {
@@ -57,9 +60,12 @@ describe("Economy", () => {
     });
 
     it("accepts valid tower build", () => {
+      const cx = WORLD_WIDTH / 2;
+      const cy = WORLD_HEIGHT / 2;
       const result = economy.requestBuild(
-        { unitKind: "tower", x: 500, y: 300 },
-        sim
+        { unitKind: "tower", x: cx + 100, y: cy + 100 },
+        sim,
+        { x: cx, y: cy }
       );
       expect(result.ok).toBe(true);
       expect(economy.balance).toBe(STARTING_BALANCE - UNIT_COSTS.tower);
@@ -103,7 +109,8 @@ describe("Economy", () => {
     });
 
     it("uses provided coordinates for tower", () => {
-      economy.requestBuild({ unitKind: "tower", x: 123, y: 456 }, sim);
+      const mothershipPos = { x: 123, y: 456 };
+      economy.requestBuild({ unitKind: "tower", x: 123, y: 456 }, sim, mothershipPos);
       expect(economy.buildQueue[0].x).toBe(123);
       expect(economy.buildQueue[0].y).toBe(456);
     });
@@ -113,6 +120,27 @@ describe("Economy", () => {
       // Need to set sim.tick manually since we're not calling sim.update()
       economy.requestBuild({ unitKind: "minion_ship" }, sim);
       expect(economy.buildQueue[0].readyAtTick).toBe(100 + BUILD_COOLDOWN_TICKS);
+    });
+
+    it("rejects tower too far from mothership", () => {
+      const mothershipPos = { x: 2000, y: 2000 };
+      const result = economy.requestBuild(
+        { unitKind: "tower", x: 2000 + TOWER_MAX_SPAWN_DISTANCE + 100, y: 2000 },
+        sim,
+        mothershipPos
+      );
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe("too_far");
+    });
+
+    it("accepts tower within max distance from mothership", () => {
+      const mothershipPos = { x: 2000, y: 2000 };
+      const result = economy.requestBuild(
+        { unitKind: "tower", x: 2000 + TOWER_MAX_SPAWN_DISTANCE - 10, y: 2000 },
+        sim,
+        mothershipPos
+      );
+      expect(result.ok).toBe(true);
     });
   });
 
@@ -180,7 +208,9 @@ describe("Economy", () => {
     });
 
     it("returns build queue info", () => {
-      economy.requestBuild({ unitKind: "tower", x: 500, y: 300 }, sim);
+      const cx = WORLD_WIDTH / 2;
+      const cy = WORLD_HEIGHT / 2;
+      economy.requestBuild({ unitKind: "tower", x: cx, y: cy }, sim, { x: cx, y: cy });
 
       const summary = economy.getSummary(sim);
       expect(summary.buildQueue).toHaveLength(1);

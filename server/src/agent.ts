@@ -37,7 +37,8 @@ export class AgentAPI {
   processCommand(
     raw: unknown,
     sim: Simulation,
-    economy: Economy
+    economy: Economy,
+    mothershipPos?: { x: number; y: number }
   ): AgentCommandResult {
     // Validate schema
     const parsed = AgentCommandSchema.safeParse(raw);
@@ -64,10 +65,10 @@ export class AgentAPI {
 
     switch (cmd.command) {
       case "spawn_ship":
-        result = this.handleSpawnShip(cmd, sim, economy);
+        result = this.handleSpawnShip(cmd, sim, economy, mothershipPos);
         break;
       case "build_tower":
-        result = this.handleBuildTower(cmd, sim, economy);
+        result = this.handleBuildTower(cmd, sim, economy, mothershipPos);
         break;
       case "set_strategy":
         result = this.handleSetStrategy(cmd, sim);
@@ -86,7 +87,8 @@ export class AgentAPI {
   private handleSpawnShip(
     cmd: Extract<AgentCommand, { command: "spawn_ship" }>,
     sim: Simulation,
-    economy: Economy
+    economy: Economy,
+    mothershipPos?: { x: number; y: number }
   ): AgentCommandResult {
     const { kind, count, lane } = cmd.params;
     let totalCost = 0;
@@ -98,7 +100,8 @@ export class AgentAPI {
       const x = Math.max(40, Math.min(WORLD_WIDTH - 40, WORLD_WIDTH - 80 - i * 6));
       const buildResult = economy.requestBuild(
         { unitKind: kind, x, y },
-        sim
+        sim,
+        mothershipPos
       );
       if (!buildResult.ok) {
         return {
@@ -120,7 +123,8 @@ export class AgentAPI {
   private handleBuildTower(
     cmd: Extract<AgentCommand, { command: "build_tower" }>,
     sim: Simulation,
-    economy: Economy
+    economy: Economy,
+    mothershipPos?: { x: number; y: number }
   ): AgentCommandResult {
     const { x, y } = cmd.params;
 
@@ -130,7 +134,8 @@ export class AgentAPI {
 
     const buildResult = economy.requestBuild(
       { unitKind: "tower", x: cx, y: cy },
-      sim
+      sim,
+      mothershipPos
     );
 
     if (!buildResult.ok) {

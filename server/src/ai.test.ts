@@ -12,6 +12,9 @@ import {
   ENEMY_TEAM,
   TICK_RATE,
   BULLET_DAMAGE,
+  ENEMY_AGGRO_RANGE,
+  ENEMY_DEAGGRO_RANGE,
+  ENEMY_PATROL_SPEED,
 } from "shared";
 
 /** Helper: register entity with AI and force fire cooldown to 0 for deterministic tests */
@@ -106,15 +109,19 @@ describe("AIManager", () => {
       expect(aiState.fireCooldown).toBe(MINION_FIRE_COOLDOWN_TICKS - 1);
     });
 
-    it("does not move when no players exist", () => {
+    it("patrols when no players exist", () => {
       const minion = sim.spawnEnemy("minion_ship", 500, 300);
       registerReady(ai, minion.id);
 
       sim.update();
       ai.update(sim);
 
-      expect(minion.vel.x).toBe(0);
-      expect(minion.vel.y).toBe(0);
+      // Should be in patrol mode, moving toward a waypoint
+      const state = ai.aiStates.get(minion.id)!;
+      expect(state.aiMode).toBe("patrol");
+      // Velocity should be non-zero (patrolling)
+      const speed = Math.sqrt(minion.vel.x ** 2 + minion.vel.y ** 2);
+      expect(speed).toBeGreaterThan(0);
     });
 
     it("targets nearest player when multiple exist", () => {
@@ -135,6 +142,74 @@ describe("AIManager", () => {
 
       // Minion should move toward near player (left)
       expect(minion.vel.x).toBeLessThan(0);
+    });
+
+    it("switches to chase when player enters aggro range", () => {
+      const player = sim.addPlayer("p1");
+      player.pos.x = 500;
+      player.pos.y = 300;
+
+      // Place minion just inside aggro range
+      const minion = sim.spawnEnemy("minion_ship", 500 + ENEMY_AGGRO_RANGE - 50, 300);
+      registerReady(ai, minion.id);
+
+      const state = ai.aiStates.get(minion.id)!;
+      expect(state.aiMode).toBe("patrol");
+
+      sim.update();
+      ai.update(sim);
+
+      expect(state.aiMode).toBe("chase");
+    });
+
+    it("switches back to patrol when player leaves deaggro range", () => {
+      const player = sim.addPlayer("p1");
+      player.pos.x = 500;
+      player.pos.y = 300;
+
+      const minion = sim.spawnEnemy("minion_ship", 500 + ENEMY_AGGRO_RANGE - 50, 300);
+      registerReady(ai, minion.id);
+
+      const state = ai.aiStates.get(minion.id)!;
+
+      // First: enter chase
+      sim.update();
+      ai.update(sim);
+      expect(state.aiMode).toBe("chase");
+
+      // Move player far away beyond deaggro range
+      player.pos.x = minion.pos.x + ENEMY_DEAGGRO_RANGE + 100;
+
+      sim.update();
+      ai.update(sim);
+      expect(state.aiMode).toBe("patrol");
+    });
+
+    it("does not aggro when player is outside aggro range", () => {
+      const player = sim.addPlayer("p1");
+      player.pos.x = 500;
+      player.pos.y = 300;
+
+      // Place minion well outside aggro range
+      const minion = sim.spawnEnemy("minion_ship", 500 + ENEMY_AGGRO_RANGE + 200, 300);
+      registerReady(ai, minion.id);
+
+      sim.update();
+      ai.update(sim);
+
+      const state = ai.aiStates.get(minion.id)!;
+      expect(state.aiMode).toBe("patrol");
+    });
+
+    it("does not fire while patrolling", () => {
+      // No players — minion stays in patrol mode
+      const minion = sim.spawnEnemy("minion_ship", 500, 300);
+      registerReady(ai, minion.id);
+
+      sim.update();
+      ai.update(sim);
+
+      expect(sim.bullets.size).toBe(0);
     });
   });
 

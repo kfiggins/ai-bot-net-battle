@@ -183,7 +183,8 @@ export function createHTTPServer(
 
         const body = await readBody(req);
         const data = JSON.parse(body);
-        const result = room.agent.processCommand(data, room.sim, room.economy);
+        const mothershipPos = room.boss.getMothershipPos(room.sim);
+        const result = room.agent.processCommand(data, room.sim, room.economy, mothershipPos);
         res.writeHead(result.ok ? 200 : 400);
         res.end(JSON.stringify(result));
       } catch {

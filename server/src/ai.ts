@@ -9,8 +9,14 @@ import {
   TICK_RATE,
   WORLD_WIDTH,
   WORLD_HEIGHT,
+  ENEMY_AGGRO_RANGE,
+  ENEMY_DEAGGRO_RANGE,
+  ENEMY_PATROL_RADIUS,
+  ENEMY_PATROL_SPEED,
 } from "shared";
 import { Simulation, entityRadius } from "./sim.js";
+
+export type AIMode = "patrol" | "chase";
 
 export interface AIState {
   entityId: string;
@@ -19,14 +25,24 @@ export interface AIState {
   strafeAmplitude: number;
   strafeFrequency: number;
   strafePhase: number;
+  aiMode: AIMode;
+  waypointX: number;
+  waypointY: number;
 }
 
 export class AIManager {
   aiStates: Map<string, AIState> = new Map();
+  /** Center point for patrol behavior (set to mothership position) */
+  private patrolCenter: { x: number; y: number } = { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 };
 
   private dt = 1 / TICK_RATE;
 
+  setPatrolCenter(pos: { x: number; y: number }): void {
+    this.patrolCenter = pos;
+  }
+
   registerEntity(entityId: string): void {
+    const wp = this.randomPatrolWaypoint();
     this.aiStates.set(entityId, {
       entityId,
       fireCooldown: Math.floor(Math.random() * MINION_FIRE_COOLDOWN_TICKS),
@@ -34,6 +50,9 @@ export class AIManager {
       strafeAmplitude: 18 + Math.random() * 26,
       strafeFrequency: 0.9 + Math.random() * 1.1,
       strafePhase: Math.random() * Math.PI * 2,
+      aiMode: "patrol",
+      waypointX: wp.x,
+      waypointY: wp.y,
     });
   }
 
@@ -59,19 +78,51 @@ export class AIManager {
 
   private updateMinion(entity: Entity, aiState: AIState, sim: Simulation): void {
     const target = this.findNearestEnemy(entity, sim);
-    if (!target) {
-      entity.vel = { x: 0, y: 0 };
-      return;
+
+    // Determine aggro state transitions
+    if (target) {
+      const dx = target.pos.x - entity.pos.x;
+      const dy = target.pos.y - entity.pos.y;
+      const distToTarget = Math.sqrt(dx * dx + dy * dy);
+
+      if (aiState.aiMode === "patrol" && distToTarget < ENEMY_AGGRO_RANGE) {
+        aiState.aiMode = "chase";
+      } else if (aiState.aiMode === "chase" && distToTarget > ENEMY_DEAGGRO_RANGE) {
+        aiState.aiMode = "patrol";
+        // Pick a new waypoint heading back toward mothership
+        const wp = this.randomPatrolWaypoint();
+        aiState.waypointX = wp.x;
+        aiState.waypointY = wp.y;
+      }
+    } else {
+      // No targets at all — patrol
+      if (aiState.aiMode === "chase") {
+        aiState.aiMode = "patrol";
+        const wp = this.randomPatrolWaypoint();
+        aiState.waypointX = wp.x;
+        aiState.waypointY = wp.y;
+      }
     }
 
+    if (aiState.aiMode === "chase" && target) {
+      this.updateMinionChase(entity, aiState, sim, target);
+    } else {
+      this.updateMinionPatrol(entity, aiState, sim);
+    }
+
+    // Clamp to world bounds
+    entity.pos.x = Math.max(0, Math.min(WORLD_WIDTH, entity.pos.x));
+    entity.pos.y = Math.max(0, Math.min(WORLD_HEIGHT, entity.pos.y));
+  }
+
+  private updateMinionChase(entity: Entity, aiState: AIState, sim: Simulation, target: Entity): void {
     const dx = target.pos.x - entity.pos.x;
     const dy = target.pos.y - entity.pos.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    // Add per-minion strafe so groups don't stack/move as one blob.
     const nx = dist > 0 ? dx / dist : 0;
     const ny = dist > 0 ? dy / dist : 0;
-    const px = -ny; // perpendicular unit vector
+    const px = -ny;
     const py = nx;
     const strafe = Math.sin((sim.tick / TICK_RATE) * aiState.strafeFrequency + aiState.strafePhase) * aiState.strafeAmplitude;
 
@@ -83,7 +134,6 @@ export class AIManager {
       entity.pos.x += desiredX * this.dt;
       entity.pos.y += desiredY * this.dt;
     } else {
-      // Light orbiting/strafe in firing range so they don't overlap at standstill.
       entity.vel = {
         x: px * strafe * 0.35,
         y: py * strafe * 0.35,
@@ -92,16 +142,44 @@ export class AIManager {
       entity.pos.y += entity.vel.y * this.dt;
     }
 
-    // Clamp to world bounds
-    entity.pos.x = Math.max(0, Math.min(WORLD_WIDTH, entity.pos.x));
-    entity.pos.y = Math.max(0, Math.min(WORLD_HEIGHT, entity.pos.y));
-
     // Fire at target if in range
     if (dist <= MINION_FIRE_RANGE && aiState.fireCooldown <= 0) {
       const aimAngle = Math.atan2(dy, dx);
       sim.spawnBullet(entity, entity.id, aimAngle);
       aiState.fireCooldown = MINION_FIRE_COOLDOWN_TICKS;
     }
+  }
+
+  private updateMinionPatrol(entity: Entity, aiState: AIState, _sim: Simulation): void {
+    const dx = aiState.waypointX - entity.pos.x;
+    const dy = aiState.waypointY - entity.pos.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < 20) {
+      // Arrived at waypoint — pick a new one
+      const wp = this.randomPatrolWaypoint();
+      aiState.waypointX = wp.x;
+      aiState.waypointY = wp.y;
+      entity.vel = { x: 0, y: 0 };
+      return;
+    }
+
+    // Move toward waypoint at patrol speed
+    const nx = dx / dist;
+    const ny = dy / dist;
+    const speed = ENEMY_PATROL_SPEED * aiState.moveSpeedScale;
+    entity.vel = { x: nx * speed, y: ny * speed };
+    entity.pos.x += entity.vel.x * this.dt;
+    entity.pos.y += entity.vel.y * this.dt;
+  }
+
+  private randomPatrolWaypoint(): { x: number; y: number } {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = Math.random() * ENEMY_PATROL_RADIUS;
+    return {
+      x: this.patrolCenter.x + Math.cos(angle) * dist,
+      y: this.patrolCenter.y + Math.sin(angle) * dist,
+    };
   }
 
   private updateTower(entity: Entity, aiState: AIState, sim: Simulation): void {

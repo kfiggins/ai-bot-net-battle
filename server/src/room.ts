@@ -273,7 +273,9 @@ export class Room {
   }
 
   private initGameState(): void {
-    this.boss.spawnMothership(this.sim);
+    const mothership = this.boss.spawnMothership(this.sim);
+    this.ai.setPatrolCenter({ x: mothership.pos.x, y: mothership.pos.y });
+
     const cx = WORLD_WIDTH / 2;
     const cy = WORLD_HEIGHT / 2;
     const m1 = this.sim.spawnEnemy("minion_ship", cx - 200, cy - 150);

@@ -7,6 +7,7 @@ import {
   BULLET_SPEED,
   BULLET_DAMAGE,
   BULLET_TTL_TICKS,
+  BULLET_MAX_RANGE,
   FIRE_COOLDOWN_TICKS,
   TICK_RATE,
   WORLD_WIDTH,
@@ -306,6 +307,47 @@ describe("Simulation", () => {
       for (let i = 0; i < 10; i++) sim.update();
 
       expect(sim.bullets.size).toBe(0);
+    });
+
+    it("removes bullets that exceed max range", () => {
+      const entity = sim.addPlayer("p1");
+      entity.pos.x = WORLD_WIDTH / 2;
+      entity.pos.y = WORLD_HEIGHT / 2;
+
+      sim.setInput("p1", {
+        up: false, down: false, left: false, right: false,
+        fire: true, aimAngle: 0, // aim right
+      });
+      sim.update();
+      expect(sim.bullets.size).toBe(1);
+
+      sim.setInput("p1", {
+        up: false, down: false, left: false, right: false,
+        fire: false, aimAngle: 0,
+      });
+
+      // Calculate ticks needed to exceed max range
+      const ticksToExceedRange = Math.ceil(BULLET_MAX_RANGE / (BULLET_SPEED / TICK_RATE)) + 1;
+      for (let i = 0; i < ticksToExceedRange; i++) sim.update();
+
+      expect(sim.bullets.size).toBe(0);
+    });
+
+    it("bullet origin position is recorded at spawn", () => {
+      const entity = sim.addPlayer("p1");
+      entity.pos.x = 500;
+      entity.pos.y = 600;
+
+      sim.setInput("p1", {
+        up: false, down: false, left: false, right: false,
+        fire: true, aimAngle: 0,
+      });
+      sim.update();
+
+      const bulletState = Array.from(sim.bullets.values())[0];
+      // Origin is where the bullet spawns (slightly offset from player by radius)
+      expect(Math.abs(bulletState.originPos.x - 500)).toBeLessThan(30);
+      expect(Math.abs(bulletState.originPos.y - 600)).toBeLessThan(30);
     });
   });
 
