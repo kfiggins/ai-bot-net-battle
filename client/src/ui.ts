@@ -6,6 +6,7 @@ export class HUD {
   private phaseText: Phaser.GameObjects.Text;
   private objectiveText: Phaser.GameObjects.Text;
   private matchOverText: Phaser.GameObjects.Text;
+  private debugText: Phaser.GameObjects.Text;
   private healthBars: Map<string, Phaser.GameObjects.Graphics> = new Map();
 
   constructor(scene: Phaser.Scene) {
@@ -47,6 +48,18 @@ export class HUD {
     this.matchOverText.setScrollFactor(0);
     this.matchOverText.setOrigin(0.5);
     this.matchOverText.setVisible(false);
+
+    this.debugText = scene.add.text(scene.cameras.main.width - 10, 10, "", {
+      fontSize: "12px",
+      color: "#9ad1ff",
+      fontFamily: "monospace",
+      backgroundColor: "#00000088",
+      padding: { x: 8, y: 4 },
+      align: "right",
+    });
+    this.debugText.setDepth(120);
+    this.debugText.setScrollFactor(0);
+    this.debugText.setOrigin(1, 0);
   }
 
   updatePhase(phase: PhaseInfo | undefined): void {
@@ -70,6 +83,31 @@ export class HUD {
       this.matchOverText.setText("VICTORY!");
       this.matchOverText.setVisible(true);
     }
+  }
+
+  updateDebug(entities: Entity[]): void {
+    const counts = {
+      player_ship: 0,
+      minion_ship: 0,
+      tower: 0,
+      mothership: 0,
+      bullet: 0,
+    };
+
+    for (const e of entities) {
+      if (e.kind in counts) {
+        (counts as Record<string, number>)[e.kind]++;
+      }
+    }
+
+    this.debugText.setText([
+      "DEBUG",
+      `players: ${counts.player_ship}`,
+      `minions: ${counts.minion_ship}`,
+      `towers: ${counts.tower}`,
+      `boss: ${counts.mothership}`,
+      `bullets: ${counts.bullet}`,
+    ].join("\n"));
   }
 
   updateHealthBars(entities: Entity[]): void {
@@ -120,6 +158,7 @@ export class HUD {
     this.phaseText.destroy();
     this.objectiveText.destroy();
     this.matchOverText.destroy();
+    this.debugText.destroy();
     for (const gfx of this.healthBars.values()) gfx.destroy();
     this.healthBars.clear();
   }

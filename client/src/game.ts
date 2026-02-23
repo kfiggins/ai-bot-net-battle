@@ -170,6 +170,7 @@ export class GameScene extends Phaser.Scene {
       this.detectEvents(entities);
       this.renderEntities(entities);
       this.hud.updateHealthBars(entities);
+      this.hud.updateDebug(entities);
     }
 
     this.hud.updatePhase(this.interpolator.getPhaseInfo());
