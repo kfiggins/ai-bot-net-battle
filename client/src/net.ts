@@ -1,4 +1,5 @@
 import {
+  AgentControlMode,
   PlayerInputData,
   SnapshotMessage,
   LobbyUpdateMessage,
@@ -18,6 +19,7 @@ export class NetClient {
   selfEntityId: string | null = null;
   selfPlayerIndex: number | null = null;
   roomId: string | null = null;
+  currentMode: AgentControlMode = "builtin_fake_ai";
   private reconnectToken: string | null = null;
   private targetRoomId: string = "default";
   private lastInputTime = 0;
@@ -62,6 +64,7 @@ export class NetClient {
           this.selfPlayerIndex = msg.playerIndex;
           this.roomId = msg.roomId;
           this.reconnectToken = msg.reconnectToken;
+          this.currentMode = msg.lobby.mode;
           console.log(`[net] Joined room ${msg.roomId}, entity: ${msg.entityId}`);
           // Notify game if entity changed (reconnect with new entity)
           if (oldEntityId !== msg.entityId && this.onEntityChange) {
@@ -74,8 +77,9 @@ export class NetClient {
           console.error(`[net] Room error: ${msg.error}`, msg.detail);
         } else if (msg.type === "snapshot" && this.onSnapshot) {
           this.onSnapshot(msg);
-        } else if (msg.type === "lobby_update" && this.onLobbyUpdate) {
-          this.onLobbyUpdate(msg);
+        } else if (msg.type === "lobby_update") {
+          this.currentMode = msg.mode;
+          if (this.onLobbyUpdate) this.onLobbyUpdate(msg);
         } else if (msg.type === "match_start" && this.onMatchStart) {
           this.onMatchStart();
         } else if (msg.type === "match_end" && this.onMatchEnd) {
@@ -116,9 +120,9 @@ export class NetClient {
   }
 
   /** Request the server to start the match */
-  sendStartGame(): void {
+  sendStartGame(mode: AgentControlMode): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ v: 1, type: "start_game" }));
+      this.ws.send(JSON.stringify({ v: 1, type: "start_game", mode }));
     }
   }
 

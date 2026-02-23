@@ -247,10 +247,10 @@ describe("AIManager", () => {
 
     it("does not fire at player out of range", () => {
       const player = sim.addPlayer("p1");
-      player.pos.x = 100;
+      player.pos.x = 0;
       player.pos.y = 300;
 
-      const tower = sim.spawnEnemy("tower", 800, 300);
+      const tower = sim.spawnEnemy("tower", 1000, 300);
       registerReady(ai, tower.id);
 
       sim.update();

@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { LobbyPlayer, VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from "shared";
+import { AgentControlMode, LobbyPlayer, VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from "shared";
 import { NetClient } from "./net.js";
 
 const PLAYER_COLORS = [0x00ff88, 0x44aaff, 0xffaa00, 0xff44ff];
@@ -15,6 +15,9 @@ export class LobbyScene extends Phaser.Scene {
   private playerDots: Phaser.GameObjects.Arc[] = [];
   private statusText!: Phaser.GameObjects.Text;
   private startButton!: Phaser.GameObjects.Text;
+  private modeToggle!: Phaser.GameObjects.Text;
+  private modeLabel!: Phaser.GameObjects.Text;
+  private mode: AgentControlMode = "builtin_fake_ai";
   private players: LobbyPlayer[] = [];
 
   constructor() {
@@ -78,7 +81,7 @@ export class LobbyScene extends Phaser.Scene {
       this.startButton.setStyle({ backgroundColor: "#00ff88" });
     });
     this.startButton.on("pointerdown", () => {
-      this.net.sendStartGame();
+      this.net.sendStartGame(this.mode);
       this.startButton.setText("STARTING...");
       this.startButton.disableInteractive();
     });
@@ -101,6 +104,31 @@ export class LobbyScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    this.modeLabel = this.add
+      .text(VIEWPORT_WIDTH - 24, VIEWPORT_HEIGHT - 72, "Agent Mode", {
+        fontSize: "13px",
+        color: "#7d7db7",
+        fontFamily: "monospace",
+      })
+      .setOrigin(1, 0.5);
+
+    this.modeToggle = this.add
+      .text(VIEWPORT_WIDTH - 24, VIEWPORT_HEIGHT - 46, "OFF", {
+        fontSize: "18px",
+        color: "#111122",
+        fontFamily: "monospace",
+        fontStyle: "bold",
+        backgroundColor: "#66cc88",
+        padding: { x: 14, y: 6 },
+      })
+      .setOrigin(1, 0.5)
+      .setInteractive({ useHandCursor: true });
+
+    this.modeToggle.on("pointerdown", () => {
+      this.mode = this.mode === "builtin_fake_ai" ? "external_agent" : "builtin_fake_ai";
+      this.refreshModeUI();
+    });
+
     // Set up networking — reuse existing NetClient if returning from game
     const existing = this.registry.get("net") as NetClient | undefined;
     if (existing) {
@@ -109,8 +137,12 @@ export class LobbyScene extends Phaser.Scene {
       this.net = new NetClient();
       this.registry.set("net", this.net);
     }
+    this.mode = this.net.currentMode;
+    this.refreshModeUI();
 
     this.net.setWelcomeHandler((lobby) => {
+      this.mode = lobby.mode;
+      this.refreshModeUI();
       if (lobby.state === "in_progress") {
         // Game already started — skip lobby
         this.scene.start("GameScene");
@@ -125,6 +157,8 @@ export class LobbyScene extends Phaser.Scene {
     });
 
     this.net.setLobbyUpdateHandler((msg) => {
+      this.mode = msg.mode;
+      this.refreshModeUI();
       this.players = msg.players;
       this.renderPlayerList();
     });
@@ -141,6 +175,18 @@ export class LobbyScene extends Phaser.Scene {
       this.statusText.setText("Waiting for players...");
       this.startButton.setVisible(true);
     }
+  }
+
+  private refreshModeUI(): void {
+    if (!this.modeToggle || !this.modeLabel) return;
+
+    const isAgent = this.mode === "external_agent";
+    this.modeToggle.setText(isAgent ? "ON" : "OFF");
+    this.modeToggle.setStyle({
+      backgroundColor: isAgent ? "#ffae42" : "#66cc88",
+      color: "#111122",
+    });
+    this.modeLabel.setText(`Agent Mode (${isAgent ? "Live" : "Kids"})`);
   }
 
   private renderPlayerList(): void {

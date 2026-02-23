@@ -10,6 +10,7 @@ import {
   StartGameMessageSchema,
   LobbyUpdateMessageSchema,
   MatchStartMessageSchema,
+  AgentControlModeSchema,
 } from "./protocol.js";
 
 describe("Vec2Schema", () => {
@@ -184,13 +185,18 @@ describe("ClientMessageSchema", () => {
 });
 
 describe("StartGameMessageSchema", () => {
-  it("accepts valid start_game message", () => {
+  it("accepts valid start_game message without mode", () => {
     const msg = { v: 1, type: "start_game" };
     expect(StartGameMessageSchema.parse(msg)).toEqual(msg);
   });
 
+  it("accepts valid start_game message with mode", () => {
+    const msg = { v: 1, type: "start_game", mode: "external_agent" };
+    expect(StartGameMessageSchema.parse(msg)).toEqual(msg);
+  });
+
   it("is accepted as a client message", () => {
-    const msg = { v: 1, type: "start_game" };
+    const msg = { v: 1, type: "start_game", mode: "builtin_fake_ai" };
     expect(ClientMessageSchema.parse(msg)).toEqual(msg);
   });
 });
@@ -204,17 +210,18 @@ describe("LobbyUpdateMessageSchema", () => {
         { name: "Player 1", playerIndex: 1 },
         { name: "Player 2", playerIndex: 2 },
       ],
+      mode: "builtin_fake_ai",
     };
     expect(LobbyUpdateMessageSchema.parse(msg)).toEqual(msg);
   });
 
   it("accepts empty player list", () => {
-    const msg = { v: 1, type: "lobby_update", players: [] };
+    const msg = { v: 1, type: "lobby_update", players: [], mode: "external_agent" };
     expect(LobbyUpdateMessageSchema.parse(msg)).toEqual(msg);
   });
 
   it("is accepted as a server message", () => {
-    const msg = { v: 1, type: "lobby_update", players: [] };
+    const msg = { v: 1, type: "lobby_update", players: [], mode: "builtin_fake_ai" };
     expect(ServerMessageSchema.parse(msg)).toEqual(msg);
   });
 });
@@ -228,6 +235,17 @@ describe("MatchStartMessageSchema", () => {
   it("is accepted as a server message", () => {
     const msg = { v: 1, type: "match_start" };
     expect(ServerMessageSchema.parse(msg)).toEqual(msg);
+  });
+});
+
+describe("AgentControlModeSchema", () => {
+  it("accepts valid control modes", () => {
+    expect(AgentControlModeSchema.parse("external_agent")).toBe("external_agent");
+    expect(AgentControlModeSchema.parse("builtin_fake_ai")).toBe("builtin_fake_ai");
+  });
+
+  it("rejects invalid control modes", () => {
+    expect(() => AgentControlModeSchema.parse("bad_mode")).toThrow();
   });
 });
 

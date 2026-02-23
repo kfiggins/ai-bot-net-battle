@@ -9,12 +9,14 @@ import {
   WORLD_WIDTH,
   WORLD_HEIGHT,
   LobbyPlayer,
+  AgentControlMode,
 } from "shared";
 import { Simulation } from "./sim.js";
 import { AIManager } from "./ai.js";
 import { Economy } from "./economy.js";
 import { AgentAPI } from "./agent.js";
 import { BossManager } from "./boss.js";
+import { FakeAI } from "./fake-ai.js";
 import { log } from "./logger.js";
 
 export type RoomState = "waiting" | "in_progress" | "finished";
@@ -40,11 +42,13 @@ export class Room {
   readonly roomId: string;
   state: RoomState = "waiting";
   readonly createdAt: number = Date.now();
+  agentControlMode: AgentControlMode = "builtin_fake_ai";
 
   sim: Simulation;
   ai: AIManager;
   economy: Economy;
   agent: AgentAPI;
+  fakeAI: FakeAI;
   boss: BossManager;
   players: Map<string, RoomPlayer> = new Map();
 
@@ -64,6 +68,7 @@ export class Room {
     this.ai = new AIManager();
     this.economy = new Economy();
     this.agent = new AgentAPI();
+    this.fakeAI = new FakeAI();
     this.boss = new BossManager();
   }
 
@@ -88,6 +93,7 @@ export class Room {
       state: this.state,
       players: this.playerCount,
       maxPlayers: MAX_PLAYERS_PER_ROOM,
+      mode: this.agentControlMode,
     };
   }
 
@@ -200,8 +206,9 @@ export class Room {
     return undefined;
   }
 
-  startMatch(): void {
+  startMatch(mode?: AgentControlMode): void {
     if (this.state !== "waiting") return;
+    this.agentControlMode = mode ?? this.agentControlMode;
     this.state = "in_progress";
     this.initGameState();
     this.startTickLoop();
@@ -228,12 +235,14 @@ export class Room {
     }
 
     this.state = "waiting";
+    this.agentControlMode = "builtin_fake_ai";
 
     // Reset simulation and subsystems
     this.sim = new Simulation();
     this.ai = new AIManager();
     this.economy = new Economy();
     this.agent = new AgentAPI();
+    this.fakeAI = new FakeAI();
     this.boss = new BossManager();
 
     // Re-add player entities for everyone still connected
@@ -301,6 +310,10 @@ export class Room {
       this.ai.update(this.sim);
       this.economy.update(this.sim, this.ai);
       this.agent.update(this.sim);
+      if (this.agentControlMode === "builtin_fake_ai") {
+        const mothershipPos = this.boss.getMothershipPos(this.sim);
+        this.fakeAI.update(this.sim, this.economy, this.agent, mothershipPos);
+      }
       this.boss.update(this.sim);
 
       // Clean up stale disconnected players periodically
@@ -357,7 +370,7 @@ export class Room {
         players.push({ name: `Player ${p.playerIndex}`, playerIndex: p.playerIndex });
       }
     }
-    const msg = JSON.stringify({ v: 1, type: "lobby_update", players });
+    const msg = JSON.stringify({ v: 1, type: "lobby_update", players, mode: this.agentControlMode });
     for (const player of this.players.values()) {
       if (player.ws?.readyState === WebSocket.OPEN) {
         player.ws.send(msg);

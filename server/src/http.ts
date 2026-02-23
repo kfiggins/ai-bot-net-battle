@@ -132,6 +132,7 @@ export function createHTTPServer(
         JSON.stringify({
           roomId: room.roomId,
           state: room.state,
+          mode: room.agentControlMode,
           ...summary,
           strategy: room.agent.strategy,
           agentBudget: budget,
@@ -166,6 +167,16 @@ export function createHTTPServer(
             ok: false,
             error: "room_not_in_progress",
             detail: `Room is '${room.state}'. Start a match before issuing agent commands.`,
+          }));
+          return;
+        }
+
+        if (room.agentControlMode !== "external_agent") {
+          res.writeHead(409);
+          res.end(JSON.stringify({
+            ok: false,
+            error: "agent_mode_disabled",
+            detail: "Room is running built-in fake AI mode. Enable Agent Mode in lobby to use external commands.",
           }));
           return;
         }

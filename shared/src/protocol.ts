@@ -53,10 +53,14 @@ export type JoinRoomMessage = z.infer<typeof JoinRoomMessageSchema>;
 
 // --- Server → Client ---
 
+export const AgentControlModeSchema = z.enum(["external_agent", "builtin_fake_ai"]);
+export type AgentControlMode = z.infer<typeof AgentControlModeSchema>;
+
 export const LobbyStateSchema = z.object({
   state: z.enum(["waiting", "in_progress", "finished"]),
   players: z.number().int(),
   maxPlayers: z.number().int(),
+  mode: AgentControlModeSchema,
 });
 export type LobbyState = z.infer<typeof LobbyStateSchema>;
 
@@ -144,6 +148,7 @@ export type AgentCommand = z.infer<typeof AgentCommandSchema>;
 export const StartGameMessageSchema = z.object({
   v: z.literal(1),
   type: z.literal("start_game"),
+  mode: AgentControlModeSchema.optional(),
 });
 export type StartGameMessage = z.infer<typeof StartGameMessageSchema>;
 
@@ -167,6 +172,7 @@ export const LobbyUpdateMessageSchema = z.object({
   v: z.literal(1),
   type: z.literal("lobby_update"),
   players: z.array(LobbyPlayerSchema),
+  mode: AgentControlModeSchema,
 });
 export type LobbyUpdateMessage = z.infer<typeof LobbyUpdateMessageSchema>;
 

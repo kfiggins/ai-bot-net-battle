@@ -161,7 +161,7 @@ export function createWSServer(
           const room = roomManager.findRoomByWs(ws);
           if (!room) return;
 
-          room.startMatch();
+          room.startMatch(msg.mode ?? "builtin_fake_ai");
           return;
         }
 

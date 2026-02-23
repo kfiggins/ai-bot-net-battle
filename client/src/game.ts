@@ -23,6 +23,7 @@ export class GameScene extends Phaser.Scene {
   private matchStartMs = 0;
   private victoryShown = false;
   private cameraPos: { x: number; y: number } | null = null;
+  private modeText!: Phaser.GameObjects.Text;
 
   constructor() {
     super({ key: "GameScene" });
@@ -60,9 +61,21 @@ export class GameScene extends Phaser.Scene {
     this.matchStartMs = performance.now();
     this.victoryShown = false;
 
+    this.modeText = this.add
+      .text(10, 10, `Mode: ${this.net.currentMode === "external_agent" ? "Agent ON" : "Kids AI"}`, {
+        fontSize: "14px",
+        color: "#7dd3fc",
+        fontFamily: "monospace",
+        backgroundColor: "#00000088",
+        padding: { x: 8, y: 4 },
+      })
+      .setOrigin(0, 0)
+      .setDepth(200)
+      .setScrollFactor(0);
+
     // Leave Game button (top-right, viewport-relative)
     const leaveBtn = this.add
-      .text(VIEWPORT_WIDTH - 10, 10, "LEAVE", {
+      .text(VIEWPORT_WIDTH - 10, 10, "LEAVE", {"}
         fontSize: "14px",
         color: "#ff4444",
         fontFamily: "monospace",

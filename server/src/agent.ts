@@ -168,7 +168,19 @@ export class AgentAPI {
   }
 
   private laneToY(lane?: "top" | "mid" | "bottom", mothershipPos?: { x: number; y: number }): number {
-    const centerY = mothershipPos?.y ?? WORLD_HEIGHT * 0.5;
+    if (!mothershipPos) {
+      switch (lane) {
+        case "top":
+          return WORLD_HEIGHT * 0.25;
+        case "bottom":
+          return WORLD_HEIGHT * 0.75;
+        case "mid":
+        default:
+          return WORLD_HEIGHT * 0.5;
+      }
+    }
+
+    const centerY = mothershipPos.y;
     switch (lane) {
       case "top":
         return centerY - 220;

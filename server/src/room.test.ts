@@ -63,6 +63,12 @@ describe("Room", () => {
     expect(room.state).toBe("in_progress");
   });
 
+  it("uses selected agent mode when starting match", () => {
+    room.addPlayer(mockWs(), "Alice");
+    room.startMatch("external_agent");
+    expect(room.agentControlMode).toBe("external_agent");
+  });
+
   it("rejects players when room is full", () => {
     for (let i = 0; i < 4; i++) {
       room.addPlayer(mockWs(), `Player${i}`);
@@ -168,6 +174,7 @@ describe("Room", () => {
     expect(lobby.state).toBe("waiting");
     expect(lobby.players).toBe(2);
     expect(lobby.maxPlayers).toBe(4);
+    expect(lobby.mode).toBe("builtin_fake_ai");
   });
 
   it("broadcasts lobby_update when players join in waiting state", () => {
@@ -187,6 +194,7 @@ describe("Room", () => {
     const parsed = JSON.parse(lastCall);
     expect(parsed.type).toBe("lobby_update");
     expect(parsed.players).toHaveLength(2);
+    expect(parsed.mode).toBe("builtin_fake_ai");
   });
 
   it("initializes game state with mothership and enemies on startMatch", () => {
@@ -207,6 +215,14 @@ describe("Room", () => {
 
     const result = room.addPlayer(mockWs(), "P2");
     expect(result).toBeNull();
+  });
+
+  it("resets mode back to builtin_fake_ai when returning to lobby", () => {
+    room.addPlayer(mockWs(), "P1");
+    room.startMatch("external_agent");
+    expect(room.agentControlMode).toBe("external_agent");
+    room.resetToLobby();
+    expect(room.agentControlMode).toBe("builtin_fake_ai");
   });
 });
 
