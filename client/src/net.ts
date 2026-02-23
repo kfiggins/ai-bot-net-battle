@@ -25,7 +25,13 @@ export class NetClient {
 
   connect(roomId: string = "default"): void {
     this.targetRoomId = roomId;
-    this.ws = new WebSocket(`ws://localhost:${SERVER_PORT}`);
+
+    const envWsUrl = (import.meta as { env?: { VITE_WS_URL?: string } }).env?.VITE_WS_URL;
+    const wsUrl = envWsUrl && envWsUrl.length > 0
+      ? envWsUrl
+      : `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:${SERVER_PORT}`;
+
+    this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
       console.log("[net] Connected to server");
