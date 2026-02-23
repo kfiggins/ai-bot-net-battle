@@ -156,21 +156,26 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
-      // Reconcile: blend predicted position toward server position
+      // Reconcile: nudge prediction toward server truth without back-and-forth jitter.
       if (selfId && this.predictedPos) {
         const serverSelf = entities.find((e) => e.id === selfId);
         if (serverSelf) {
           const dx = serverSelf.targetPos.x - this.predictedPos.x;
           const dy = serverSelf.targetPos.y - this.predictedPos.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist > 100) {
-            // Too far off — snap to server
+          const isMoving = input.up || input.down || input.left || input.right;
+
+          if (dist > 160) {
+            // Way off (packet delay/rejoin): hard snap.
             this.predictedPos.x = serverSelf.targetPos.x;
             this.predictedPos.y = serverSelf.targetPos.y;
-          } else if (dist > 2) {
-            // Smooth correction toward server truth
-            this.predictedPos.x += dx * 0.15;
-            this.predictedPos.y += dy * 0.15;
+          } else if (dist > 12) {
+            // While moving, apply light correction; while idle, converge faster.
+            const alpha = isMoving ? 0.04 : 0.16;
+            const maxStep = isMoving ? 4 : 10;
+            const step = Math.min(maxStep, dist * alpha);
+            this.predictedPos.x += (dx / dist) * step;
+            this.predictedPos.y += (dy / dist) * step;
           }
         }
       }
