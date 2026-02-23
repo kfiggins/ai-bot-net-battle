@@ -75,7 +75,7 @@ export class GameScene extends Phaser.Scene {
 
     // Leave Game button (top-right, viewport-relative)
     const leaveBtn = this.add
-      .text(VIEWPORT_WIDTH - 10, 10, "LEAVE", {"}
+      .text(VIEWPORT_WIDTH - 10, 10, "LEAVE", {
         fontSize: "14px",
         color: "#ff4444",
         fontFamily: "monospace",
