@@ -26,10 +26,13 @@ export class NetClient {
   connect(roomId: string = "default"): void {
     this.targetRoomId = roomId;
 
-    const envWsUrl = (import.meta as { env?: { VITE_WS_URL?: string } }).env?.VITE_WS_URL;
+    const env = (import.meta as { env?: { VITE_WS_URL?: string; DEV?: boolean } }).env;
+    const envWsUrl = env?.VITE_WS_URL;
     const wsUrl = envWsUrl && envWsUrl.length > 0
       ? envWsUrl
-      : `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:${SERVER_PORT}`;
+      : env?.DEV
+        ? `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.hostname}:${SERVER_PORT}`
+        : `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/ws`;
 
     this.ws = new WebSocket(wsUrl);
 
