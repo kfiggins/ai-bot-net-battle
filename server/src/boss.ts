@@ -68,7 +68,15 @@ export class BossManager {
       ? sim.entities.get(this.mothershipId)
       : null;
 
-    if (!mothership) return;
+    // If the mothership entity is gone, treat it as destroyed and end match.
+    // (Simulation may remove dead entities before boss.update runs.)
+    if (!mothership) {
+      if (this.mothershipId) {
+        this.phaseState.matchOver = true;
+        this.phaseState.winner = "players";
+      }
+      return;
+    }
 
     // Enforce shield: if shielded, undo any damage dealt this tick
     const shielded = this.isShielded(sim);
