@@ -168,6 +168,7 @@ export class NetClient {
     this.reconnectToken = null;
     if (this.ws) {
       this.ws.onclose = null;
+      this.ws.onmessage = null;
       this.ws.close();
       this.ws = null;
     }

@@ -174,14 +174,18 @@ export function createWSServer(
           const player = room.findPlayerByWs(ws);
           if (!player) return;
 
-          if (room.state !== "waiting") {
-            // End/reset match for everyone, send all back to lobby.
+          if (room.state === "finished") {
+            // Match is over — reset everyone to lobby
             room.resetToLobby();
+          } else if (room.state !== "waiting") {
+            // Match in progress — remove only this player; game continues
+            room.removePlayer(player.playerId);
+            joined = false;
           } else {
             room.removePlayer(player.playerId);
             room.broadcastLobbyUpdate();
+            joined = false;
           }
-          joined = false;
           return;
         }
 

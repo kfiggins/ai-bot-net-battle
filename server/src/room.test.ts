@@ -132,6 +132,65 @@ describe("Room", () => {
     expect(room.playerCount).toBe(0);
   });
 
+  it("removePlayer mid-game keeps match running for remaining players", () => {
+    const p1 = room.addPlayer(mockWs(), "Alice")!;
+    const p2 = room.addPlayer(mockWs(), "Bob")!;
+    room.startMatch();
+
+    room.removePlayer(p1.playerId);
+
+    // State unchanged — game continues
+    expect(room.state).toBe("in_progress");
+    expect(room.playerCount).toBe(1);
+    expect(room.players.has(p2.playerId)).toBe(true);
+    expect(room.players.has(p1.playerId)).toBe(false);
+  });
+
+  it("removePlayer mid-game removes the player entity from sim", () => {
+    const p1 = room.addPlayer(mockWs(), "Alice")!;
+    room.addPlayer(mockWs(), "Bob");
+    room.startMatch();
+
+    const entityId = p1.entityId;
+    expect(room.sim.entities.has(entityId)).toBe(true);
+
+    room.removePlayer(p1.playerId);
+    expect(room.sim.entities.has(entityId)).toBe(false);
+  });
+
+  it("removePlayer mid-game frees the slot so a new player can join", () => {
+    // Fill to the 4-player cap
+    const players = Array.from({ length: 4 }, (_, i) =>
+      room.addPlayer(mockWs(), `Player ${i + 1}`)!
+    );
+    room.startMatch();
+
+    // Room full — 5th player rejected
+    expect(room.addPlayer(mockWs(), "Newcomer")).toBeNull();
+
+    room.removePlayer(players[0].playerId);
+    expect(room.playerCount).toBe(3);
+
+    // Slot freed — newcomer can now join
+    const newcomer = room.addPlayer(mockWs(), "Newcomer");
+    expect(newcomer).not.toBeNull();
+    expect(room.playerCount).toBe(4);
+  });
+
+  it("rejoining player gets a new entity in the running simulation", () => {
+    const p1 = room.addPlayer(mockWs(), "Alice")!;
+    room.addPlayer(mockWs(), "Bob");
+    room.startMatch();
+
+    const oldEntityId = p1.entityId;
+    room.removePlayer(p1.playerId);
+
+    const rejoin = room.addPlayer(mockWs(), "Alice")!;
+
+    expect(rejoin.entityId).not.toBe(oldEntityId);
+    expect(room.sim.entities.has(rejoin.entityId)).toBe(true);
+  });
+
   it("cleans up disconnected players after timeout", () => {
     const ws = mockWs();
     const player = room.addPlayer(ws, "Eve");
@@ -223,6 +282,20 @@ describe("Room", () => {
     expect(room.agentControlMode).toBe("external_agent");
     room.resetToLobby();
     expect(room.agentControlMode).toBe("builtin_fake_ai");
+  });
+
+  it("resetToLobby from finished state sends match_end and resets to waiting", () => {
+    const ws = mockWs();
+    room.addPlayer(ws, "P1");
+    room.startMatch();
+    room.state = "finished" as any;
+
+    room.resetToLobby();
+
+    expect(room.state).toBe("waiting");
+    expect(ws.send).toHaveBeenCalledWith(
+      expect.stringContaining('"type":"match_end"')
+    );
   });
 });
 

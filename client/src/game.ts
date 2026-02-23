@@ -34,10 +34,19 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.setBackgroundColor("#111122");
 
+    // Clear any stale state from a previous session (Phaser reuses the scene instance)
+    this.entitySprites.clear();
+    this.entityLabels.clear();
+    this.teammateArrows.clear();
+    this.previousEntityIds.clear();
+    this.previousEntityHp.clear();
+    this.predictedPos = null;
+    this.cameraPos = null;
+    this.victoryShown = false;
+
     // Set up world bounds and camera
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.cameras.main.roundPixels = true;
-    this.cameraPos = null;
 
     // Draw background grid for spatial awareness
     this.drawGrid();
@@ -92,7 +101,8 @@ export class GameScene extends Phaser.Scene {
     leaveBtn.on("pointerover", () => leaveBtn.setColor("#ff8888"));
     leaveBtn.on("pointerout", () => leaveBtn.setColor("#ff4444"));
     leaveBtn.on("pointerdown", () => {
-      this.net.sendLeaveRoom();
+      this.net.disconnect();
+      this.scene.start("NameEntryScene");
     });
 
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
@@ -233,7 +243,8 @@ export class GameScene extends Phaser.Scene {
         phase: phase.current,
         remaining: phase.remaining,
       }, () => {
-        this.net.sendLeaveRoom();
+        this.net.disconnect();
+        this.scene.start("NameEntryScene");
       });
     }
 
