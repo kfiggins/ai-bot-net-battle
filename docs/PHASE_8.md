@@ -15,14 +15,14 @@ pnpm dev
 ```
 
 ## Deliverables
-- [ ] Production deployment profile (env vars, ports, host binding)
-- [ ] Reverse proxy/WSS support (TLS for browser WebSocket clients)
-- [ ] Health endpoints + startup/readiness checks
-- [ ] Structured logs with room/player correlation IDs
-- [ ] Rate limits and guardrails (join spam, input spam, command abuse)
-- [ ] Graceful process restart behavior (active rooms handled safely)
-- [ ] Basic observability dashboard/reporting (latency, tick drift, room count)
-- [ ] Deployment runbook for free-tier hosting options
+- [x] Production deployment profile (env vars, ports, host binding)
+- [x] Reverse proxy/WSS support (TLS for browser WebSocket clients)
+- [x] Health endpoints + startup/readiness checks
+- [x] Structured logs with room/player correlation IDs
+- [x] Rate limits and guardrails (join spam, input spam, command abuse)
+- [x] Graceful process restart behavior (active rooms handled safely)
+- [x] Basic observability dashboard/reporting (latency, tick drift, room count)
+- [x] Deployment runbook for free-tier hosting options
 
 ## Key Files to Create/Modify
 - `/server/src/index.ts` - Env-driven host/port/startup checks

@@ -1,17 +1,64 @@
 import { WebSocketServer, WebSocket } from "ws";
 import { ClientMessageSchema } from "shared";
 import { RoomManager } from "./room-manager.js";
+import { config } from "./config.js";
+import { log } from "./logger.js";
+
+/** Per-connection rate limiter state */
+interface ConnectionLimiter {
+  msgCount: number;
+  msgWindowStart: number;
+  joinCount: number;
+  joinWindowStart: number;
+}
+
+function checkMessageRate(limiter: ConnectionLimiter): boolean {
+  const now = Date.now();
+  if (now - limiter.msgWindowStart >= 1000) {
+    limiter.msgCount = 0;
+    limiter.msgWindowStart = now;
+  }
+  limiter.msgCount++;
+  return limiter.msgCount <= config.wsRateLimitPerSec;
+}
+
+function checkJoinRate(limiter: ConnectionLimiter): boolean {
+  const now = Date.now();
+  if (now - limiter.joinWindowStart >= 60_000) {
+    limiter.joinCount = 0;
+    limiter.joinWindowStart = now;
+  }
+  limiter.joinCount++;
+  return limiter.joinCount <= config.joinRateLimitPerMin;
+}
 
 export function createWSServer(
   port: number,
   roomManager: RoomManager
 ): WebSocketServer {
-  const wss = new WebSocketServer({ port });
+  const wss = new WebSocketServer({ port, host: config.host });
 
   wss.on("connection", (ws) => {
     let joined = false;
+    const limiter: ConnectionLimiter = {
+      msgCount: 0,
+      msgWindowStart: Date.now(),
+      joinCount: 0,
+      joinWindowStart: Date.now(),
+    };
 
     ws.on("message", (raw) => {
+      // Global message rate limit
+      if (!checkMessageRate(limiter)) {
+        ws.send(JSON.stringify({
+          v: 1,
+          type: "room_error",
+          error: "rate_limited",
+          detail: "Too many messages",
+        }));
+        return;
+      }
+
       try {
         const data = JSON.parse(raw.toString());
         const result = ClientMessageSchema.safeParse(data);
@@ -38,13 +85,24 @@ export function createWSServer(
             return;
           }
 
+          // Join spam rate limit
+          if (!checkJoinRate(limiter)) {
+            log.warn("Join rate limit hit");
+            ws.send(JSON.stringify({
+              v: 1,
+              type: "room_error",
+              error: "rate_limited",
+              detail: "Too many join attempts",
+            }));
+            return;
+          }
+
           // Try reconnect first
           if (msg.reconnectToken) {
             for (const room of roomManager.rooms.values()) {
               const player = room.reconnectPlayer(ws, msg.reconnectToken);
               if (player) {
                 joined = true;
-                console.log(`[ws] ${player.playerId} reconnected to room ${room.roomId}`);
                 ws.send(JSON.stringify({
                   v: 1,
                   type: "welcome",
@@ -83,7 +141,6 @@ export function createWSServer(
           }
 
           joined = true;
-          console.log(`[ws] ${player.playerId} joined room ${room.roomId}`);
 
           ws.send(JSON.stringify({
             v: 1,
@@ -123,7 +180,6 @@ export function createWSServer(
       const player = room.findPlayerByWs(ws);
       if (!player) return;
 
-      console.log(`[ws] ${player.playerId} disconnected from room ${room.roomId}`);
       room.disconnectPlayer(player.playerId);
     });
   });

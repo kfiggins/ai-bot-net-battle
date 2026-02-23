@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { Entity, PlayerInputData, WORLD_WIDTH, WORLD_HEIGHT } from "shared";
+import { Entity, PlayerInputData, WORLD_WIDTH, WORLD_HEIGHT, PLAYER_SPEED } from "shared";
 import { NetClient } from "./net.js";
 import { SnapshotInterpolator, InterpolatedEntity } from "./interpolation.js";
 import { VFXManager } from "./vfx.js";
@@ -17,6 +17,8 @@ export class GameScene extends Phaser.Scene {
   private hud!: HUD;
   private previousEntityIds: Set<string> = new Set();
   private previousEntityHp: Map<string, number> = new Map();
+  /** Client-side predicted position for local player */
+  private predictedPos: { x: number; y: number } | null = null;
 
   constructor() {
     super({ key: "GameScene" });
@@ -46,41 +48,100 @@ export class GameScene extends Phaser.Scene {
       this.interpolator.pushSnapshot(snapshot);
     });
 
+    // Reset prediction when entity ID changes (reconnect / new player)
+    this.net.setEntityChangeHandler(() => {
+      this.predictedPos = null;
+    });
+
     // Use URL hash as room ID, e.g. http://localhost:5173/#my-room
     const roomId = window.location.hash.slice(1) || "default";
     this.net.connect(roomId);
   }
 
   update(_time: number, dt: number): void {
-    // Calculate aim angle from player's position toward cursor
-    let playerX = WORLD_WIDTH / 2;
-    let playerY = WORLD_HEIGHT / 2;
     const selfId = this.net.selfEntityId;
-    if (selfId) {
-      const sprite = this.entitySprites.get(selfId);
-      if (sprite) {
-        playerX = sprite.x;
-        playerY = sprite.y;
-      }
-    }
+    const dtSec = dt / 1000;
 
-    const aimAngle = Math.atan2(
-      this.mouseWorldPos.y - playerY,
-      this.mouseWorldPos.x - playerX
-    );
-
+    // Read input
     const input: PlayerInputData = {
       up: this.cursors.up.isDown || this.wasd.w.isDown,
       down: this.cursors.down.isDown || this.wasd.s.isDown,
       left: this.cursors.left.isDown || this.wasd.a.isDown,
       right: this.cursors.right.isDown || this.wasd.d.isDown,
       fire: this.fireKey.isDown || this.input.activePointer.isDown,
-      aimAngle,
+      aimAngle: 0, // set below after prediction
     };
+
+    // Client-side prediction: move local player immediately
+    if (selfId && this.predictedPos) {
+      let vx = 0;
+      let vy = 0;
+      if (input.up) vy -= 1;
+      if (input.down) vy += 1;
+      if (input.left) vx -= 1;
+      if (input.right) vx += 1;
+      const mag = Math.sqrt(vx * vx + vy * vy);
+      if (mag > 0) {
+        vx = (vx / mag) * PLAYER_SPEED;
+        vy = (vy / mag) * PLAYER_SPEED;
+      }
+      this.predictedPos.x = Math.max(0, Math.min(WORLD_WIDTH, this.predictedPos.x + vx * dtSec));
+      this.predictedPos.y = Math.max(0, Math.min(WORLD_HEIGHT, this.predictedPos.y + vy * dtSec));
+    }
+
+    // Calculate aim angle from predicted position (or sprite fallback)
+    let playerX = WORLD_WIDTH / 2;
+    let playerY = WORLD_HEIGHT / 2;
+    if (selfId && this.predictedPos) {
+      playerX = this.predictedPos.x;
+      playerY = this.predictedPos.y;
+    }
+
+    input.aimAngle = Math.atan2(
+      this.mouseWorldPos.y - playerY,
+      this.mouseWorldPos.x - playerX
+    );
+
     this.net.sendInput(input);
 
     const entities = this.interpolator.getInterpolatedEntities();
     if (entities.length > 0) {
+      // Initialize predicted position from first snapshot containing our entity
+      if (selfId && !this.predictedPos) {
+        const self = entities.find((e) => e.id === selfId);
+        if (self) {
+          this.predictedPos = { x: self.pos.x, y: self.pos.y };
+        }
+      }
+
+      // Reconcile: blend predicted position toward server position
+      if (selfId && this.predictedPos) {
+        const serverSelf = entities.find((e) => e.id === selfId);
+        if (serverSelf) {
+          const dx = serverSelf.targetPos.x - this.predictedPos.x;
+          const dy = serverSelf.targetPos.y - this.predictedPos.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist > 100) {
+            // Too far off — snap to server
+            this.predictedPos.x = serverSelf.targetPos.x;
+            this.predictedPos.y = serverSelf.targetPos.y;
+          } else if (dist > 2) {
+            // Smooth correction toward server truth
+            this.predictedPos.x += dx * 0.15;
+            this.predictedPos.y += dy * 0.15;
+          }
+        }
+      }
+
+      // Override local player position with prediction before rendering
+      if (selfId && this.predictedPos) {
+        const selfEntity = entities.find((e) => e.id === selfId);
+        if (selfEntity) {
+          selfEntity.pos.x = this.predictedPos.x;
+          selfEntity.pos.y = this.predictedPos.y;
+        }
+      }
+
       this.detectEvents(entities);
       this.renderEntities(entities);
       this.hud.updateHealthBars(entities);

@@ -1,6 +1,7 @@
 import { WebSocket } from "ws";
 import { MAX_ROOMS } from "shared";
 import { Room } from "./room.js";
+import { log } from "./logger.js";
 
 export class RoomManager {
   rooms: Map<string, Room> = new Map();
@@ -13,7 +14,7 @@ export class RoomManager {
 
     const room = new Room(roomId);
     this.rooms.set(roomId, room);
-    console.log(`[rooms] Created room: ${roomId}`);
+    log.info("Room created", { roomId });
     return room;
   }
 
@@ -35,7 +36,7 @@ export class RoomManager {
       if (room.isEmpty() || (room.state === "finished" && room.connectedCount === 0)) {
         room.destroy();
         this.rooms.delete(roomId);
-        console.log(`[rooms] Destroyed room: ${roomId}`);
+        log.info("Room cleaned up", { roomId });
       }
     }
   }

@@ -1,4 +1,4 @@
-import { PlayerInputData, SnapshotMessage, ServerMessageSchema, SERVER_PORT } from "shared";
+import { PlayerInputData, SnapshotMessage, ServerMessageSchema, SERVER_PORT, TICK_MS } from "shared";
 
 export class NetClient {
   private ws: WebSocket | null = null;
@@ -7,6 +7,8 @@ export class NetClient {
   roomId: string | null = null;
   private reconnectToken: string | null = null;
   private targetRoomId: string = "default";
+  private lastInputTime = 0;
+  private onEntityChange: (() => void) | null = null;
 
   connect(roomId: string = "default"): void {
     this.targetRoomId = roomId;
@@ -33,10 +35,15 @@ export class NetClient {
 
         const msg = result.data;
         if (msg.type === "welcome") {
+          const oldEntityId = this.selfEntityId;
           this.selfEntityId = msg.entityId;
           this.roomId = msg.roomId;
           this.reconnectToken = msg.reconnectToken;
           console.log(`[net] Joined room ${msg.roomId}, entity: ${msg.entityId}`);
+          // Notify game if entity changed (reconnect with new entity)
+          if (oldEntityId !== msg.entityId && this.onEntityChange) {
+            this.onEntityChange();
+          }
         } else if (msg.type === "room_error") {
           console.error(`[net] Room error: ${msg.error}`, msg.detail);
         } else if (msg.type === "snapshot" && this.onSnapshot) {
@@ -59,8 +66,13 @@ export class NetClient {
     };
   }
 
+  /** Send input throttled to server tick rate (~30Hz) */
   sendInput(input: PlayerInputData): void {
     if (this.ws?.readyState === WebSocket.OPEN && this.roomId) {
+      const now = performance.now();
+      if (now - this.lastInputTime < TICK_MS) return;
+      this.lastInputTime = now;
+
       this.ws.send(
         JSON.stringify({
           v: 1,
@@ -73,5 +85,9 @@ export class NetClient {
 
   setSnapshotHandler(handler: (snapshot: SnapshotMessage) => void): void {
     this.onSnapshot = handler;
+  }
+
+  setEntityChangeHandler(handler: () => void): void {
+    this.onEntityChange = handler;
   }
 }

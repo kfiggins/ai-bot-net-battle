@@ -2,6 +2,7 @@ import { WebSocket } from "ws";
 import { v4 as uuid } from "uuid";
 import {
   TICK_MS,
+  TICK_RATE,
   SNAPSHOT_INTERVAL,
   MAX_PLAYERS_PER_ROOM,
   RECONNECT_TIMEOUT_MS,
@@ -11,6 +12,7 @@ import { AIManager } from "./ai.js";
 import { Economy } from "./economy.js";
 import { AgentAPI } from "./agent.js";
 import { BossManager } from "./boss.js";
+import { log } from "./logger.js";
 
 export type RoomState = "waiting" | "in_progress" | "finished";
 
@@ -23,9 +25,17 @@ export interface RoomPlayer {
   disconnectedAt: number | null; // timestamp, null if connected
 }
 
+/** Tick drift tracking for observability */
+export interface TickMetrics {
+  observedTickRate: number;
+  maxTickMs: number;
+  totalTicks: number;
+}
+
 export class Room {
   readonly roomId: string;
   state: RoomState = "waiting";
+  readonly createdAt: number = Date.now();
 
   sim: Simulation;
   ai: AIManager;
@@ -33,6 +43,13 @@ export class Room {
   agent: AgentAPI;
   boss: BossManager;
   players: Map<string, RoomPlayer> = new Map();
+
+  /** Tick drift instrumentation */
+  private _tickMetrics: TickMetrics = { observedTickRate: 0, maxTickMs: 0, totalTicks: 0 };
+  private _lastTickTime: number = 0;
+  private _tickDurations: number[] = [];
+  private _metricsWindowStart: number = 0;
+  private _ticksInWindow: number = 0;
 
   private tickInterval: ReturnType<typeof setInterval> | null = null;
   private nextPlayerId = 1;
@@ -56,6 +73,10 @@ export class Room {
       if (p.ws) count++;
     }
     return count;
+  }
+
+  get tickMetrics(): TickMetrics {
+    return { ...this._tickMetrics };
   }
 
   getLobbyState() {
@@ -84,6 +105,8 @@ export class Room {
     };
     this.players.set(playerId, player);
 
+    log.info("Player joined", { roomId: this.roomId, playerId, displayName });
+
     // Start the game when first player joins
     if (this.state === "waiting") {
       this.startMatch();
@@ -104,6 +127,7 @@ export class Room {
           player.entityId = entity.id;
         }
 
+        log.info("Player reconnected", { roomId: this.roomId, playerId: player.playerId });
         return player;
       }
     }
@@ -116,6 +140,8 @@ export class Room {
 
     player.ws = null;
     player.disconnectedAt = Date.now();
+
+    log.info("Player disconnected", { roomId: this.roomId, playerId });
 
     // Remove their entity from the sim
     this.sim.removePlayer(playerId);
@@ -134,6 +160,7 @@ export class Room {
     const now = Date.now();
     for (const [playerId, player] of this.players) {
       if (player.disconnectedAt !== null && now - player.disconnectedAt > RECONNECT_TIMEOUT_MS) {
+        log.info("Removing timed-out player", { roomId: this.roomId, playerId });
         this.removePlayer(playerId);
       }
     }
@@ -150,6 +177,7 @@ export class Room {
     this.state = "in_progress";
     this.initGameState();
     this.startTickLoop();
+    log.info("Match started", { roomId: this.roomId });
   }
 
   private initGameState(): void {
@@ -165,7 +193,14 @@ export class Room {
   }
 
   private startTickLoop(): void {
+    const now = Date.now();
+    this._lastTickTime = now;
+    this._metricsWindowStart = now;
+    this._ticksInWindow = 0;
+
     this.tickInterval = setInterval(() => {
+      const tickStart = Date.now();
+
       this.sim.update();
       this.ai.update(this.sim);
       this.economy.update(this.sim, this.ai);
@@ -185,7 +220,36 @@ export class Room {
       const phaseInfo = this.boss.getPhaseInfo(this.sim);
       if (phaseInfo.matchOver && this.state !== "finished") {
         this.state = "finished";
+        log.info("Match finished", { roomId: this.roomId, tick: this.sim.tick });
       }
+
+      // Track tick drift
+      const tickEnd = Date.now();
+      const tickDuration = tickEnd - tickStart;
+      this._tickDurations.push(tickDuration);
+      this._ticksInWindow++;
+      this._tickMetrics.totalTicks++;
+
+      // Update metrics every ~1 second
+      const windowElapsed = tickEnd - this._metricsWindowStart;
+      if (windowElapsed >= 1000) {
+        this._tickMetrics.observedTickRate = (this._ticksInWindow / windowElapsed) * 1000;
+        this._tickMetrics.maxTickMs = Math.max(...this._tickDurations);
+        this._tickDurations = [];
+        this._ticksInWindow = 0;
+        this._metricsWindowStart = tickEnd;
+
+        // Warn if tick rate drifts significantly
+        if (this._tickMetrics.observedTickRate < TICK_RATE * 0.8) {
+          log.warn("Tick rate drift", {
+            roomId: this.roomId,
+            observed: Math.round(this._tickMetrics.observedTickRate * 10) / 10,
+            target: TICK_RATE,
+          });
+        }
+      }
+
+      this._lastTickTime = tickStart;
     }, TICK_MS);
   }
 
@@ -210,6 +274,7 @@ export class Room {
       }
     }
     this.players.clear();
+    log.info("Room destroyed", { roomId: this.roomId });
   }
 
   isEmpty(): boolean {

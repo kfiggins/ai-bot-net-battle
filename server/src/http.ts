@@ -1,5 +1,10 @@
 import http from "node:http";
+import { TICK_RATE } from "shared";
 import { RoomManager } from "./room-manager.js";
+import { config } from "./config.js";
+import { log } from "./logger.js";
+
+const startTime = Date.now();
 
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -8,6 +13,20 @@ function readBody(req: http.IncomingMessage): Promise<string> {
     req.on("end", () => resolve(body));
     req.on("error", reject);
   });
+}
+
+/** Per-IP rate limiter for HTTP command endpoint */
+const commandRateLimiter = new Map<string, { count: number; resetAt: number }>();
+
+function checkCommandRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = commandRateLimiter.get(ip);
+  if (!entry || now >= entry.resetAt) {
+    commandRateLimiter.set(ip, { count: 1, resetAt: now + 60_000 });
+    return true;
+  }
+  entry.count++;
+  return entry.count <= config.httpCommandRateLimitPerMin;
 }
 
 export function createHTTPServer(
@@ -23,6 +42,68 @@ export function createHTTPServer(
     if (req.method === "OPTIONS") {
       res.writeHead(204);
       res.end();
+      return;
+    }
+
+    // Health check — is the process alive and accepting connections?
+    if (req.method === "GET" && req.url === "/healthz") {
+      const uptimeSec = Math.floor((Date.now() - startTime) / 1000);
+      let totalPlayers = 0;
+      let avgObservedRate = 0;
+      let roomCount = 0;
+      for (const room of roomManager.rooms.values()) {
+        totalPlayers += room.connectedCount;
+        if (room.state === "in_progress") {
+          avgObservedRate += room.tickMetrics.observedTickRate;
+          roomCount++;
+        }
+      }
+      if (roomCount > 0) avgObservedRate /= roomCount;
+
+      res.writeHead(200);
+      res.end(JSON.stringify({
+        ok: true,
+        uptimeSec,
+        rooms: roomManager.rooms.size,
+        players: totalPlayers,
+        tickRateTarget: TICK_RATE,
+        tickRateObserved: Math.round(avgObservedRate * 10) / 10,
+      }));
+      return;
+    }
+
+    // Readiness check — is the server ready to accept game traffic?
+    if (req.method === "GET" && req.url === "/readyz") {
+      const uptimeSec = (Date.now() - startTime) / 1000;
+      // Ready after 1 second of uptime (allow initialization)
+      const ready = uptimeSec >= 1;
+      res.writeHead(ready ? 200 : 503);
+      res.end(JSON.stringify({ ready }));
+      return;
+    }
+
+    // Metrics — detailed room-level observability
+    if (req.method === "GET" && req.url === "/metrics") {
+      const rooms = Array.from(roomManager.rooms.values()).map((room) => {
+        const metrics = room.tickMetrics;
+        return {
+          roomId: room.roomId,
+          state: room.state,
+          players: room.connectedCount,
+          tick: room.sim.tick,
+          phase: room.boss.getPhaseInfo(room.sim).current,
+          observedTickRate: Math.round(metrics.observedTickRate * 10) / 10,
+          maxTickMs: metrics.maxTickMs,
+          totalTicks: metrics.totalTicks,
+          createdAt: room.createdAt,
+        };
+      });
+      res.writeHead(200);
+      res.end(JSON.stringify({
+        uptimeSec: Math.floor((Date.now() - startTime) / 1000),
+        totalRooms: roomManager.rooms.size,
+        rooms,
+      }));
       return;
     }
 
@@ -63,6 +144,14 @@ export function createHTTPServer(
     // Room-specific agent command: /rooms/:roomId/agent/command
     const cmdMatch = req.url?.match(/^\/rooms\/([^/]+)\/agent\/command$/);
     if (req.method === "POST" && cmdMatch) {
+      const ip = req.socket.remoteAddress ?? "unknown";
+      if (!checkCommandRateLimit(ip)) {
+        log.warn("HTTP command rate limit hit", { ip });
+        res.writeHead(429);
+        res.end(JSON.stringify({ ok: false, error: "rate_limited", detail: "Too many requests" }));
+        return;
+      }
+
       const room = roomManager.getRoom(cmdMatch[1]);
       if (!room) {
         res.writeHead(404);
@@ -97,6 +186,14 @@ export function createHTTPServer(
     res.end(JSON.stringify({ error: "not_found" }));
   });
 
-  server.listen(port + 1);
+  // Periodic cleanup of stale rate limit entries
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, entry] of commandRateLimiter) {
+      if (now >= entry.resetAt) commandRateLimiter.delete(ip);
+    }
+  }, 60_000);
+
+  server.listen(port + 1, config.host);
   return server;
 }

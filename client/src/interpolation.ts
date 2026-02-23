@@ -28,7 +28,7 @@ export class SnapshotInterpolator {
     }
 
     const elapsed = performance.now() - this.snapshotTime;
-    const t = Math.min(elapsed / this.snapshotInterval, 1);
+    const t = elapsed / this.snapshotInterval; // no clamp — allow > 1 for extrapolation
 
     const prevMap = new Map<string, Entity>();
     for (const e of this.prev.entities) {
@@ -45,14 +45,26 @@ export class SnapshotInterpolator {
         };
       }
 
+      let x: number;
+      let y: number;
+
+      if (t <= 1) {
+        // Normal interpolation between prev and current
+        x = lerp(prev.pos.x, entity.pos.x, t);
+        y = lerp(prev.pos.y, entity.pos.y, t);
+      } else {
+        // Extrapolate past target using entity velocity (cap at 1.5x interval)
+        const tExtra = Math.min(t - 1, 0.5);
+        const extraSec = tExtra * (this.snapshotInterval / 1000);
+        x = entity.pos.x + entity.vel.x * extraSec;
+        y = entity.pos.y + entity.vel.y * extraSec;
+      }
+
       return {
         ...entity,
         prevPos: { ...prev.pos },
         targetPos: { ...entity.pos },
-        pos: {
-          x: lerp(prev.pos.x, entity.pos.x, t),
-          y: lerp(prev.pos.y, entity.pos.y, t),
-        },
+        pos: { x, y },
       };
     });
   }

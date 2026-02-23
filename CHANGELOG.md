@@ -1,5 +1,25 @@
 # Changelog
 
+## Phase 8: Deployment + Multiplayer Hardening
+
+### Added
+- Server: `config.ts` — env-driven configuration (HOST, WS_PORT, HTTP_PORT, NODE_ENV, rate limits)
+- Server: `logger.ts` — structured logger with room/player correlation IDs, configurable log levels
+- Server: Health endpoints: `GET /healthz` (liveness), `GET /readyz` (readiness), `GET /metrics` (per-room observability)
+- Server: Tick drift instrumentation — observed tick rate, max tick duration, drift warnings
+- Server: Per-connection WS rate limiting (60 msgs/sec, 5 joins/min)
+- Server: Per-IP HTTP command rate limiting (30 cmds/min) with 429 responses
+- Server: Graceful shutdown on SIGTERM/SIGINT (stops accepting connections, destroys rooms, flushes I/O)
+- Server: Production `start` script (`pnpm --filter server start`)
+- Docs: `DEPLOYMENT.md` — full deployment runbook (env vars, reverse proxy configs, hosting options, limits reference)
+- Hardening test suite (12 tests)
+
+### Changed
+- Server: All `console.log` calls replaced with structured logger
+- Server: WS and HTTP servers bind to configurable host (default `0.0.0.0`)
+- Server: `index.ts` uses env-driven config instead of hardcoded constants
+- Server: Room tracks `createdAt` timestamp and exposes `tickMetrics` getter
+
 ## Phase 7: Multiplayer Rooms + Match Lifecycle
 
 ### Added
