@@ -71,6 +71,38 @@ pnpm dev
 - NetClient is shared between scenes via the Phaser registry.
 - During lobby, no tick loop runs and no snapshots are sent.
 
+## Post-Phase 9 Hotfix Notes (2026-02-23)
+
+These were added after initial Phase 9 completion to fix real playtest issues.
+
+### Why these changes were made
+- Players needed a clear end-of-match UX (not just phase text).
+- Agent commands were still possible in edge cases after match end/lobby state.
+- Minion groups looked unnatural (stacking and synchronized movement).
+- Re-introduced towers in phase 3 were expected to re-enable boss shielding.
+
+### What changed
+- Added victory overlay in client with:
+  - match time
+  - final phase
+  - remaining objective summary
+  - **Return to Lobby** button
+- Server now rejects agent commands when:
+  - room is not `in_progress`
+  - match is already over
+- `resetToLobby()` now works from `finished` state too (button path fix).
+- Mothership match-over detection handles entity-removed-first ordering.
+- Boss shielding logic now treats active towers as global shield source in any phase.
+- Minion spawn/movement now includes variation:
+  - spawn spread/jitter (x+y)
+  - per-minion movement/fire cadence variance
+
+### Design intent (for future agents)
+- **Return to Lobby must always be safe/idempotent** from post-win states.
+- **Match authority is server-side**; client UI can be stale, command APIs must gate by room+phase state.
+- **Gameplay readability > strict deterministic symmetry** for enemy swarms.
+- **Tower presence always implies boss shield ON** (phase-agnostic override).
+
 ## After This Phase
 - Player name input (custom names instead of "Player N")
 - Ready-up system (require all players to ready before start)

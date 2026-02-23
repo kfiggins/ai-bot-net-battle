@@ -1,5 +1,17 @@
 # Deployment Runbook
 
+## Current VPS Workflow (Ramsey-managed)
+
+Client deploy is intentionally automated via a constrained sudo helper so the agent can publish without full root shell.
+
+- Build client:
+  - `cd /home/openclaw/.openclaw/workspace/ai-bot-net-battle && corepack pnpm --filter client build`
+- Publish client bundle:
+  - `sudo /usr/local/bin/botnet-deploy-client`
+
+The helper syncs `client/dist` -> `/var/www/botnet` and ensures `caddy:caddy` ownership.
+Use lobby footer version text to verify the active build after deploy.
+
 ## Environment Variables
 
 | Variable | Default | Description |
