@@ -73,7 +73,7 @@ export const ENEMY_DEAGGRO_RANGE = 900;  // pixels — stop chasing when player 
 export const ENEMY_PATROL_RADIUS = 400;  // pixels — wander radius around mothership
 export const ENEMY_PATROL_SPEED = 60;    // pixels/second — slower than chase speed
 
-export const SERVER_PORT = 3000;
+export const SERVER_PORT = parseInt(process.env.WS_PORT ?? "3000", 10);
 export const CLIENT_PORT = 5173;
 
 // Rooms

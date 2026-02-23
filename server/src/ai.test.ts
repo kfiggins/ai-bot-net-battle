@@ -250,7 +250,7 @@ describe("AIManager", () => {
       player.pos.x = 100;
       player.pos.y = 300;
 
-      const tower = sim.spawnEnemy("tower", 800, 300);
+      const tower = sim.spawnEnemy("tower", 100 + TOWER_FIRE_RANGE + 100, 300);
       registerReady(ai, tower.id);
 
       sim.update();

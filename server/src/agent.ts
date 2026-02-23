@@ -168,15 +168,19 @@ export class AgentAPI {
   }
 
   private laneToY(lane?: "top" | "mid" | "bottom", mothershipPos?: { x: number; y: number }): number {
-    const centerY = mothershipPos?.y ?? WORLD_HEIGHT * 0.5;
+    if (mothershipPos) {
+      // Near mothership: use small fixed offsets for formation
+      switch (lane) {
+        case "top":    return mothershipPos.y - 220;
+        case "bottom": return mothershipPos.y + 220;
+        default:       return mothershipPos.y;
+      }
+    }
+    // No anchor: spread lanes across the full world height
     switch (lane) {
-      case "top":
-        return centerY - 220;
-      case "bottom":
-        return centerY + 220;
-      case "mid":
-      default:
-        return centerY;
+      case "top":    return WORLD_HEIGHT * 0.25;
+      case "bottom": return WORLD_HEIGHT * 0.75;
+      default:       return WORLD_HEIGHT * 0.5;
     }
   }
 

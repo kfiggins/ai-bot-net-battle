@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { SnapshotInterpolator } from "./interpolation.js";
-import { SnapshotMessage } from "shared";
+import { SnapshotMessage, SNAPSHOT_RATE } from "shared";
 
 function makeSnapshot(
   tick: number,
@@ -43,7 +43,7 @@ describe("SnapshotInterpolator", () => {
 
   it("interpolates between two snapshots", () => {
     const mockNow = vi.spyOn(performance, "now");
-    const interval = 1000 / 15; // ~66.667ms
+    const interval = 1000 / SNAPSHOT_RATE;
 
     // Push first snapshot
     mockNow.mockReturnValue(0);

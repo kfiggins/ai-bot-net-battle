@@ -4,6 +4,7 @@ import { NetClient } from "./net.js";
 import { SnapshotInterpolator, InterpolatedEntity } from "./interpolation.js";
 import { VFXManager } from "./vfx.js";
 import { HUD } from "./ui.js";
+import { computeTeammateArrow } from "./teammate-arrows.js";
 
 export class GameScene extends Phaser.Scene {
   private net!: NetClient;
@@ -18,6 +19,7 @@ export class GameScene extends Phaser.Scene {
   private hud!: HUD;
   private previousEntityIds: Set<string> = new Set();
   private previousEntityHp: Map<string, number> = new Map();
+  private teammateArrows: Map<string, Phaser.GameObjects.Graphics> = new Map();
   /** Client-side predicted position for local player */
   private predictedPos: { x: number; y: number } | null = null;
   private matchStartMs = 0;
@@ -203,6 +205,7 @@ export class GameScene extends Phaser.Scene {
 
       this.detectEvents(entities);
       this.renderEntities(entities);
+      this.updateTeammateArrows(entities, selfId);
       this.hud.updateHealthBars(entities);
       this.hud.updateDebug(entities);
     }
@@ -341,6 +344,81 @@ export class GameScene extends Phaser.Scene {
     const color = getColor(entity);
     const radius = getRadius(entity.kind);
     return this.add.circle(entity.pos.x, entity.pos.y, radius, color);
+  }
+
+  /** Draw/update screen-edge arrows pointing toward off-screen teammates. */
+  private updateTeammateArrows(entities: InterpolatedEntity[], selfId: string | null): void {
+    const cam = this.cameras.main;
+
+    if (!selfId) {
+      for (const gfx of this.teammateArrows.values()) gfx.setVisible(false);
+      return;
+    }
+
+    const selfEntity = entities.find((e) => e.id === selfId);
+    if (!selfEntity) {
+      for (const gfx of this.teammateArrows.values()) gfx.setVisible(false);
+      return;
+    }
+
+    const teammates = entities.filter(
+      (e) => e.kind === "player_ship" && e.id !== selfId && e.team === selfEntity.team
+    );
+
+    const activeIds = new Set<string>();
+
+    for (const mate of teammates) {
+      activeIds.add(mate.id);
+
+      const result = computeTeammateArrow(
+        mate.pos.x, mate.pos.y,
+        cam.scrollX, cam.scrollY,
+        VIEWPORT_WIDTH, VIEWPORT_HEIGHT
+      );
+
+      if (!result.visible) {
+        const gfx = this.teammateArrows.get(mate.id);
+        if (gfx) gfx.setVisible(false);
+        continue;
+      }
+
+      let gfx = this.teammateArrows.get(mate.id);
+      if (!gfx) {
+        gfx = this.add.graphics();
+        gfx.setDepth(150);
+        gfx.setScrollFactor(0);
+        this.teammateArrows.set(mate.id, gfx);
+      }
+
+      gfx.setVisible(true);
+      gfx.clear();
+
+      const color = getColor(mate);
+      const { screenX: ax, screenY: ay, angle } = result;
+
+      // Arrow triangle: tip points toward the off-screen teammate
+      const tipLen = 12;
+      const baseHalf = 7;
+      const tipX = ax + Math.cos(angle) * tipLen;
+      const tipY = ay + Math.sin(angle) * tipLen;
+      const b1x = ax + Math.cos(angle + Math.PI / 2) * baseHalf;
+      const b1y = ay + Math.sin(angle + Math.PI / 2) * baseHalf;
+      const b2x = ax + Math.cos(angle - Math.PI / 2) * baseHalf;
+      const b2y = ay + Math.sin(angle - Math.PI / 2) * baseHalf;
+
+      gfx.fillStyle(color, 0.9);
+      gfx.fillTriangle(tipX, tipY, b1x, b1y, b2x, b2y);
+      gfx.lineStyle(1.5, 0xffffff, 0.5);
+      gfx.strokeTriangle(tipX, tipY, b1x, b1y, b2x, b2y);
+    }
+
+    // Clean up arrows for teammates who left the match
+    for (const [id, gfx] of this.teammateArrows) {
+      if (!activeIds.has(id)) {
+        gfx.destroy();
+        this.teammateArrows.delete(id);
+      }
+    }
   }
 }
 
