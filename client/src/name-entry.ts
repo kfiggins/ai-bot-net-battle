@@ -115,6 +115,13 @@ export class NameEntryScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    // Pre-fill name from a previous session
+    const savedName = this.registry.get("displayName") as string | undefined;
+    if (savedName) {
+      this.nameInput = savedName;
+      this.updateDisplay();
+    }
+
     // Capture keyboard input
     this.input.keyboard!.on("keydown", this.handleKeyDown, this);
     this.game.canvas.focus();

@@ -79,7 +79,8 @@ export class GameScene extends Phaser.Scene {
     leaveBtn.on("pointerover", () => leaveBtn.setColor("#ff8888"));
     leaveBtn.on("pointerout", () => leaveBtn.setColor("#ff4444"));
     leaveBtn.on("pointerdown", () => {
-      this.net.sendLeaveRoom();
+      this.net.disconnect();
+      this.scene.start("NameEntryScene");
     });
 
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {

@@ -175,8 +175,9 @@ export function createWSServer(
           if (!player) return;
 
           if (room.state !== "waiting") {
-            // End/reset match for everyone, send all back to lobby.
-            room.resetToLobby();
+            // Remove only this player — the match continues for everyone else.
+            // The leaver will rejoin via a fresh join_room and be dropped back in.
+            room.disconnectPlayer(player.playerId);
           } else {
             room.removePlayer(player.playerId);
             room.broadcastLobbyUpdate();
