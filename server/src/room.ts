@@ -6,6 +6,7 @@ import {
   SNAPSHOT_INTERVAL,
   MAX_PLAYERS_PER_ROOM,
   RECONNECT_TIMEOUT_MS,
+  LobbyPlayer,
 } from "shared";
 import { Simulation } from "./sim.js";
 import { AIManager } from "./ai.js";
@@ -18,6 +19,7 @@ export type RoomState = "waiting" | "in_progress" | "finished";
 
 export interface RoomPlayer {
   playerId: string;
+  playerIndex: number;
   entityId: string;
   displayName: string;
   ws: WebSocket | null; // null when disconnected
@@ -91,12 +93,15 @@ export class Room {
     if (this.playerCount >= MAX_PLAYERS_PER_ROOM) return null;
     if (this.state === "finished") return null;
 
-    const playerId = `player_${this.nextPlayerId++}`;
-    const entity = this.sim.addPlayer(playerId);
+    const playerNum = this.nextPlayerId++;
+    const playerId = `player_${playerNum}`;
+    const label = `Player ${playerNum}`;
+    const entity = this.sim.addPlayer(playerId, label, playerNum);
     const reconnectToken = uuid();
 
     const player: RoomPlayer = {
       playerId,
+      playerIndex: playerNum,
       entityId: entity.id,
       displayName,
       ws,
@@ -107,9 +112,9 @@ export class Room {
 
     log.info("Player joined", { roomId: this.roomId, playerId, displayName });
 
-    // Start the game when first player joins
+    // Broadcast updated player list to all in lobby
     if (this.state === "waiting") {
-      this.startMatch();
+      this.broadcastLobbyUpdate();
     }
 
     return player;
@@ -123,11 +128,17 @@ export class Room {
 
         // Re-add player entity if it was removed
         if (!this.sim.entities.has(player.entityId)) {
-          const entity = this.sim.addPlayer(player.playerId);
+          const label = `Player ${player.playerIndex}`;
+          const entity = this.sim.addPlayer(player.playerId, label, player.playerIndex);
           player.entityId = entity.id;
         }
 
         log.info("Player reconnected", { roomId: this.roomId, playerId: player.playerId });
+
+        if (this.state === "waiting") {
+          this.broadcastLobbyUpdate();
+        }
+
         return player;
       }
     }
@@ -145,6 +156,10 @@ export class Room {
 
     // Remove their entity from the sim
     this.sim.removePlayer(playerId);
+
+    if (this.state === "waiting") {
+      this.broadcastLobbyUpdate();
+    }
   }
 
   removePlayer(playerId: string): void {
@@ -173,10 +188,20 @@ export class Room {
     return undefined;
   }
 
-  private startMatch(): void {
+  startMatch(): void {
+    if (this.state !== "waiting") return;
     this.state = "in_progress";
     this.initGameState();
     this.startTickLoop();
+
+    // Notify all connected players that the match is starting
+    const msg = JSON.stringify({ v: 1, type: "match_start" });
+    for (const player of this.players.values()) {
+      if (player.ws?.readyState === WebSocket.OPEN) {
+        player.ws.send(msg);
+      }
+    }
+
     log.info("Match started", { roomId: this.roomId });
   }
 
@@ -251,6 +276,22 @@ export class Room {
 
       this._lastTickTime = tickStart;
     }, TICK_MS);
+  }
+
+  /** Send current player list to all connected clients in the lobby */
+  broadcastLobbyUpdate(): void {
+    const players: LobbyPlayer[] = [];
+    for (const p of this.players.values()) {
+      if (p.ws !== null) {
+        players.push({ name: `Player ${p.playerIndex}`, playerIndex: p.playerIndex });
+      }
+    }
+    const msg = JSON.stringify({ v: 1, type: "lobby_update", players });
+    for (const player of this.players.values()) {
+      if (player.ws?.readyState === WebSocket.OPEN) {
+        player.ws.send(msg);
+      }
+    }
   }
 
   private broadcastSnapshot(): void {

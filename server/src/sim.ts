@@ -44,7 +44,7 @@ export class Simulation {
 
   private dt = 1 / TICK_RATE;
 
-  addPlayer(playerId: string): Entity {
+  addPlayer(playerId: string, label?: string, playerIndex?: number): Entity {
     const entityId = uuid();
     const entity: Entity = {
       id: entityId,
@@ -56,6 +56,8 @@ export class Simulation {
       vel: { x: 0, y: 0 },
       hp: PLAYER_HP,
       team: 1,
+      label,
+      playerIndex,
     };
     this.entities.set(entityId, entity);
     this.players.set(playerId, {

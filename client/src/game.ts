@@ -6,9 +6,10 @@ import { VFXManager } from "./vfx.js";
 import { HUD } from "./ui.js";
 
 export class GameScene extends Phaser.Scene {
-  private net: NetClient;
-  private interpolator: SnapshotInterpolator;
+  private net!: NetClient;
+  private interpolator!: SnapshotInterpolator;
   private entitySprites: Map<string, Phaser.GameObjects.Arc> = new Map();
+  private entityLabels: Map<string, Phaser.GameObjects.Text> = new Map();
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd!: { w: Phaser.Input.Keyboard.Key; a: Phaser.Input.Keyboard.Key; s: Phaser.Input.Keyboard.Key; d: Phaser.Input.Keyboard.Key };
   private fireKey!: Phaser.Input.Keyboard.Key;
@@ -22,12 +23,15 @@ export class GameScene extends Phaser.Scene {
 
   constructor() {
     super({ key: "GameScene" });
-    this.net = new NetClient();
-    this.interpolator = new SnapshotInterpolator();
   }
 
   create(): void {
     this.cameras.main.setBackgroundColor("#111122");
+
+    // Get shared NetClient from lobby scene via registry
+    this.net = this.registry.get("net") as NetClient;
+    this.interpolator = new SnapshotInterpolator();
+
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasd = {
       w: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
@@ -52,10 +56,6 @@ export class GameScene extends Phaser.Scene {
     this.net.setEntityChangeHandler(() => {
       this.predictedPos = null;
     });
-
-    // Use URL hash as room ID, e.g. http://localhost:5173/#my-room
-    const roomId = window.location.hash.slice(1) || "default";
-    this.net.connect(roomId);
   }
 
   update(_time: number, dt: number): void {
@@ -210,12 +210,31 @@ export class GameScene extends Phaser.Scene {
       } else {
         sprite.setFillStyle(getColor(entity));
       }
+
+      // Player labels
+      if (entity.label) {
+        let label = this.entityLabels.get(entity.id);
+        if (!label) {
+          label = this.add.text(0, 0, entity.label, {
+            fontSize: "11px",
+            color: "#ffffff",
+            align: "center",
+          }).setOrigin(0.5, 1);
+          this.entityLabels.set(entity.id, label);
+        }
+        label.setPosition(entity.pos.x, entity.pos.y - getRadius(entity.kind) - 4);
+      }
     }
 
     for (const [id, sprite] of this.entitySprites) {
       if (!activeIds.has(id)) {
         sprite.destroy();
         this.entitySprites.delete(id);
+        const label = this.entityLabels.get(id);
+        if (label) {
+          label.destroy();
+          this.entityLabels.delete(id);
+        }
       }
     }
   }
@@ -227,9 +246,14 @@ export class GameScene extends Phaser.Scene {
   }
 }
 
+const PLAYER_COLORS = [0x00ff88, 0x44aaff, 0xffaa00, 0xff44ff];
+
 function getColor(entity: Entity): number {
   switch (entity.kind) {
-    case "player_ship": return 0x00ff88;
+    case "player_ship": {
+      const idx = (entity.playerIndex ?? 1) - 1;
+      return PLAYER_COLORS[idx % PLAYER_COLORS.length];
+    }
     case "bullet": return entity.team === 1 ? 0xffff44 : 0xff4444;
     case "minion_ship": return 0xff6644;
     case "tower": return 0xff2222;
@@ -249,12 +273,3 @@ function getRadius(kind: string): number {
   }
 }
 
-export function createGame(): Phaser.Game {
-  return new Phaser.Game({
-    type: Phaser.AUTO,
-    width: WORLD_WIDTH,
-    height: WORLD_HEIGHT,
-    scene: GameScene,
-    parent: document.body,
-  });
-}

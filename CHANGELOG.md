@@ -1,5 +1,21 @@
 # Changelog
 
+## Phase 9: Lobby / Start Screen
+
+### Added
+- Client: `lobby.ts` — LobbyScene with game title, player list, and Start Game button
+- Shared: `start_game`, `lobby_update`, `match_start` wire message schemas
+- Server: `broadcastLobbyUpdate()` sends player list on join/disconnect/reconnect during waiting state
+- Server: `startMatch()` is now public, triggered by client `start_game` message
+- Protocol tests for new message types (7 tests)
+- Room tests for lobby broadcast and explicit start (3 tests)
+
+### Changed
+- Server: Room no longer auto-starts when first player joins; waits for `start_game`
+- Client: GameScene gets NetClient from Phaser registry (shared with LobbyScene)
+- Client: `main.ts` registers both LobbyScene and GameScene, starts with lobby
+- Client: NetClient supports lobby_update, match_start, and welcome handlers
+
 ## Phase 8: Deployment + Multiplayer Hardening
 
 ### Added

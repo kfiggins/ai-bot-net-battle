@@ -27,7 +27,7 @@ describe("Room", () => {
     expect(room.playerCount).toBe(0);
   });
 
-  it("adds a player and transitions to in_progress", () => {
+  it("adds a player and stays in waiting state", () => {
     const ws = mockWs();
     const player = room.addPlayer(ws, "Alice");
     expect(player).not.toBeNull();
@@ -35,6 +35,31 @@ describe("Room", () => {
     expect(player!.entityId).toBeTruthy();
     expect(player!.reconnectToken).toBeTruthy();
     expect(room.playerCount).toBe(1);
+    expect(room.state).toBe("waiting");
+  });
+
+  it("transitions to in_progress when startMatch is called", () => {
+    const ws = mockWs();
+    room.addPlayer(ws, "Alice");
+    expect(room.state).toBe("waiting");
+
+    room.startMatch();
+    expect(room.state).toBe("in_progress");
+
+    // match_start message should have been sent
+    expect(ws.send).toHaveBeenCalledWith(
+      expect.stringContaining('"type":"match_start"')
+    );
+  });
+
+  it("startMatch is ignored when already in_progress", () => {
+    const ws = mockWs();
+    room.addPlayer(ws, "Alice");
+    room.startMatch();
+    expect(room.state).toBe("in_progress");
+
+    // Calling again should be a no-op
+    room.startMatch();
     expect(room.state).toBe("in_progress");
   });
 
@@ -124,13 +149,33 @@ describe("Room", () => {
     room.addPlayer(mockWs(), "P2");
 
     const lobby = room.getLobbyState();
-    expect(lobby.state).toBe("in_progress");
+    expect(lobby.state).toBe("waiting");
     expect(lobby.players).toBe(2);
     expect(lobby.maxPlayers).toBe(4);
   });
 
-  it("initializes game state with mothership and enemies", () => {
-    room.addPlayer(mockWs(), "P1"); // triggers startMatch
+  it("broadcasts lobby_update when players join in waiting state", () => {
+    const ws1 = mockWs();
+    room.addPlayer(ws1, "P1");
+
+    // First player should receive lobby_update with themselves
+    expect(ws1.send).toHaveBeenCalledWith(
+      expect.stringContaining('"type":"lobby_update"')
+    );
+
+    const ws2 = mockWs();
+    room.addPlayer(ws2, "P2");
+
+    // Both players should receive updated lobby_update with 2 players
+    const lastCall = ws1.send.mock.calls[ws1.send.mock.calls.length - 1][0];
+    const parsed = JSON.parse(lastCall);
+    expect(parsed.type).toBe("lobby_update");
+    expect(parsed.players).toHaveLength(2);
+  });
+
+  it("initializes game state with mothership and enemies on startMatch", () => {
+    room.addPlayer(mockWs(), "P1");
+    room.startMatch();
     const entities = Array.from(room.sim.entities.values());
     const kinds = entities.map((e) => e.kind);
 
@@ -207,6 +252,7 @@ describe("RoomManager", () => {
     const room = manager.getOrCreateRoom("room-1")!;
     const ws = mockWs();
     room.addPlayer(ws, "P1");
+    room.startMatch();
     room.state = "finished" as any;
 
     // Player still connected — don't clean up
@@ -230,6 +276,6 @@ describe("RoomManager", () => {
     expect(summaries).toHaveLength(1);
     expect(summaries[0].roomId).toBe("room-1");
     expect(summaries[0].players).toBe(1);
-    expect(summaries[0].state).toBe("in_progress");
+    expect(summaries[0].state).toBe("waiting");
   });
 });

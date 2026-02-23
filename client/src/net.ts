@@ -1,8 +1,19 @@
-import { PlayerInputData, SnapshotMessage, ServerMessageSchema, SERVER_PORT, TICK_MS } from "shared";
+import {
+  PlayerInputData,
+  SnapshotMessage,
+  LobbyUpdateMessage,
+  LobbyState,
+  ServerMessageSchema,
+  SERVER_PORT,
+  TICK_MS,
+} from "shared";
 
 export class NetClient {
   private ws: WebSocket | null = null;
   private onSnapshot: ((snapshot: SnapshotMessage) => void) | null = null;
+  private onLobbyUpdate: ((msg: LobbyUpdateMessage) => void) | null = null;
+  private onMatchStart: (() => void) | null = null;
+  private onWelcome: ((lobbyState: LobbyState) => void) | null = null;
   selfEntityId: string | null = null;
   roomId: string | null = null;
   private reconnectToken: string | null = null;
@@ -44,10 +55,17 @@ export class NetClient {
           if (oldEntityId !== msg.entityId && this.onEntityChange) {
             this.onEntityChange();
           }
+          if (this.onWelcome) {
+            this.onWelcome(msg.lobby);
+          }
         } else if (msg.type === "room_error") {
           console.error(`[net] Room error: ${msg.error}`, msg.detail);
         } else if (msg.type === "snapshot" && this.onSnapshot) {
           this.onSnapshot(msg);
+        } else if (msg.type === "lobby_update" && this.onLobbyUpdate) {
+          this.onLobbyUpdate(msg);
+        } else if (msg.type === "match_start" && this.onMatchStart) {
+          this.onMatchStart();
         }
       } catch {
         console.warn("[net] Failed to parse server message");
@@ -83,11 +101,30 @@ export class NetClient {
     }
   }
 
+  /** Request the server to start the match */
+  sendStartGame(): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ v: 1, type: "start_game" }));
+    }
+  }
+
   setSnapshotHandler(handler: (snapshot: SnapshotMessage) => void): void {
     this.onSnapshot = handler;
   }
 
   setEntityChangeHandler(handler: () => void): void {
     this.onEntityChange = handler;
+  }
+
+  setLobbyUpdateHandler(handler: (msg: LobbyUpdateMessage) => void): void {
+    this.onLobbyUpdate = handler;
+  }
+
+  setMatchStartHandler(handler: () => void): void {
+    this.onMatchStart = handler;
+  }
+
+  setWelcomeHandler(handler: (lobbyState: LobbyState) => void): void {
+    this.onWelcome = handler;
   }
 }

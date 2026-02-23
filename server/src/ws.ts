@@ -153,6 +153,16 @@ export function createWSServer(
           return;
         }
 
+        if (msg.type === "start_game") {
+          if (!joined) return;
+
+          const room = roomManager.findRoomByWs(ws);
+          if (!room) return;
+
+          room.startMatch();
+          return;
+        }
+
         if (msg.type === "player_input") {
           if (!joined) return;
 

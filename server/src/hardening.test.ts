@@ -115,7 +115,8 @@ describe("Room tick metrics", () => {
     // Suppress log output during test
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
-    room.addPlayer(mockWs(), "P1"); // triggers startMatch
+    room.addPlayer(mockWs(), "P1");
+    room.startMatch();
 
     // Wait for a few ticks to execute
     await new Promise((resolve) => setTimeout(resolve, 150));

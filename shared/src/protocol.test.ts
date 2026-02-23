@@ -5,7 +5,11 @@ import {
   EntitySchema,
   Vec2Schema,
   ClientMessageSchema,
+  ServerMessageSchema,
   AgentCommandSchema,
+  StartGameMessageSchema,
+  LobbyUpdateMessageSchema,
+  MatchStartMessageSchema,
 } from "./protocol.js";
 
 describe("Vec2Schema", () => {
@@ -176,6 +180,54 @@ describe("ClientMessageSchema", () => {
       },
     };
     expect(ClientMessageSchema.parse(msg)).toEqual(msg);
+  });
+});
+
+describe("StartGameMessageSchema", () => {
+  it("accepts valid start_game message", () => {
+    const msg = { v: 1, type: "start_game" };
+    expect(StartGameMessageSchema.parse(msg)).toEqual(msg);
+  });
+
+  it("is accepted as a client message", () => {
+    const msg = { v: 1, type: "start_game" };
+    expect(ClientMessageSchema.parse(msg)).toEqual(msg);
+  });
+});
+
+describe("LobbyUpdateMessageSchema", () => {
+  it("accepts valid lobby_update message", () => {
+    const msg = {
+      v: 1,
+      type: "lobby_update",
+      players: [
+        { name: "Player 1", playerIndex: 1 },
+        { name: "Player 2", playerIndex: 2 },
+      ],
+    };
+    expect(LobbyUpdateMessageSchema.parse(msg)).toEqual(msg);
+  });
+
+  it("accepts empty player list", () => {
+    const msg = { v: 1, type: "lobby_update", players: [] };
+    expect(LobbyUpdateMessageSchema.parse(msg)).toEqual(msg);
+  });
+
+  it("is accepted as a server message", () => {
+    const msg = { v: 1, type: "lobby_update", players: [] };
+    expect(ServerMessageSchema.parse(msg)).toEqual(msg);
+  });
+});
+
+describe("MatchStartMessageSchema", () => {
+  it("accepts valid match_start message", () => {
+    const msg = { v: 1, type: "match_start" };
+    expect(MatchStartMessageSchema.parse(msg)).toEqual(msg);
+  });
+
+  it("is accepted as a server message", () => {
+    const msg = { v: 1, type: "match_start" };
+    expect(ServerMessageSchema.parse(msg)).toEqual(msg);
   });
 });
 

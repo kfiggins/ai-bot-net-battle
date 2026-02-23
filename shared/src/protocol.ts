@@ -18,6 +18,8 @@ export const EntitySchema = z.object({
   vel: Vec2Schema,
   hp: z.number(),
   team: z.number(),
+  label: z.string().optional(),
+  playerIndex: z.number().int().optional(),
 });
 export type Entity = z.infer<typeof EntitySchema>;
 
@@ -136,11 +138,43 @@ export const AgentCommandSchema = z.discriminatedUnion("command", [
 ]);
 export type AgentCommand = z.infer<typeof AgentCommandSchema>;
 
+// --- Client → Server: start_game ---
+
+export const StartGameMessageSchema = z.object({
+  v: z.literal(1),
+  type: z.literal("start_game"),
+});
+export type StartGameMessage = z.infer<typeof StartGameMessageSchema>;
+
+// --- Server → Client: lobby_update ---
+
+export const LobbyPlayerSchema = z.object({
+  name: z.string(),
+  playerIndex: z.number().int(),
+});
+export type LobbyPlayer = z.infer<typeof LobbyPlayerSchema>;
+
+export const LobbyUpdateMessageSchema = z.object({
+  v: z.literal(1),
+  type: z.literal("lobby_update"),
+  players: z.array(LobbyPlayerSchema),
+});
+export type LobbyUpdateMessage = z.infer<typeof LobbyUpdateMessageSchema>;
+
+// --- Server → Client: match_start ---
+
+export const MatchStartMessageSchema = z.object({
+  v: z.literal(1),
+  type: z.literal("match_start"),
+});
+export type MatchStartMessage = z.infer<typeof MatchStartMessageSchema>;
+
 // --- Union of all wire messages ---
 
 export const ClientMessageSchema = z.discriminatedUnion("type", [
   PlayerInputMessageSchema,
   JoinRoomMessageSchema,
+  StartGameMessageSchema,
 ]);
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
@@ -148,5 +182,7 @@ export const ServerMessageSchema = z.discriminatedUnion("type", [
   WelcomeMessageSchema,
   RoomErrorMessageSchema,
   SnapshotMessageSchema,
+  LobbyUpdateMessageSchema,
+  MatchStartMessageSchema,
 ]);
 export type ServerMessage = z.infer<typeof ServerMessageSchema>;
