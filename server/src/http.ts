@@ -170,6 +170,17 @@ export function createHTTPServer(
           return;
         }
 
+        const phase = room.boss.getPhaseInfo(room.sim);
+        if (phase.matchOver) {
+          res.writeHead(409);
+          res.end(JSON.stringify({
+            ok: false,
+            error: "match_over",
+            detail: "Match is over. Return to lobby and start a new game.",
+          }));
+          return;
+        }
+
         const body = await readBody(req);
         const data = JSON.parse(body);
         const result = room.agent.processCommand(data, room.sim, room.economy);

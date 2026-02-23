@@ -7,6 +7,10 @@ export class HUD {
   private objectiveText: Phaser.GameObjects.Text;
   private matchOverText: Phaser.GameObjects.Text;
   private debugText: Phaser.GameObjects.Text;
+  private victoryPanel: Phaser.GameObjects.Rectangle;
+  private victoryTitle: Phaser.GameObjects.Text;
+  private victoryStats: Phaser.GameObjects.Text;
+  private returnButton: Phaser.GameObjects.Text;
   private healthBars: Map<string, Phaser.GameObjects.Graphics> = new Map();
 
   constructor(scene: Phaser.Scene) {
@@ -60,6 +64,38 @@ export class HUD {
     this.debugText.setDepth(120);
     this.debugText.setScrollFactor(0);
     this.debugText.setOrigin(1, 0);
+
+    const cx = scene.cameras.main.width / 2;
+    const cy = scene.cameras.main.height / 2;
+    this.victoryPanel = scene.add.rectangle(cx, cy, 520, 280, 0x000000, 0.82);
+    this.victoryPanel.setDepth(260).setScrollFactor(0).setVisible(false);
+
+    this.victoryTitle = scene.add.text(cx, cy - 92, "VICTORY", {
+      fontSize: "44px",
+      color: "#00ff88",
+      fontFamily: "monospace",
+      fontStyle: "bold",
+    }).setOrigin(0.5).setDepth(270).setScrollFactor(0).setVisible(false);
+
+    this.victoryStats = scene.add.text(cx, cy - 26, "", {
+      fontSize: "18px",
+      color: "#d8ffe9",
+      fontFamily: "monospace",
+      align: "center",
+    }).setOrigin(0.5).setDepth(270).setScrollFactor(0).setVisible(false);
+
+    this.returnButton = scene.add.text(cx, cy + 88, "RETURN TO LOBBY", {
+      fontSize: "22px",
+      color: "#111122",
+      fontFamily: "monospace",
+      fontStyle: "bold",
+      backgroundColor: "#00ff88",
+      padding: { x: 18, y: 10 },
+    }).setOrigin(0.5).setDepth(280).setScrollFactor(0).setVisible(false)
+      .setInteractive({ useHandCursor: true });
+
+    this.returnButton.on("pointerover", () => this.returnButton.setStyle({ backgroundColor: "#44ffaa" }));
+    this.returnButton.on("pointerout", () => this.returnButton.setStyle({ backgroundColor: "#00ff88" }));
   }
 
   updatePhase(phase: PhaseInfo | undefined): void {
@@ -83,6 +119,25 @@ export class HUD {
       this.matchOverText.setText("VICTORY!");
       this.matchOverText.setVisible(true);
     }
+  }
+
+  showVictory(stats: { durationSec: number; phase: number; remaining: Record<string, number> }, onReturn: () => void): void {
+    const remainingText = Object.keys(stats.remaining).length > 0
+      ? Object.entries(stats.remaining).map(([k, v]) => `${k}: ${v}`).join(" | ")
+      : "none";
+
+    this.victoryStats.setText([
+      `match time: ${Math.round(stats.durationSec)}s`,
+      `final phase: ${stats.phase}`,
+      `remaining: ${remainingText}`,
+    ].join("\n"));
+
+    this.victoryPanel.setVisible(true);
+    this.victoryTitle.setVisible(true);
+    this.victoryStats.setVisible(true);
+    this.returnButton.setVisible(true);
+    this.returnButton.removeAllListeners("pointerdown");
+    this.returnButton.on("pointerdown", onReturn);
   }
 
   updateDebug(entities: Entity[]): void {
@@ -159,6 +214,10 @@ export class HUD {
     this.objectiveText.destroy();
     this.matchOverText.destroy();
     this.debugText.destroy();
+    this.victoryPanel.destroy();
+    this.victoryTitle.destroy();
+    this.victoryStats.destroy();
+    this.returnButton.destroy();
     for (const gfx of this.healthBars.values()) gfx.destroy();
     this.healthBars.clear();
   }

@@ -20,6 +20,8 @@ export class GameScene extends Phaser.Scene {
   private previousEntityHp: Map<string, number> = new Map();
   /** Client-side predicted position for local player */
   private predictedPos: { x: number; y: number } | null = null;
+  private matchStartMs = 0;
+  private victoryShown = false;
 
   constructor() {
     super({ key: "GameScene" });
@@ -43,6 +45,8 @@ export class GameScene extends Phaser.Scene {
 
     this.vfx = new VFXManager(this);
     this.hud = new HUD(this);
+    this.matchStartMs = performance.now();
+    this.victoryShown = false;
 
     // Leave Game button (top-right)
     const leaveBtn = this.add
@@ -173,7 +177,20 @@ export class GameScene extends Phaser.Scene {
       this.hud.updateDebug(entities);
     }
 
-    this.hud.updatePhase(this.interpolator.getPhaseInfo());
+    const phase = this.interpolator.getPhaseInfo();
+    this.hud.updatePhase(phase);
+
+    if (phase?.matchOver && !this.victoryShown) {
+      this.victoryShown = true;
+      this.hud.showVictory({
+        durationSec: (performance.now() - this.matchStartMs) / 1000,
+        phase: phase.current,
+        remaining: phase.remaining,
+      }, () => {
+        this.net.sendLeaveRoom();
+      });
+    }
+
     this.vfx.update(dt);
   }
 

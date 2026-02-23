@@ -3,7 +3,7 @@ import { LobbyPlayer, WORLD_WIDTH, WORLD_HEIGHT } from "shared";
 import { NetClient } from "./net.js";
 
 const PLAYER_COLORS = [0x00ff88, 0x44aaff, 0xffaa00, 0xff44ff];
-const CLIENT_VERSION = "v0.0.1+1870788";
+const CLIENT_VERSION = "v0.0.1+winfix1";
 
 function colorToHex(color: number): string {
   return "#" + color.toString(16).padStart(6, "0");

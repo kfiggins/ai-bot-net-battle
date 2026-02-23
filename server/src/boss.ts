@@ -40,19 +40,21 @@ export class BossManager {
   isShielded(sim: Simulation): boolean {
     if (this.phaseState.matchOver) return false;
 
-    // Shield is up while any towers or minion_ships are alive
+    // Towers always force mothership shield back on, regardless of phase.
     const towers = sim.getEntitiesByKind("tower");
+    if (towers.length > 0) return true;
+
     const minions = sim.getEntitiesByKind("minion_ship");
 
     switch (this.phaseState.current) {
       case 1:
-        // Phase 1: shield up while towers alive
-        return towers.length > 0;
+        // No towers left in phase 1 -> transition imminent, no shield from phase rule.
+        return false;
       case 2:
-        // Phase 2: shield up while minions alive
+        // Phase 2: shield up while minions alive.
         return minions.length > 0;
       case 3:
-        // Final phase: mothership vulnerable
+        // Final phase vulnerable unless new towers are introduced.
         return false;
       default:
         return false;
