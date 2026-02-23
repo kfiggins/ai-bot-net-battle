@@ -22,7 +22,7 @@ export class GameScene extends Phaser.Scene {
   private predictedPos: { x: number; y: number } | null = null;
   private matchStartMs = 0;
   private victoryShown = false;
-  private cameraFollowing = false;
+  private cameraPos: { x: number; y: number } | null = null;
 
   constructor() {
     super({ key: "GameScene" });
@@ -33,7 +33,8 @@ export class GameScene extends Phaser.Scene {
 
     // Set up world bounds and camera
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-    this.cameraFollowing = false;
+    this.cameras.main.roundPixels = true;
+    this.cameraPos = null;
 
     // Draw background grid for spatial awareness
     this.drawGrid();
@@ -90,7 +91,7 @@ export class GameScene extends Phaser.Scene {
     // Reset prediction when entity ID changes (reconnect / new player)
     this.net.setEntityChangeHandler(() => {
       this.predictedPos = null;
-      this.cameraFollowing = false;
+      this.cameraPos = null;
     });
 
     // Server ended the match — go back to lobby
@@ -183,13 +184,16 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
-      // Start camera follow once we have the player sprite
-      if (selfId && !this.cameraFollowing) {
-        const selfSprite = this.entitySprites.get(selfId);
-        if (selfSprite) {
-          this.cameras.main.startFollow(selfSprite, true, 0.25, 0.25);
-          this.cameraFollowing = true;
+      // Smooth camera centered on predicted local player position.
+      // This decouples camera motion from sprite reconciliation jitter.
+      if (selfId && this.predictedPos) {
+        if (!this.cameraPos) {
+          this.cameraPos = { x: this.predictedPos.x, y: this.predictedPos.y };
+        } else {
+          this.cameraPos.x += (this.predictedPos.x - this.cameraPos.x) * 0.18;
+          this.cameraPos.y += (this.predictedPos.y - this.cameraPos.y) * 0.18;
         }
+        this.cameras.main.centerOn(this.cameraPos.x, this.cameraPos.y);
       }
 
       this.detectEvents(entities);
