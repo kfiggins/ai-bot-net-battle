@@ -20,10 +20,12 @@ export class NetClient {
   roomId: string | null = null;
   private reconnectToken: string | null = null;
   private targetRoomId: string = "default";
+  private displayName: string = "Player";
   private lastInputTime = 0;
   private onEntityChange: (() => void) | null = null;
 
-  connect(roomId: string = "default"): void {
+  connect(roomId: string = "default", displayName?: string): void {
+    if (displayName) this.displayName = displayName;
     this.targetRoomId = roomId;
 
     const env = (import.meta as { env?: { VITE_WS_URL?: string; DEV?: boolean } }).env;
@@ -44,6 +46,7 @@ export class NetClient {
           v: 1,
           type: "join_room",
           roomId: this.targetRoomId,
+          displayName: this.displayName,
           reconnectToken: this.reconnectToken ?? undefined,
         })
       );
