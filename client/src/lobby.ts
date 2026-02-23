@@ -3,6 +3,7 @@ import { LobbyPlayer, WORLD_WIDTH, WORLD_HEIGHT } from "shared";
 import { NetClient } from "./net.js";
 
 const PLAYER_COLORS = [0x00ff88, 0x44aaff, 0xffaa00, 0xff44ff];
+const CLIENT_VERSION = "v0.0.1+37b763e";
 
 function colorToHex(color: number): string {
   return "#" + color.toString(16).padStart(6, "0");
@@ -85,9 +86,17 @@ export class LobbyScene extends Phaser.Scene {
     // Room info (bottom)
     const roomId = window.location.hash.slice(1) || "default";
     this.add
-      .text(WORLD_WIDTH / 2, WORLD_HEIGHT - 40, `Room: ${roomId}`, {
+      .text(WORLD_WIDTH / 2, WORLD_HEIGHT - 50, `Room: ${roomId}`, {
         fontSize: "14px",
         color: "#444466",
+        fontFamily: "monospace",
+      })
+      .setOrigin(0.5);
+
+    this.add
+      .text(WORLD_WIDTH / 2, WORLD_HEIGHT - 28, `Client ${CLIENT_VERSION}`, {
+        fontSize: "13px",
+        color: "#6c6ca2",
         fontFamily: "monospace",
       })
       .setOrigin(0.5);
