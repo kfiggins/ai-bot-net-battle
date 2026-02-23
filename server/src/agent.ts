@@ -93,11 +93,13 @@ export class AgentAPI {
     const { kind, count, lane } = cmd.params;
     let totalCost = 0;
 
+    const anchorX = mothershipPos ? mothershipPos.x - 120 : WORLD_WIDTH - 80;
+    const laneBaseY = this.laneToY(lane, mothershipPos);
+
     for (let i = 0; i < count; i++) {
-      const yBase = this.laneToY(lane);
-      const spread = 20 + i * 10;
-      const y = Math.max(40, Math.min(WORLD_HEIGHT - 40, yBase + (Math.random() * 2 - 1) * spread));
-      const x = Math.max(40, Math.min(WORLD_WIDTH - 40, WORLD_WIDTH - 80 - i * 6));
+      const spread = 18 + i * 9;
+      const y = Math.max(40, Math.min(WORLD_HEIGHT - 40, laneBaseY + (Math.random() * 2 - 1) * spread));
+      const x = Math.max(40, Math.min(WORLD_WIDTH - 40, anchorX - i * 8 + (Math.random() * 10 - 5)));
       const buildResult = economy.requestBuild(
         { unitKind: kind, x, y },
         sim,
@@ -165,15 +167,16 @@ export class AgentAPI {
     };
   }
 
-  private laneToY(lane?: "top" | "mid" | "bottom"): number {
+  private laneToY(lane?: "top" | "mid" | "bottom", mothershipPos?: { x: number; y: number }): number {
+    const centerY = mothershipPos?.y ?? WORLD_HEIGHT * 0.5;
     switch (lane) {
       case "top":
-        return WORLD_HEIGHT * 0.2;
+        return centerY - 220;
       case "bottom":
-        return WORLD_HEIGHT * 0.8;
+        return centerY + 220;
       case "mid":
       default:
-        return WORLD_HEIGHT * 0.5;
+        return centerY;
     }
   }
 
