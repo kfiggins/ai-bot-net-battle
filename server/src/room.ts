@@ -215,9 +215,9 @@ export class Room {
     log.info("Match started", { roomId: this.roomId });
   }
 
-  /** Stop the match and send all players back to lobby */
+  /** Stop/reset the match and send all players back to lobby */
   resetToLobby(): void {
-    if (this.state !== "in_progress") return;
+    if (this.state === "waiting") return;
 
     // Stop the tick loop
     if (this.tickInterval) {
