@@ -13,8 +13,10 @@ export class NetClient {
   private onSnapshot: ((snapshot: SnapshotMessage) => void) | null = null;
   private onLobbyUpdate: ((msg: LobbyUpdateMessage) => void) | null = null;
   private onMatchStart: (() => void) | null = null;
+  private onMatchEnd: (() => void) | null = null;
   private onWelcome: ((lobbyState: LobbyState) => void) | null = null;
   selfEntityId: string | null = null;
+  selfPlayerIndex: number | null = null;
   roomId: string | null = null;
   private reconnectToken: string | null = null;
   private targetRoomId: string = "default";
@@ -48,6 +50,7 @@ export class NetClient {
         if (msg.type === "welcome") {
           const oldEntityId = this.selfEntityId;
           this.selfEntityId = msg.entityId;
+          this.selfPlayerIndex = msg.playerIndex;
           this.roomId = msg.roomId;
           this.reconnectToken = msg.reconnectToken;
           console.log(`[net] Joined room ${msg.roomId}, entity: ${msg.entityId}`);
@@ -66,6 +69,8 @@ export class NetClient {
           this.onLobbyUpdate(msg);
         } else if (msg.type === "match_start" && this.onMatchStart) {
           this.onMatchStart();
+        } else if (msg.type === "match_end" && this.onMatchEnd) {
+          this.onMatchEnd();
         }
       } catch {
         console.warn("[net] Failed to parse server message");
@@ -124,7 +129,34 @@ export class NetClient {
     this.onMatchStart = handler;
   }
 
+  setMatchEndHandler(handler: () => void): void {
+    this.onMatchEnd = handler;
+  }
+
   setWelcomeHandler(handler: (lobbyState: LobbyState) => void): void {
     this.onWelcome = handler;
+  }
+
+  /** Ask server to leave the current room (ends match for everyone if in-game) */
+  sendLeaveRoom(): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ v: 1, type: "leave_room" }));
+    }
+  }
+
+  /** Tell server to fully remove us, then disconnect */
+  disconnect(): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ v: 1, type: "leave_room" }));
+    }
+    this.reconnectToken = null;
+    if (this.ws) {
+      this.ws.onclose = null;
+      this.ws.close();
+      this.ws = null;
+    }
+    this.selfEntityId = null;
+    this.selfPlayerIndex = null;
+    this.roomId = null;
   }
 }

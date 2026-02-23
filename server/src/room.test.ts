@@ -73,11 +73,24 @@ describe("Room", () => {
     expect(rejected).toBeNull();
   });
 
-  it("disconnects and reconnects a player", () => {
+  it("disconnects in waiting state fully removes player", () => {
+    const ws1 = mockWs();
+    const player = room.addPlayer(ws1, "Bob");
+    const playerId = player!.playerId;
+
+    // Disconnect in waiting state — player is fully removed
+    room.disconnectPlayer(playerId);
+    expect(room.playerCount).toBe(0);
+    expect(room.connectedCount).toBe(0);
+  });
+
+  it("disconnects and reconnects a player in_progress", () => {
     const ws1 = mockWs();
     const player = room.addPlayer(ws1, "Bob");
     const token = player!.reconnectToken;
     const playerId = player!.playerId;
+
+    room.startMatch();
 
     // Disconnect
     room.disconnectPlayer(playerId);
@@ -98,6 +111,7 @@ describe("Room", () => {
   it("reconnect fails with wrong token", () => {
     const ws1 = mockWs();
     const player = room.addPlayer(ws1, "Charlie");
+    room.startMatch();
     room.disconnectPlayer(player!.playerId);
 
     const ws2 = mockWs();
@@ -115,6 +129,7 @@ describe("Room", () => {
   it("cleans up disconnected players after timeout", () => {
     const ws = mockWs();
     const player = room.addPlayer(ws, "Eve");
+    room.startMatch();
     room.disconnectPlayer(player!.playerId);
 
     // Simulate time passing beyond reconnect timeout
@@ -126,6 +141,7 @@ describe("Room", () => {
   it("does not clean up recently disconnected players", () => {
     const ws = mockWs();
     const player = room.addPlayer(ws, "Frank");
+    room.startMatch();
     room.disconnectPlayer(player!.playerId);
 
     // Just disconnected — should still be in room

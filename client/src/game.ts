@@ -44,6 +44,26 @@ export class GameScene extends Phaser.Scene {
     this.vfx = new VFXManager(this);
     this.hud = new HUD(this);
 
+    // Leave Game button (top-right)
+    const leaveBtn = this.add
+      .text(WORLD_WIDTH - 10, 10, "LEAVE", {
+        fontSize: "14px",
+        color: "#ff4444",
+        fontFamily: "monospace",
+        backgroundColor: "#00000088",
+        padding: { x: 8, y: 4 },
+      })
+      .setOrigin(1, 0)
+      .setDepth(200)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true });
+
+    leaveBtn.on("pointerover", () => leaveBtn.setColor("#ff8888"));
+    leaveBtn.on("pointerout", () => leaveBtn.setColor("#ff4444"));
+    leaveBtn.on("pointerdown", () => {
+      this.net.sendLeaveRoom();
+    });
+
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
       this.mouseWorldPos = { x: pointer.worldX, y: pointer.worldY };
     });
@@ -55,6 +75,11 @@ export class GameScene extends Phaser.Scene {
     // Reset prediction when entity ID changes (reconnect / new player)
     this.net.setEntityChangeHandler(() => {
       this.predictedPos = null;
+    });
+
+    // Server ended the match — go back to lobby
+    this.net.setMatchEndHandler(() => {
+      this.scene.start("LobbyScene");
     });
   }
 

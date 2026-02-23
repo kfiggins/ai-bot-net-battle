@@ -65,6 +65,7 @@ export const WelcomeMessageSchema = z.object({
   type: z.literal("welcome"),
   roomId: z.string(),
   entityId: z.string(),
+  playerIndex: z.number().int(),
   reconnectToken: z.string(),
   lobby: LobbyStateSchema,
 });
@@ -146,6 +147,14 @@ export const StartGameMessageSchema = z.object({
 });
 export type StartGameMessage = z.infer<typeof StartGameMessageSchema>;
 
+// --- Client → Server: leave_room ---
+
+export const LeaveRoomMessageSchema = z.object({
+  v: z.literal(1),
+  type: z.literal("leave_room"),
+});
+export type LeaveRoomMessage = z.infer<typeof LeaveRoomMessageSchema>;
+
 // --- Server → Client: lobby_update ---
 
 export const LobbyPlayerSchema = z.object({
@@ -169,12 +178,21 @@ export const MatchStartMessageSchema = z.object({
 });
 export type MatchStartMessage = z.infer<typeof MatchStartMessageSchema>;
 
+// --- Server → Client: match_end ---
+
+export const MatchEndMessageSchema = z.object({
+  v: z.literal(1),
+  type: z.literal("match_end"),
+});
+export type MatchEndMessage = z.infer<typeof MatchEndMessageSchema>;
+
 // --- Union of all wire messages ---
 
 export const ClientMessageSchema = z.discriminatedUnion("type", [
   PlayerInputMessageSchema,
   JoinRoomMessageSchema,
   StartGameMessageSchema,
+  LeaveRoomMessageSchema,
 ]);
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
@@ -184,5 +202,6 @@ export const ServerMessageSchema = z.discriminatedUnion("type", [
   SnapshotMessageSchema,
   LobbyUpdateMessageSchema,
   MatchStartMessageSchema,
+  MatchEndMessageSchema,
 ]);
 export type ServerMessage = z.infer<typeof ServerMessageSchema>;

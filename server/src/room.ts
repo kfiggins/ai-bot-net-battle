@@ -149,16 +149,17 @@ export class Room {
     const player = this.players.get(playerId);
     if (!player) return;
 
-    player.ws = null;
-    player.disconnectedAt = Date.now();
-
     log.info("Player disconnected", { roomId: this.roomId, playerId });
 
-    // Remove their entity from the sim
-    this.sim.removePlayer(playerId);
-
     if (this.state === "waiting") {
+      // In lobby: fully remove the player slot so it can be reused
+      this.removePlayer(playerId);
       this.broadcastLobbyUpdate();
+    } else {
+      // In-game: keep the slot for potential reconnect
+      player.ws = null;
+      player.disconnectedAt = Date.now();
+      this.sim.removePlayer(playerId);
     }
   }
 
@@ -168,6 +169,15 @@ export class Room {
 
     this.sim.removePlayer(playerId);
     this.players.delete(playerId);
+
+    // Reset counter so next join gets a clean number
+    if (this.state === "waiting") {
+      let max = 0;
+      for (const p of this.players.values()) {
+        if (p.playerIndex > max) max = p.playerIndex;
+      }
+      this.nextPlayerId = max + 1;
+    }
   }
 
   /** Clean up players who disconnected and haven't reconnected in time */
@@ -203,6 +213,61 @@ export class Room {
     }
 
     log.info("Match started", { roomId: this.roomId });
+  }
+
+  /** Stop the match and send all players back to lobby */
+  resetToLobby(): void {
+    if (this.state !== "in_progress") return;
+
+    // Stop the tick loop
+    if (this.tickInterval) {
+      clearInterval(this.tickInterval);
+      this.tickInterval = null;
+    }
+
+    this.state = "waiting";
+
+    // Reset simulation and subsystems
+    this.sim = new Simulation();
+    this.ai = new AIManager();
+    this.economy = new Economy();
+    this.agent = new AgentAPI();
+    this.boss = new BossManager();
+
+    // Re-add player entities for everyone still connected
+    for (const player of this.players.values()) {
+      if (player.ws !== null) {
+        const label = `Player ${player.playerIndex}`;
+        const entity = this.sim.addPlayer(player.playerId, label, player.playerIndex);
+        player.entityId = entity.id;
+        player.disconnectedAt = null;
+      }
+    }
+
+    // Remove disconnected players (no point keeping them for reconnect now)
+    for (const [playerId, player] of this.players) {
+      if (player.ws === null) {
+        this.players.delete(playerId);
+      }
+    }
+
+    // Reset counter
+    let max = 0;
+    for (const p of this.players.values()) {
+      if (p.playerIndex > max) max = p.playerIndex;
+    }
+    this.nextPlayerId = max + 1;
+
+    // Notify all clients to go back to lobby
+    const msg = JSON.stringify({ v: 1, type: "match_end" });
+    for (const player of this.players.values()) {
+      if (player.ws?.readyState === WebSocket.OPEN) {
+        player.ws.send(msg);
+      }
+    }
+
+    this.broadcastLobbyUpdate();
+    log.info("Match reset to lobby", { roomId: this.roomId });
   }
 
   private initGameState(): void {

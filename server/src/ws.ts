@@ -108,6 +108,7 @@ export function createWSServer(
                   type: "welcome",
                   roomId: room.roomId,
                   entityId: player.entityId,
+                  playerIndex: player.playerIndex,
                   reconnectToken: player.reconnectToken,
                   lobby: room.getLobbyState(),
                 }));
@@ -147,6 +148,7 @@ export function createWSServer(
             type: "welcome",
             roomId: room.roomId,
             entityId: player.entityId,
+            playerIndex: player.playerIndex,
             reconnectToken: player.reconnectToken,
             lobby: room.getLobbyState(),
           }));
@@ -160,6 +162,28 @@ export function createWSServer(
           if (!room) return;
 
           room.startMatch();
+          return;
+        }
+
+        if (msg.type === "leave_room") {
+          if (!joined) return;
+
+          const room = roomManager.findRoomByWs(ws);
+          if (!room) return;
+
+          const player = room.findPlayerByWs(ws);
+          if (!player) return;
+
+          if (room.state === "in_progress") {
+            // End match for everyone, send all back to lobby
+            room.resetToLobby();
+          } else {
+            room.removePlayer(player.playerId);
+            if (room.state === "waiting") {
+              room.broadcastLobbyUpdate();
+            }
+          }
+          joined = false;
           return;
         }
 

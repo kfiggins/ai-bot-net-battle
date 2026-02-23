@@ -92,9 +92,14 @@ export class LobbyScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    // Set up networking
-    this.net = new NetClient();
-    this.registry.set("net", this.net);
+    // Set up networking — reuse existing NetClient if returning from game
+    const existing = this.registry.get("net") as NetClient | undefined;
+    if (existing) {
+      this.net = existing;
+    } else {
+      this.net = new NetClient();
+      this.registry.set("net", this.net);
+    }
 
     this.net.setWelcomeHandler((lobby) => {
       if (lobby.state === "in_progress") {
@@ -104,6 +109,10 @@ export class LobbyScene extends Phaser.Scene {
       }
       this.statusText.setText("Waiting for players...");
       this.startButton.setVisible(true);
+      // Re-render player list now that we know our playerIndex
+      if (this.players.length > 0) {
+        this.renderPlayerList();
+      }
     });
 
     this.net.setLobbyUpdateHandler((msg) => {
@@ -115,7 +124,14 @@ export class LobbyScene extends Phaser.Scene {
       this.scene.start("GameScene");
     });
 
-    this.net.connect(roomId);
+    // Only connect if we don't already have a connection
+    if (!this.net.roomId) {
+      this.net.connect(roomId);
+    } else {
+      // Already connected (returning from game) — show lobby immediately
+      this.statusText.setText("Waiting for players...");
+      this.startButton.setVisible(true);
+    }
   }
 
   private renderPlayerList(): void {
@@ -137,8 +153,10 @@ export class LobbyScene extends Phaser.Scene {
       const dot = this.add.circle(WORLD_WIDTH / 2 - 80, y, 8, color);
       this.playerDots.push(dot);
 
-      // Player name
-      const text = this.add.text(WORLD_WIDTH / 2 - 60, y, p.name, {
+      // Player name + "(you)" indicator
+      const isSelf = p.playerIndex === this.net.selfPlayerIndex;
+      const label = isSelf ? `${p.name}  (you)` : p.name;
+      const text = this.add.text(WORLD_WIDTH / 2 - 60, y, label, {
         fontSize: "22px",
         color: colorToHex(color),
         fontFamily: "monospace",
