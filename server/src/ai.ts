@@ -242,7 +242,7 @@ export class AIManager {
     const nx = dx / dist;
     const ny = dy / dist;
     const speed = ENEMY_PATROL_SPEED * aiState.moveSpeedScale;
-    entity.vel = { x: nx * speed, y: ny * speed };
+    entity.vel = { x: nx * speed*100, y: ny * speed*100};
     entity.pos.x += entity.vel.x * this.dt;
     entity.pos.y += entity.vel.y * this.dt;
   }
