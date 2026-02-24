@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { Simulation, circlesOverlap } from "./sim.js";
+import { Simulation, circlesOverlap, getCannonAngles, getEffectiveMaxHp } from "./sim.js";
 import {
   PLAYER_HP,
   PLAYER_SPEED,
@@ -17,6 +17,19 @@ import {
   WORLD_WIDTH,
   WORLD_HEIGHT,
   SnapshotMessageSchema,
+  ORB_SPAWN_INTERVAL_TICKS,
+  ORB_MAX_ON_MAP,
+  ORB_XP_VALUE,
+  MAX_LEVEL,
+  xpForLevel,
+  MAX_UPGRADE_PER_STAT,
+  DAMAGE_PER_UPGRADE,
+  SPEED_PER_UPGRADE,
+  HEALTH_PER_UPGRADE,
+  FIRE_RATE_PER_UPGRADE,
+  CANNON_SPREAD_ANGLE,
+  CANNON_MILESTONES,
+  MILESTONE_LEVELS,
 } from "shared";
 
 describe("Simulation", () => {
@@ -433,7 +446,7 @@ describe("Simulation", () => {
       expect(sim.bullets.size).toBe(0);
     });
 
-    it("entity is removed when HP reaches 0", () => {
+    it("player entity is respawned with full HP when killed", () => {
       const p1Entity = sim.addPlayer("p1");
       p1Entity.pos.x = 100;
       p1Entity.pos.y = 300;
@@ -452,8 +465,28 @@ describe("Simulation", () => {
 
       for (let i = 0; i < 10; i++) sim.update();
 
-      // p2's entity should be removed
-      expect(sim.entities.has(p2Entity.id)).toBe(false);
+      // p2's entity should be respawned (same ID, full HP, new position)
+      expect(sim.entities.has(p2Entity.id)).toBe(true);
+      const respawned = sim.entities.get(p2Entity.id)!;
+      expect(respawned.hp).toBe(PLAYER_HP);
+    });
+
+    it("non-player entity is removed when HP reaches 0", () => {
+      const p1Entity = sim.addPlayer("p1");
+      p1Entity.pos.x = 100;
+      p1Entity.pos.y = 300;
+
+      const enemy = sim.spawnEnemy("minion_ship", 130, 300);
+      enemy.hp = BULLET_DAMAGE; // will die in one hit
+
+      sim.setInput("p1", {
+        up: false, down: false, left: false, right: false,
+        fire: true, aimAngle: 0,
+      });
+
+      for (let i = 0; i < 10; i++) sim.update();
+
+      expect(sim.entities.has(enemy.id)).toBe(false);
     });
   });
 
@@ -657,5 +690,637 @@ describe("missile physics", () => {
     expect(sim.missiles.size).toBe(0);
     const missileEntities = Array.from(sim.entities.values()).filter(e => e.kind === "missile");
     expect(missileEntities).toHaveLength(0);
+  });
+});
+
+describe("energy orbs", () => {
+  let sim: Simulation;
+
+  beforeEach(() => {
+    sim = new Simulation();
+  });
+
+  it("does not spawn orbs before cooldown expires", () => {
+    sim.addPlayer("p1");
+    // First tick should not spawn orb (cooldown starts at ORB_SPAWN_INTERVAL_TICKS)
+    sim.update();
+    const orbs = Array.from(sim.entities.values()).filter(e => e.kind === "energy_orb");
+    expect(orbs).toHaveLength(0);
+  });
+
+  it("spawns an orb after cooldown expires", () => {
+    sim.addPlayer("p1");
+    for (let i = 0; i < ORB_SPAWN_INTERVAL_TICKS + 1; i++) sim.update();
+
+    const orbs = Array.from(sim.entities.values()).filter(e => e.kind === "energy_orb");
+    expect(orbs.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("orbs are neutral team 0", () => {
+    sim.addPlayer("p1");
+    for (let i = 0; i < ORB_SPAWN_INTERVAL_TICKS + 1; i++) sim.update();
+
+    const orb = Array.from(sim.entities.values()).find(e => e.kind === "energy_orb");
+    expect(orb).toBeDefined();
+    expect(orb!.team).toBe(0);
+  });
+
+  it("does not exceed ORB_MAX_ON_MAP", () => {
+    sim.addPlayer("p1");
+    // Run enough ticks to potentially exceed max
+    for (let i = 0; i < (ORB_MAX_ON_MAP + 50) * ORB_SPAWN_INTERVAL_TICKS; i++) {
+      sim.update();
+    }
+    const orbs = Array.from(sim.entities.values()).filter(e => e.kind === "energy_orb");
+    expect(orbs.length).toBeLessThanOrEqual(ORB_MAX_ON_MAP);
+  });
+
+  it("player picks up orb on overlap and gains XP", () => {
+    const player = sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+
+    // Manually place an orb at the player's position
+    const orbId = "test-orb";
+    sim.entities.set(orbId, {
+      id: orbId,
+      kind: "energy_orb",
+      pos: { x: player.pos.x, y: player.pos.y },
+      vel: { x: 0, y: 0 },
+      hp: 1,
+      team: 0,
+    });
+
+    expect(ps.xp).toBe(0);
+    sim.update();
+
+    // Orb should be collected and XP awarded
+    expect(ps.xp).toBe(ORB_XP_VALUE);
+    expect(sim.entities.has(orbId)).toBe(false);
+  });
+
+  it("bullets do not collide with orbs", () => {
+    const player = sim.addPlayer("p1");
+    player.pos.x = 100;
+    player.pos.y = 300;
+
+    // Place an orb in the bullet's path
+    const orbId = "test-orb";
+    sim.entities.set(orbId, {
+      id: orbId,
+      kind: "energy_orb",
+      pos: { x: 140, y: 300 },
+      vel: { x: 0, y: 0 },
+      hp: 1,
+      team: 0,
+    });
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: true, aimAngle: 0,
+    });
+    sim.update();
+
+    // Orb should still be there (bullet passes through)
+    // Note: orb may have been picked up by player if overlapping - move orb further
+    // Check that a bullet still exists (wasn't consumed by orb)
+    expect(sim.bullets.size).toBe(1);
+  });
+});
+
+describe("XP & leveling", () => {
+  let sim: Simulation;
+
+  beforeEach(() => {
+    sim = new Simulation();
+  });
+
+  it("player starts at level 1 with 0 XP", () => {
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    expect(ps.level).toBe(1);
+    expect(ps.xp).toBe(0);
+    expect(ps.xpToNext).toBe(xpForLevel(1));
+  });
+
+  it("awardXP increases player XP", () => {
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    sim.awardXP(ps, 5);
+    expect(ps.xp).toBe(5);
+  });
+
+  it("player levels up when XP exceeds threshold", () => {
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    const needed = xpForLevel(1); // XP to go from 1→2
+    sim.awardXP(ps, needed);
+    expect(ps.level).toBe(2);
+    expect(ps.xp).toBe(0);
+    expect(ps.xpToNext).toBe(xpForLevel(2));
+  });
+
+  it("handles multiple level-ups from a single large XP award", () => {
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    // Award enough for several levels
+    const totalForLevel5 = xpForLevel(1) + xpForLevel(2) + xpForLevel(3) + xpForLevel(4);
+    sim.awardXP(ps, totalForLevel5);
+    expect(ps.level).toBe(5);
+    expect(ps.xp).toBe(0);
+  });
+
+  it("caps at MAX_LEVEL", () => {
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    // Award massive XP
+    sim.awardXP(ps, 999999);
+    expect(ps.level).toBe(MAX_LEVEL);
+    expect(ps.xp).toBe(0);
+    expect(ps.xpToNext).toBe(0);
+  });
+
+  it("does not gain XP past MAX_LEVEL", () => {
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    sim.awardXP(ps, 999999); // max out
+    sim.awardXP(ps, 100); // try to award more
+    expect(ps.level).toBe(MAX_LEVEL);
+    expect(ps.xp).toBe(0);
+  });
+
+  it("XP scaling increases with level", () => {
+    const xp1 = xpForLevel(1);
+    const xp5 = xpForLevel(5);
+    const xp10 = xpForLevel(10);
+    expect(xp5).toBeGreaterThan(xp1);
+    expect(xp10).toBeGreaterThan(xp5);
+  });
+
+  it("snapshot includes level/xp/xpToNext for player entities", () => {
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    sim.awardXP(ps, 5);
+    sim.update();
+
+    const snapshot = sim.getSnapshot();
+    const playerEntity = snapshot.entities.find(e => e.kind === "player_ship");
+    expect(playerEntity).toBeDefined();
+    expect(playerEntity!.level).toBe(1);
+    expect(playerEntity!.xp).toBe(5);
+    expect(playerEntity!.xpToNext).toBe(xpForLevel(1));
+  });
+
+  it("death resets level and XP to starting values", () => {
+    const player = sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    sim.awardXP(ps, 200); // level up a few times
+
+    const levelBefore = ps.level;
+    expect(levelBefore).toBeGreaterThan(1);
+
+    // Kill the player
+    player.hp = 0;
+    sim.update(); // removeDeadEntities + respawnDeadPlayers
+
+    expect(ps.level).toBe(1);
+    expect(ps.xp).toBe(0);
+    expect(ps.xpToNext).toBe(xpForLevel(1));
+  });
+
+  it("respawned player has full HP", () => {
+    const player = sim.addPlayer("p1");
+    player.hp = 0;
+    sim.update();
+
+    const respawned = sim.entities.get(player.id);
+    expect(respawned).toBeDefined();
+    expect(respawned!.hp).toBe(PLAYER_HP);
+  });
+
+  it("snapshot validates against SnapshotMessageSchema with new fields", () => {
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    sim.awardXP(ps, 50);
+    sim.update();
+
+    const snapshot = sim.getSnapshot();
+    const result = SnapshotMessageSchema.safeParse(snapshot);
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("stat upgrades", () => {
+  let sim: Simulation;
+
+  beforeEach(() => {
+    sim = new Simulation();
+  });
+
+  it("player starts with zero upgrades, 1 cannon, 0 pending", () => {
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    expect(ps.upgrades).toEqual({ damage: 0, speed: 0, health: 0, fire_rate: 0 });
+    expect(ps.cannons).toBe(1);
+    expect(ps.pendingUpgrades).toBe(0);
+  });
+
+  it("level-up at non-milestone grants a pending upgrade point", () => {
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    const needed = xpForLevel(1); // level 1→2
+    sim.awardXP(ps, needed);
+    expect(ps.level).toBe(2);
+    expect(ps.pendingUpgrades).toBe(1);
+    expect(ps.cannons).toBe(1); // no cannon change
+  });
+
+  it("level-up at milestone grants cannon upgrade, no pending point", () => {
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    // Level to 5 (a milestone)
+    let totalXP = 0;
+    for (let lvl = 1; lvl < 5; lvl++) totalXP += xpForLevel(lvl);
+    sim.awardXP(ps, totalXP);
+    expect(ps.level).toBe(5);
+    expect(ps.cannons).toBe(2);
+    // Levels 2,3,4 give pending points (3 total), level 5 gives cannon not point
+    expect(ps.pendingUpgrades).toBe(3);
+  });
+
+  it("all milestone levels grant correct cannon counts", () => {
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+
+    // Level to 10
+    let totalXP = 0;
+    for (let lvl = 1; lvl < 10; lvl++) totalXP += xpForLevel(lvl);
+    sim.awardXP(ps, totalXP);
+    expect(ps.level).toBe(10);
+    expect(ps.cannons).toBe(3);
+
+    // Level to 15
+    let moreXP = 0;
+    for (let lvl = 10; lvl < 15; lvl++) moreXP += xpForLevel(lvl);
+    sim.awardXP(ps, moreXP);
+    expect(ps.level).toBe(15);
+    expect(ps.cannons).toBe(4);
+  });
+
+  it("total pending upgrade points across full leveling is 12", () => {
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    sim.awardXP(ps, 999999);
+    expect(ps.level).toBe(MAX_LEVEL);
+    // 14 level-ups total (2-15), 3 milestones (5,10,15) → 11 stat points
+    // Wait: levels 2,3,4,6,7,8,9,11,12,13,14 = 11 non-milestone levels + 3 milestones = 14 total
+    // Actually: level 1→15 is 14 level-ups. Milestones at 5,10,15 = 3 auto-cannon. So 14-3=11 pending.
+    // Hmm, let me recount: levels you reach = 2,3,4,5,6,7,8,9,10,11,12,13,14,15 = 14 level-ups
+    // Milestones: 5,10,15 = 3 cannon upgrades (no pending point)
+    // Non-milestones: 2,3,4,6,7,8,9,11,12,13,14 = 11 stat points
+    expect(ps.pendingUpgrades).toBe(11);
+  });
+
+  it("applyUpgrade succeeds and increments stat", () => {
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    sim.awardXP(ps, xpForLevel(1)); // level 2, 1 pending
+    expect(ps.pendingUpgrades).toBe(1);
+
+    const result = sim.applyUpgrade("p1", "damage");
+    expect(result).toBe(true);
+    expect(ps.upgrades.damage).toBe(1);
+    expect(ps.pendingUpgrades).toBe(0);
+  });
+
+  it("applyUpgrade fails when no pending points", () => {
+    sim.addPlayer("p1");
+    const result = sim.applyUpgrade("p1", "damage");
+    expect(result).toBe(false);
+  });
+
+  it("applyUpgrade fails when stat is at max", () => {
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    ps.upgrades.damage = MAX_UPGRADE_PER_STAT;
+    ps.pendingUpgrades = 1;
+
+    const result = sim.applyUpgrade("p1", "damage");
+    expect(result).toBe(false);
+    expect(ps.upgrades.damage).toBe(MAX_UPGRADE_PER_STAT);
+    expect(ps.pendingUpgrades).toBe(1);
+  });
+
+  it("applyUpgrade fails for non-existent player", () => {
+    const result = sim.applyUpgrade("nonexistent", "damage");
+    expect(result).toBe(false);
+  });
+
+  it("health upgrade heals player to new max HP", () => {
+    const entity = sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    entity.hp = 50; // damaged
+    ps.pendingUpgrades = 1;
+
+    sim.applyUpgrade("p1", "health");
+    expect(entity.hp).toBe(PLAYER_HP + HEALTH_PER_UPGRADE);
+  });
+
+  it("effective speed increases with speed upgrades", () => {
+    const entity = sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    entity.pos.x = WORLD_WIDTH / 2;
+    entity.pos.y = WORLD_HEIGHT / 2;
+
+    // Move right at base speed
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: true,
+      fire: false, aimAngle: 0,
+    });
+    sim.update();
+    const baseMove = entity.pos.x - WORLD_WIDTH / 2;
+
+    // Reset position and add speed upgrade
+    entity.pos.x = WORLD_WIDTH / 2;
+    ps.upgrades.speed = 3;
+    sim.update();
+    const upgradedMove = entity.pos.x - WORLD_WIDTH / 2;
+
+    expect(upgradedMove).toBeGreaterThan(baseMove);
+    const expectedRatio = (PLAYER_SPEED + 3 * SPEED_PER_UPGRADE) / PLAYER_SPEED;
+    expect(upgradedMove / baseMove).toBeCloseTo(expectedRatio, 2);
+  });
+
+  it("effective fire cooldown decreases with fire_rate upgrades", () => {
+    const entity = sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    entity.pos.x = WORLD_WIDTH / 2;
+    entity.pos.y = WORLD_HEIGHT / 2;
+    ps.upgrades.fire_rate = 3;
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: true, aimAngle: 0,
+    });
+
+    // First tick fires
+    sim.update();
+    expect(sim.bullets.size).toBe(1);
+
+    // Effective cooldown = FIRE_COOLDOWN_TICKS - 3 = 3
+    // After 3 ticks, should fire again (ticks 2,3,4 are cooldown, tick 5 fires)
+    const effectiveCooldown = FIRE_COOLDOWN_TICKS - 3 * FIRE_RATE_PER_UPGRADE;
+    for (let i = 0; i < effectiveCooldown; i++) sim.update();
+    expect(sim.bullets.size).toBe(2);
+  });
+
+  it("effective damage increases with damage upgrades", () => {
+    const entity = sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    entity.pos.x = 100;
+    entity.pos.y = 300;
+    ps.upgrades.damage = 2;
+
+    const enemy = sim.spawnEnemy("minion_ship", 130, 300);
+    const startHp = enemy.hp;
+
+    // Fire once, then stop
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: true, aimAngle: 0,
+    });
+    sim.update();
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, aimAngle: 0,
+    });
+
+    for (let i = 0; i < 10; i++) sim.update();
+
+    const expectedDamage = BULLET_DAMAGE + 2 * DAMAGE_PER_UPGRADE;
+    expect(enemy.hp).toBe(startHp - expectedDamage);
+  });
+
+  it("fire rate cooldown minimum is 1 tick", () => {
+    const entity = sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    entity.pos.x = WORLD_WIDTH / 2;
+    entity.pos.y = WORLD_HEIGHT / 2;
+    ps.upgrades.fire_rate = MAX_UPGRADE_PER_STAT; // 5 → cooldown = max(1, 6-5) = 1
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: true, aimAngle: 0,
+    });
+
+    // Should fire every tick
+    sim.update(); // fires tick 1
+    sim.update(); // fires tick 2
+    sim.update(); // fires tick 3
+    expect(sim.bullets.size).toBe(3);
+  });
+});
+
+describe("multi-cannon firing", () => {
+  let sim: Simulation;
+
+  beforeEach(() => {
+    sim = new Simulation();
+  });
+
+  it("1 cannon fires 1 bullet", () => {
+    const entity = sim.addPlayer("p1");
+    entity.pos.x = WORLD_WIDTH / 2;
+    entity.pos.y = WORLD_HEIGHT / 2;
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: true, aimAngle: 0,
+    });
+    sim.update();
+    expect(sim.bullets.size).toBe(1);
+  });
+
+  it("2 cannons fire 2 bullets in spread", () => {
+    const entity = sim.addPlayer("p1");
+    entity.pos.x = WORLD_WIDTH / 2;
+    entity.pos.y = WORLD_HEIGHT / 2;
+    const ps = sim.players.get("p1")!;
+    ps.cannons = 2;
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: true, aimAngle: 0,
+    });
+    sim.update();
+    expect(sim.bullets.size).toBe(2);
+
+    const bullets = Array.from(sim.entities.values()).filter(e => e.kind === "bullet");
+    expect(bullets).toHaveLength(2);
+    // One should have positive vy, one negative (spread above/below aim line)
+    const vys = bullets.map(b => b.vel.y).sort((a, b) => a - b);
+    expect(vys[0]).toBeLessThan(0);
+    expect(vys[1]).toBeGreaterThan(0);
+  });
+
+  it("3 cannons fire 3 bullets", () => {
+    const entity = sim.addPlayer("p1");
+    entity.pos.x = WORLD_WIDTH / 2;
+    entity.pos.y = WORLD_HEIGHT / 2;
+    const ps = sim.players.get("p1")!;
+    ps.cannons = 3;
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: true, aimAngle: 0,
+    });
+    sim.update();
+    expect(sim.bullets.size).toBe(3);
+  });
+
+  it("4 cannons fire 4 bullets", () => {
+    const entity = sim.addPlayer("p1");
+    entity.pos.x = WORLD_WIDTH / 2;
+    entity.pos.y = WORLD_HEIGHT / 2;
+    const ps = sim.players.get("p1")!;
+    ps.cannons = 4;
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: true, aimAngle: 0,
+    });
+    sim.update();
+    expect(sim.bullets.size).toBe(4);
+  });
+
+  it("getCannonAngles returns correct spread for 2 cannons", () => {
+    const angles = getCannonAngles(0, 2);
+    expect(angles).toHaveLength(2);
+    expect(angles[0]).toBeCloseTo(-CANNON_SPREAD_ANGLE / 2);
+    expect(angles[1]).toBeCloseTo(CANNON_SPREAD_ANGLE / 2);
+  });
+
+  it("getCannonAngles returns center and spread for 3 cannons", () => {
+    const angles = getCannonAngles(0, 3);
+    expect(angles).toHaveLength(3);
+    expect(angles[0]).toBeCloseTo(-CANNON_SPREAD_ANGLE);
+    expect(angles[1]).toBeCloseTo(0);
+    expect(angles[2]).toBeCloseTo(CANNON_SPREAD_ANGLE);
+  });
+
+  it("getCannonAngles returns 1 angle for 1 cannon", () => {
+    const angles = getCannonAngles(Math.PI / 4, 1);
+    expect(angles).toHaveLength(1);
+    expect(angles[0]).toBeCloseTo(Math.PI / 4);
+  });
+
+  it("multi-cannon bullets use effective damage", () => {
+    const entity = sim.addPlayer("p1");
+    entity.pos.x = 100;
+    entity.pos.y = 300;
+    const ps = sim.players.get("p1")!;
+    ps.cannons = 2;
+    ps.upgrades.damage = 3;
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: true, aimAngle: 0,
+    });
+    sim.update();
+
+    // Both bullets should have effective damage
+    const expectedDamage = BULLET_DAMAGE + 3 * DAMAGE_PER_UPGRADE;
+    for (const bullet of sim.bullets.values()) {
+      expect(bullet.damage).toBe(expectedDamage);
+    }
+  });
+});
+
+describe("upgrade death reset", () => {
+  let sim: Simulation;
+
+  beforeEach(() => {
+    sim = new Simulation();
+  });
+
+  it("death resets upgrades, cannons, and pending points", () => {
+    const entity = sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+
+    // Level up and apply upgrades
+    sim.awardXP(ps, 999999);
+    ps.pendingUpgrades = 3;
+    sim.applyUpgrade("p1", "damage");
+    sim.applyUpgrade("p1", "speed");
+    sim.applyUpgrade("p1", "health");
+
+    expect(ps.upgrades.damage).toBeGreaterThan(0);
+    expect(ps.cannons).toBeGreaterThan(1);
+
+    // Kill the player
+    entity.hp = 0;
+    sim.update();
+
+    expect(ps.level).toBe(1);
+    expect(ps.xp).toBe(0);
+    expect(ps.upgrades).toEqual({ damage: 0, speed: 0, health: 0, fire_rate: 0 });
+    expect(ps.cannons).toBe(1);
+    expect(ps.pendingUpgrades).toBe(0);
+  });
+
+  it("respawned player has base HP (not upgraded max HP)", () => {
+    const entity = sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    ps.upgrades.health = 3;
+
+    entity.hp = 0;
+    sim.update();
+
+    const respawned = sim.entities.get(entity.id);
+    expect(respawned).toBeDefined();
+    expect(respawned!.hp).toBe(PLAYER_HP); // base HP, not upgraded
+  });
+
+  it("snapshot includes upgrade fields for player entities", () => {
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    sim.awardXP(ps, xpForLevel(1)); // level 2
+    sim.applyUpgrade("p1", "damage");
+    sim.update();
+
+    const snapshot = sim.getSnapshot();
+    const playerEntity = snapshot.entities.find(e => e.kind === "player_ship");
+    expect(playerEntity).toBeDefined();
+    expect(playerEntity!.upgrades).toEqual({ damage: 1, speed: 0, health: 0, fire_rate: 0 });
+    expect(playerEntity!.cannons).toBe(1);
+    expect(playerEntity!.pendingUpgrades).toBe(0);
+  });
+
+  it("snapshot with upgrade fields validates against schema", () => {
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    sim.awardXP(ps, xpForLevel(1));
+    sim.applyUpgrade("p1", "speed");
+    sim.update();
+
+    const snapshot = sim.getSnapshot();
+    const result = SnapshotMessageSchema.safeParse(snapshot);
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("getEffectiveMaxHp", () => {
+  it("returns base HP with no upgrades", () => {
+    const sim = new Simulation();
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    expect(getEffectiveMaxHp(ps)).toBe(PLAYER_HP);
+  });
+
+  it("returns increased HP with health upgrades", () => {
+    const sim = new Simulation();
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    ps.upgrades.health = 3;
+    expect(getEffectiveMaxHp(ps)).toBe(PLAYER_HP + 3 * HEALTH_PER_UPGRADE);
   });
 });

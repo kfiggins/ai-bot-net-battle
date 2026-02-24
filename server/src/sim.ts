@@ -2,6 +2,7 @@ import { v4 as uuid } from "uuid";
 import {
   Entity,
   EntityKind,
+  Upgrades,
   PlayerInputData,
   TICK_RATE,
   PLAYER_SPEED,
@@ -30,6 +31,22 @@ import {
   WORLD_WIDTH,
   WORLD_HEIGHT,
   BULLET_MAX_RANGE,
+  ORB_RADIUS,
+  ORB_XP_VALUE,
+  ORB_SPAWN_INTERVAL_TICKS,
+  ORB_MAX_ON_MAP,
+  ORB_SPAWN_PADDING,
+  MAX_LEVEL,
+  xpForLevel,
+  MAX_UPGRADE_PER_STAT,
+  DAMAGE_PER_UPGRADE,
+  SPEED_PER_UPGRADE,
+  HEALTH_PER_UPGRADE,
+  FIRE_RATE_PER_UPGRADE,
+  CANNON_MILESTONES,
+  CANNON_SPREAD_ANGLE,
+  UpgradeType,
+  MILESTONE_LEVELS,
 } from "shared";
 
 export interface PlayerState {
@@ -37,6 +54,16 @@ export interface PlayerState {
   entityId: string;
   input: PlayerInputData;
   fireCooldown: number;
+  label?: string;
+  playerIndex?: number;
+  // XP & leveling
+  xp: number;
+  level: number;
+  xpToNext: number;
+  // Upgrades
+  upgrades: Upgrades;
+  cannons: number;
+  pendingUpgrades: number;
 }
 
 export interface BulletState {
@@ -44,6 +71,7 @@ export interface BulletState {
   ownerId: string;
   ttl: number;
   originPos: { x: number; y: number };
+  damage: number;
 }
 
 export interface MissileState {
@@ -58,6 +86,7 @@ export class Simulation {
   players: Map<string, PlayerState> = new Map();
   bullets: Map<string, BulletState> = new Map();
   missiles: Map<string, MissileState> = new Map();
+  private orbSpawnCooldown = ORB_SPAWN_INTERVAL_TICKS;
 
   private dt = 1 / TICK_RATE;
 
@@ -86,6 +115,14 @@ export class Simulation {
         aimAngle: 0,
       },
       fireCooldown: 0,
+      label,
+      playerIndex,
+      xp: 0,
+      level: 1,
+      xpToNext: xpForLevel(1),
+      upgrades: { damage: 0, speed: 0, health: 0, fire_rate: 0 },
+      cannons: 1,
+      pendingUpgrades: 0,
     });
     return entity;
   }
@@ -133,11 +170,137 @@ export class Simulation {
 
   update(): void {
     this.tick++;
+    this.spawnOrbs();
     this.updatePlayers();
     this.updateBullets();
     this.updateMissiles();
     this.checkCollisions();
+    this.checkOrbPickups();
     this.removeDeadEntities();
+    this.respawnDeadPlayers();
+  }
+
+  private spawnOrbs(): void {
+    this.orbSpawnCooldown--;
+    if (this.orbSpawnCooldown > 0) return;
+    this.orbSpawnCooldown = ORB_SPAWN_INTERVAL_TICKS;
+
+    // Count current orbs
+    let orbCount = 0;
+    for (const e of this.entities.values()) {
+      if (e.kind === "energy_orb") orbCount++;
+    }
+    if (orbCount >= ORB_MAX_ON_MAP) return;
+
+    const x = ORB_SPAWN_PADDING + Math.random() * (WORLD_WIDTH - 2 * ORB_SPAWN_PADDING);
+    const y = ORB_SPAWN_PADDING + Math.random() * (WORLD_HEIGHT - 2 * ORB_SPAWN_PADDING);
+    const entityId = uuid();
+    this.entities.set(entityId, {
+      id: entityId,
+      kind: "energy_orb",
+      pos: { x, y },
+      vel: { x: 0, y: 0 },
+      hp: 1,
+      team: 0, // neutral
+    });
+  }
+
+  private checkOrbPickups(): void {
+    for (const player of this.players.values()) {
+      const entity = this.entities.get(player.entityId);
+      if (!entity || entity.hp <= 0) continue;
+      if (player.level >= MAX_LEVEL) continue;
+
+      for (const [orbId, orb] of this.entities) {
+        if (orb.kind !== "energy_orb" || orb.hp <= 0) continue;
+
+        if (circlesOverlap(entity.pos, PLAYER_RADIUS, orb.pos, ORB_RADIUS)) {
+          orb.hp = 0; // mark for removal
+          this.awardXP(player, ORB_XP_VALUE);
+        }
+      }
+    }
+  }
+
+  awardXP(player: PlayerState, amount: number): void {
+    if (player.level >= MAX_LEVEL) return;
+
+    player.xp += amount;
+    while (player.xp >= player.xpToNext && player.level < MAX_LEVEL) {
+      player.xp -= player.xpToNext;
+      player.level++;
+      player.xpToNext = xpForLevel(player.level);
+
+      // Cannon milestone: auto-apply, no choice needed
+      if (CANNON_MILESTONES[player.level] !== undefined) {
+        player.cannons = CANNON_MILESTONES[player.level];
+      } else {
+        // Regular level-up: give a pending stat upgrade point
+        player.pendingUpgrades++;
+      }
+
+      // Heal to new max HP on level up
+      const maxHp = getEffectiveMaxHp(player);
+      const entity = this.entities.get(player.entityId);
+      if (entity) {
+        entity.hp = maxHp;
+      }
+    }
+
+    // Cap XP at max level
+    if (player.level >= MAX_LEVEL) {
+      player.xp = 0;
+      player.xpToNext = 0;
+    }
+  }
+
+  applyUpgrade(playerId: string, stat: UpgradeType): boolean {
+    const player = this.players.get(playerId);
+    if (!player) return false;
+    if (player.pendingUpgrades <= 0) return false;
+    if (player.upgrades[stat] >= MAX_UPGRADE_PER_STAT) return false;
+
+    player.upgrades[stat]++;
+    player.pendingUpgrades--;
+
+    // If health was upgraded, heal to new max HP
+    if (stat === "health") {
+      const entity = this.entities.get(player.entityId);
+      if (entity) {
+        entity.hp = getEffectiveMaxHp(player);
+      }
+    }
+
+    return true;
+  }
+
+  private respawnDeadPlayers(): void {
+    for (const player of this.players.values()) {
+      if (this.entities.has(player.entityId)) continue;
+
+      // Player entity was removed (died) — respawn with reset
+      const pos = playerSpawnPosition();
+      const entity: Entity = {
+        id: player.entityId, // reuse same entity ID so client tracks it
+        kind: "player_ship",
+        pos,
+        vel: { x: 0, y: 0 },
+        hp: PLAYER_HP,
+        team: 1,
+        label: player.label,
+        playerIndex: player.playerIndex,
+      };
+      this.entities.set(entity.id, entity);
+
+      // Reset XP, level, and upgrades
+      player.xp = 0;
+      player.level = 1;
+      player.xpToNext = xpForLevel(1);
+      player.fireCooldown = 0;
+      player.upgrades = { damage: 0, speed: 0, health: 0, fire_rate: 0 };
+      player.cannons = 1;
+      player.pendingUpgrades = 0;
+    }
   }
 
   private updatePlayers(): void {
@@ -146,6 +309,10 @@ export class Simulation {
       if (!entity) continue;
 
       const { input } = player;
+      const effectiveSpeed = PLAYER_SPEED + player.upgrades.speed * SPEED_PER_UPGRADE;
+      const effectiveCooldown = Math.max(1, FIRE_COOLDOWN_TICKS - player.upgrades.fire_rate * FIRE_RATE_PER_UPGRADE);
+      const effectiveDamage = BULLET_DAMAGE + player.upgrades.damage * DAMAGE_PER_UPGRADE;
+
       let vx = 0;
       let vy = 0;
 
@@ -157,8 +324,8 @@ export class Simulation {
       // Normalize diagonal movement
       const mag = Math.sqrt(vx * vx + vy * vy);
       if (mag > 0) {
-        vx = (vx / mag) * PLAYER_SPEED;
-        vy = (vy / mag) * PLAYER_SPEED;
+        vx = (vx / mag) * effectiveSpeed;
+        vy = (vy / mag) * effectiveSpeed;
       }
 
       entity.vel = { x: vx, y: vy };
@@ -174,26 +341,35 @@ export class Simulation {
         player.fireCooldown--;
       }
       if (input.fire && player.fireCooldown <= 0) {
-        this.spawnBullet(entity, player.id, input.aimAngle);
-        player.fireCooldown = FIRE_COOLDOWN_TICKS;
+        this.fireMultiCannon(entity, player.id, input.aimAngle, player.cannons, effectiveDamage);
+        player.fireCooldown = effectiveCooldown;
       }
+    }
+  }
+
+  private fireMultiCannon(owner: Entity, ownerId: string, aimAngle: number, cannons: number, damage: number): void {
+    const angles = getCannonAngles(aimAngle, cannons);
+    for (const angle of angles) {
+      this.spawnBullet(owner, ownerId, angle, damage);
     }
   }
 
   spawnBullet(
     owner: Entity,
     ownerId: string,
-    aimAngle: number
+    aimAngle: number,
+    damage: number = BULLET_DAMAGE
   ): Entity {
     const entityId = uuid();
     const vx = Math.cos(aimAngle) * BULLET_SPEED;
     const vy = Math.sin(aimAngle) * BULLET_SPEED;
+    const ownerRadius = entityRadius(owner.kind);
     const entity: Entity = {
       id: entityId,
       kind: "bullet",
       pos: {
-        x: owner.pos.x + Math.cos(aimAngle) * (PLAYER_RADIUS + BULLET_RADIUS + 2),
-        y: owner.pos.y + Math.sin(aimAngle) * (PLAYER_RADIUS + BULLET_RADIUS + 2),
+        x: owner.pos.x + Math.cos(aimAngle) * (ownerRadius + BULLET_RADIUS + 2),
+        y: owner.pos.y + Math.sin(aimAngle) * (ownerRadius + BULLET_RADIUS + 2),
       },
       vel: { x: vx, y: vy },
       hp: BULLET_HP,
@@ -205,6 +381,7 @@ export class Simulation {
       ownerId,
       ttl: BULLET_TTL_TICKS,
       originPos: { x: entity.pos.x, y: entity.pos.y },
+      damage,
     });
     return entity;
   }
@@ -276,7 +453,7 @@ export class Simulation {
       let nearestDistSq = Infinity;
       for (const other of this.entities.values()) {
         if (other.team === entity.team) continue;
-        if (other.kind === "bullet" || other.kind === "missile") continue;
+        if (other.kind === "bullet" || other.kind === "missile" || other.kind === "energy_orb") continue;
         if (other.hp <= 0) continue;
         const dx = other.pos.x - entity.pos.x;
         const dy = other.pos.y - entity.pos.y;
@@ -324,35 +501,35 @@ export class Simulation {
   }
 
   checkCollisions(): void {
-    // Bullets hit any opposite-team non-bullet entity (including missiles)
-    for (const [bulletId] of this.bullets) {
+    // Bullets hit any opposite-team non-bullet, non-orb entity (including missiles)
+    for (const [bulletId, bulletState] of this.bullets) {
       const bulletEntity = this.entities.get(bulletId);
       if (!bulletEntity || bulletEntity.hp <= 0) continue;
 
       for (const [entityId, target] of this.entities) {
         if (entityId === bulletId) continue;
-        if (target.kind === "bullet") continue;
+        if (target.kind === "bullet" || target.kind === "energy_orb") continue;
         if (target.team === bulletEntity.team) continue;
         if (target.hp <= 0) continue;
 
         const targetRadius = entityRadius(target.kind);
 
         if (circlesOverlap(bulletEntity.pos, BULLET_RADIUS, target.pos, targetRadius)) {
-          target.hp -= BULLET_DAMAGE;
+          target.hp -= bulletState.damage;
           bulletEntity.hp = 0;
           break;
         }
       }
     }
 
-    // Missiles hit any opposite-team non-projectile entity
+    // Missiles hit any opposite-team non-projectile, non-orb entity
     for (const [missileId] of this.missiles) {
       const missileEntity = this.entities.get(missileId);
       if (!missileEntity || missileEntity.hp <= 0) continue;
 
       for (const [entityId, target] of this.entities) {
         if (entityId === missileId) continue;
-        if (target.kind === "bullet" || target.kind === "missile") continue;
+        if (target.kind === "bullet" || target.kind === "missile" || target.kind === "energy_orb") continue;
         if (target.team === missileEntity.team) continue;
         if (target.hp <= 0) continue;
 
@@ -384,11 +561,35 @@ export class Simulation {
     matchOver: boolean;
     mothershipShielded: boolean;
   }) {
+    // Build player ID→state lookup for snapshot enrichment
+    const playerByEntityId = new Map<string, PlayerState>();
+    for (const p of this.players.values()) {
+      playerByEntityId.set(p.entityId, p);
+    }
+
+    const entities = Array.from(this.entities.values()).map((e) => {
+      if (e.kind === "player_ship") {
+        const ps = playerByEntityId.get(e.id);
+        if (ps) {
+          return {
+            ...e,
+            level: ps.level,
+            xp: ps.xp,
+            xpToNext: ps.xpToNext,
+            upgrades: { ...ps.upgrades },
+            cannons: ps.cannons,
+            pendingUpgrades: ps.pendingUpgrades,
+          };
+        }
+      }
+      return e;
+    });
+
     return {
       v: 1 as const,
       type: "snapshot" as const,
       tick: this.tick,
-      entities: Array.from(this.entities.values()),
+      entities,
       phase: phaseInfo,
     };
   }
@@ -420,9 +621,26 @@ export function entityRadius(kind: string): number {
       return MISSILE_TOWER_RADIUS;
     case "mothership":
       return MOTHERSHIP_RADIUS;
+    case "energy_orb":
+      return ORB_RADIUS;
     default:
       return PLAYER_RADIUS;
   }
+}
+
+export function getEffectiveMaxHp(player: PlayerState): number {
+  return PLAYER_HP + player.upgrades.health * HEALTH_PER_UPGRADE;
+}
+
+export function getCannonAngles(aimAngle: number, cannons: number): number[] {
+  if (cannons <= 1) return [aimAngle];
+  const angles: number[] = [];
+  // Center the spread around aimAngle
+  const half = (cannons - 1) / 2;
+  for (let i = 0; i < cannons; i++) {
+    angles.push(aimAngle + (i - half) * CANNON_SPREAD_ANGLE);
+  }
+  return angles;
 }
 
 export function circlesOverlap(

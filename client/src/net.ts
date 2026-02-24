@@ -129,6 +129,13 @@ export class NetClient {
     }
   }
 
+  /** Send stat upgrade choice to server */
+  sendUpgrade(stat: "damage" | "speed" | "health" | "fire_rate"): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ v: 1, type: "player_upgrade", stat }));
+    }
+  }
+
   setSnapshotHandler(handler: (snapshot: SnapshotMessage) => void): void {
     this.onSnapshot = handler;
   }

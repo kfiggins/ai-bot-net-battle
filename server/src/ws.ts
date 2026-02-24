@@ -200,6 +200,18 @@ export function createWSServer(
 
           room.sim.setInput(player.playerId, msg.input);
         }
+
+        if (msg.type === "player_upgrade") {
+          if (!joined) return;
+
+          const room = roomManager.findRoomByWs(ws);
+          if (!room) return;
+
+          const player = room.findPlayerByWs(ws);
+          if (!player) return;
+
+          room.sim.applyUpgrade(player.playerId, msg.stat);
+        }
       } catch {
         ws.send(JSON.stringify({
           v: 1,

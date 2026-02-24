@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { Entity, PlayerInputData, WORLD_WIDTH, WORLD_HEIGHT, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, GRID_SPACING, PLAYER_SPEED } from "shared";
+import { Entity, PlayerInputData, WORLD_WIDTH, WORLD_HEIGHT, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, GRID_SPACING, PLAYER_SPEED, SPEED_PER_UPGRADE, ORB_RADIUS } from "shared";
 import { NetClient } from "./net.js";
 import { SnapshotInterpolator, InterpolatedEntity } from "./interpolation.js";
 import { VFXManager } from "./vfx.js";
@@ -26,6 +26,7 @@ export class GameScene extends Phaser.Scene {
   private victoryShown = false;
   private cameraPos: { x: number; y: number } | null = null;
   private modeText!: Phaser.GameObjects.Text;
+  private predictedSpeed = PLAYER_SPEED;
 
   constructor() {
     super({ key: "GameScene" });
@@ -69,8 +70,12 @@ export class GameScene extends Phaser.Scene {
 
     this.vfx = new VFXManager(this);
     this.hud = new HUD(this);
+    this.hud.setUpgradeHandler((stat) => {
+      this.net.sendUpgrade(stat as "damage" | "speed" | "health" | "fire_rate");
+    });
     this.matchStartMs = performance.now();
     this.victoryShown = false;
+    this.predictedSpeed = PLAYER_SPEED;
 
     this.modeText = this.add
       .text(10, 10, `Mode: ${this.net.currentMode === "external_agent" ? "Agent ON" : "Kids AI"}`, {
@@ -149,8 +154,8 @@ export class GameScene extends Phaser.Scene {
       if (input.right) vx += 1;
       const mag = Math.sqrt(vx * vx + vy * vy);
       if (mag > 0) {
-        vx = (vx / mag) * PLAYER_SPEED;
-        vy = (vy / mag) * PLAYER_SPEED;
+        vx = (vx / mag) * this.predictedSpeed;
+        vy = (vy / mag) * this.predictedSpeed;
       }
       this.predictedPos.x = Math.max(0, Math.min(WORLD_WIDTH, this.predictedPos.x + vx * dtSec));
       this.predictedPos.y = Math.max(0, Math.min(WORLD_HEIGHT, this.predictedPos.y + vy * dtSec));
@@ -231,6 +236,19 @@ export class GameScene extends Phaser.Scene {
       this.updateTeammateArrows(entities, selfId);
       this.hud.updateHealthBars(entities);
       this.hud.updateDebug(entities);
+
+      // Update XP bar and upgrades for local player
+      if (selfId) {
+        const selfEntity = entities.find((e) => e.id === selfId);
+        if (selfEntity) {
+          this.hud.updateXP(selfEntity.level ?? 1, selfEntity.xp ?? 0, selfEntity.xpToNext ?? 0);
+          if (selfEntity.upgrades) {
+            this.hud.updateUpgrades(selfEntity.upgrades, selfEntity.cannons ?? 1, selfEntity.pendingUpgrades ?? 0);
+            // Update predicted speed for client-side prediction
+            this.predictedSpeed = PLAYER_SPEED + (selfEntity.upgrades.speed ?? 0) * SPEED_PER_UPGRADE;
+          }
+        }
+      }
     }
 
     const phase = this.interpolator.getPhaseInfo();
@@ -321,8 +339,8 @@ export class GameScene extends Phaser.Scene {
       if (!sprite) {
         sprite = this.createEntitySprite(entity);
         this.entitySprites.set(entity.id, sprite);
-        // Spawn telegraph for non-projectile entities
-        if (entity.kind !== "bullet" && entity.kind !== "missile") {
+        // Spawn telegraph for non-projectile, non-orb entities
+        if (entity.kind !== "bullet" && entity.kind !== "missile" && entity.kind !== "energy_orb") {
           this.vfx.spawnTelegraph(entity.pos.x, entity.pos.y, getRadius(entity.kind));
         }
       }
@@ -372,7 +390,12 @@ export class GameScene extends Phaser.Scene {
   private createEntitySprite(entity: Entity): Phaser.GameObjects.Arc {
     const color = getColor(entity);
     const radius = getRadius(entity.kind);
-    return this.add.circle(entity.pos.x, entity.pos.y, radius, color);
+    const circle = this.add.circle(entity.pos.x, entity.pos.y, radius, color);
+    if (entity.kind === "energy_orb") {
+      circle.setAlpha(0.7);
+      circle.setDepth(-0.5); // below ships but above grid
+    }
+    return circle;
   }
 
   /** Draw/update screen-edge arrows pointing toward off-screen teammates. */
@@ -465,6 +488,7 @@ function getColor(entity: Entity): number {
     case "tower": return 0xff2222;
     case "missile_tower": return 0xff8800;
     case "mothership": return 0xff00ff;
+    case "energy_orb": return 0x00ffcc;
     default: return 0xffffff;
   }
 }
@@ -478,6 +502,7 @@ function getRadius(kind: string): number {
     case "tower": return 20;
     case "missile_tower": return 24;
     case "mothership": return 40;
+    case "energy_orb": return ORB_RADIUS;
     default: return 8;
   }
 }

@@ -89,8 +89,45 @@ export const ENEMY_DEAGGRO_RANGE = 900;  // pixels — stop chasing when player 
 export const ENEMY_PATROL_RADIUS = 400;  // pixels — wander radius around mothership
 export const ENEMY_PATROL_SPEED = 60;    // pixels/second — slower than chase speed
 
+// Energy Orbs
+export const ORB_RADIUS = 8;
+export const ORB_XP_VALUE = 5;
+export const ORB_SPAWN_INTERVAL_TICKS = 15;  // spawn 1 orb every 0.5s
+export const ORB_MAX_ON_MAP = 150;
+export const ORB_SPAWN_PADDING = 100;        // pixels from world edge
+
+// XP & Leveling
+export const MAX_LEVEL = 15;
+export const XP_BASE = 10;
+export const XP_SCALING = 1.5;
+export const MILESTONE_LEVELS = [5, 10, 15];
+
+/** XP needed to advance from `level` to `level+1` */
+export function xpForLevel(level: number): number {
+  return Math.floor(XP_BASE * Math.pow(level, XP_SCALING));
+}
+
 export const SERVER_PORT = parseInt(process.env.WS_PORT ?? "3000", 10);
 export const CLIENT_PORT = 5173;
+
+// Stat Upgrades
+export const UPGRADE_TYPES = ["damage", "speed", "health", "fire_rate"] as const;
+export type UpgradeType = (typeof UPGRADE_TYPES)[number];
+export const MAX_UPGRADE_PER_STAT = 5;
+
+// Per-point bonuses (additive per upgrade level)
+export const DAMAGE_PER_UPGRADE = 3;    // +3 bullet damage per point (base 10 → max 25)
+export const SPEED_PER_UPGRADE = 25;    // +25 px/s per point (base 200 → max 325)
+export const HEALTH_PER_UPGRADE = 20;   // +20 max HP per point (base 100 → max 200)
+export const FIRE_RATE_PER_UPGRADE = 1; // -1 tick off cooldown per point (base 6 → min 1)
+
+// Cannon Milestones
+export const CANNON_MILESTONES: Record<number, number> = {
+  5: 2,   // level 5 → double cannon
+  10: 3,  // level 10 → triple cannon
+  15: 4,  // level 15 → quad cannon
+};
+export const CANNON_SPREAD_ANGLE = 0.15; // radians between each cannon (~8.6 degrees)
 
 // Rooms
 export const MAX_ROOMS = 10;

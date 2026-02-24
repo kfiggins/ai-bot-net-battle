@@ -8,8 +8,16 @@ export const Vec2Schema = z.object({
 });
 export type Vec2 = z.infer<typeof Vec2Schema>;
 
-export const EntityKind = z.enum(["player_ship", "bullet", "missile", "minion_ship", "tower", "missile_tower", "mothership"]);
+export const EntityKind = z.enum(["player_ship", "bullet", "missile", "minion_ship", "tower", "missile_tower", "mothership", "energy_orb"]);
 export type EntityKind = z.infer<typeof EntityKind>;
+
+export const UpgradesSchema = z.object({
+  damage: z.number().int(),
+  speed: z.number().int(),
+  health: z.number().int(),
+  fire_rate: z.number().int(),
+});
+export type Upgrades = z.infer<typeof UpgradesSchema>;
 
 export const EntitySchema = z.object({
   id: z.string(),
@@ -20,6 +28,14 @@ export const EntitySchema = z.object({
   team: z.number(),
   label: z.string().optional(),
   playerIndex: z.number().int().optional(),
+  // XP & leveling (player_ship only)
+  level: z.number().int().optional(),
+  xp: z.number().optional(),
+  xpToNext: z.number().optional(),
+  // Upgrades (player_ship only)
+  upgrades: UpgradesSchema.optional(),
+  cannons: z.number().int().optional(),
+  pendingUpgrades: z.number().int().optional(),
 });
 export type Entity = z.infer<typeof EntitySchema>;
 
@@ -143,6 +159,15 @@ export const AgentCommandSchema = z.discriminatedUnion("command", [
 ]);
 export type AgentCommand = z.infer<typeof AgentCommandSchema>;
 
+// --- Client → Server: player_upgrade ---
+
+export const PlayerUpgradeMessageSchema = z.object({
+  v: z.literal(1),
+  type: z.literal("player_upgrade"),
+  stat: z.enum(["damage", "speed", "health", "fire_rate"]),
+});
+export type PlayerUpgradeMessage = z.infer<typeof PlayerUpgradeMessageSchema>;
+
 // --- Client → Server: start_game ---
 
 export const StartGameMessageSchema = z.object({
@@ -199,6 +224,7 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   JoinRoomMessageSchema,
   StartGameMessageSchema,
   LeaveRoomMessageSchema,
+  PlayerUpgradeMessageSchema,
 ]);
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
