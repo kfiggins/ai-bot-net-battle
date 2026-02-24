@@ -19,6 +19,7 @@ export class GameScene extends Phaser.Scene {
   private hud!: HUD;
   private previousEntityIds: Set<string> = new Set();
   private previousEntityHp: Map<string, number> = new Map();
+  private previousEntityKinds: Map<string, string> = new Map();
   private teammateArrows: Map<string, Phaser.GameObjects.Graphics> = new Map();
   /** Client-side predicted position for local player */
   private predictedPos: { x: number; y: number } | null = null;
@@ -41,6 +42,7 @@ export class GameScene extends Phaser.Scene {
     this.teammateArrows.clear();
     this.previousEntityIds.clear();
     this.previousEntityHp.clear();
+    this.previousEntityKinds.clear();
     this.predictedPos = null;
     this.cameraPos = null;
     this.victoryShown = false;
@@ -301,6 +303,7 @@ export class GameScene extends Phaser.Scene {
     for (const entity of entities) {
       currentIds.add(entity.id);
       currentHp.set(entity.id, entity.hp);
+      this.previousEntityKinds.set(entity.id, entity.kind);
 
       // Detect hits (HP decreased)
       const prevHp = this.previousEntityHp.get(entity.id);
@@ -312,14 +315,25 @@ export class GameScene extends Phaser.Scene {
     // Detect deaths (entity disappeared)
     for (const id of this.previousEntityIds) {
       if (!currentIds.has(id)) {
-        // Entity was removed - find its last known position for explosion
         const lastHp = this.previousEntityHp.get(id);
         // Only explode if it was alive before (not a bullet that expired)
         if (lastHp !== undefined && lastHp > 0) {
-          // We need the last position - check sprites
           const sprite = this.entitySprites.get(id);
           if (sprite) {
             this.vfx.explosion(sprite.x, sprite.y, sprite.fillColor, 10);
+
+            // Mothership death: chain explosions over ~2 s before Nemesis arrives
+            if (this.previousEntityKinds.get(id) === "mothership") {
+              const pos = { x: sprite.x, y: sprite.y };
+              const timings = [120, 300, 520, 740, 960, 1180, 1400, 1650, 1900];
+              for (const delay of timings) {
+                this.time.delayedCall(delay, () => {
+                  const ox = (Math.random() - 0.5) * 140;
+                  const oy = (Math.random() - 0.5) * 140;
+                  this.vfx.explosion(pos.x + ox, pos.y + oy, 0xff00ff, 14);
+                });
+              }
+            }
           }
         }
       }

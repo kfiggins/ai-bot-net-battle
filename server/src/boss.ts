@@ -18,6 +18,13 @@ import {
 } from "shared";
 import { Simulation } from "./sim.js";
 
+// Mothership death sequence (2 s of chaos before Nemesis spawns)
+const MOTHERSHIP_DEATH_TICKS = 60;     // 2 s at 30 Hz
+const DEATH_RING_INTERVAL_TICKS = 10;  // bullet ring every ~0.33 s → 6 rings
+const DEATH_RING_BULLET_COUNT = 12;    // bullets per ring
+const DEATH_RING_BULLET_SPEED = 220;   // px/s
+const DEATH_RING_BULLET_DAMAGE = 8;    // same as body collision damage
+
 export interface BossPhaseState {
   current: number; // 1, 2, 3 (mothership phases), 4 (Nemesis boss)
   matchOver: boolean;
@@ -37,6 +44,9 @@ export class BossManager {
   private spiralFireCooldown: number = 0;
   private missileFireCooldown: number = 0;
   private mothershipLastPos: { x: number; y: number } | null = null;
+  private mothershipDyingCountdown: number = 0;
+  private deathRingCooldown: number = 0;
+  private deathRingAngle: number = 0;
 
   spawnMothership(sim: Simulation): Entity {
     const entityId = uuid();
@@ -93,6 +103,39 @@ export class BossManager {
         return false;
       default:
         return false;
+    }
+  }
+
+  private spawnDeathBulletRing(sim: Simulation): void {
+    const pos = this.mothershipLastPos ?? { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 };
+    // Ghost entity — not added to sim, just used as bullet origin
+    const ghost: Entity = {
+      id: "mothership_death",
+      kind: "mothership",
+      pos: { x: pos.x, y: pos.y },
+      vel: { x: 0, y: 0 },
+      hp: 1,
+      team: ENEMY_TEAM,
+    };
+    for (let i = 0; i < DEATH_RING_BULLET_COUNT; i++) {
+      const angle = this.deathRingAngle + (Math.PI * 2 * i) / DEATH_RING_BULLET_COUNT;
+      sim.spawnBullet(ghost, "mothership_death", angle, DEATH_RING_BULLET_DAMAGE, DEATH_RING_BULLET_SPEED);
+    }
+    this.deathRingAngle += Math.PI / DEATH_RING_BULLET_COUNT;
+  }
+
+  private updateMothershipDying(sim: Simulation): void {
+    this.deathRingCooldown--;
+    if (this.deathRingCooldown <= 0) {
+      this.spawnDeathBulletRing(sim);
+      this.deathRingCooldown = DEATH_RING_INTERVAL_TICKS;
+    }
+
+    this.mothershipDyingCountdown--;
+    if (this.mothershipDyingCountdown <= 0) {
+      const pos = this.mothershipLastPos ?? { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 };
+      this.spawnNemesis(sim, pos);
+      this.phaseState.current = 4;
     }
   }
 
@@ -177,19 +220,26 @@ export class BossManager {
       return;
     }
 
+    // Death sequence in progress — fire bullet rings, then spawn Nemesis when done
+    if (this.mothershipDyingCountdown > 0) {
+      this.updateMothershipDying(sim);
+      return;
+    }
+
     // Phases 1–3: Mothership fight
     const mothership = this.mothershipId
       ? sim.entities.get(this.mothershipId)
       : null;
 
-    // If mothership entity is gone (removeDeadEntities may run before boss.update),
-    // transition to Nemesis fight using the last known position.
+    // If mothership entity is gone (removeDeadEntities ran before boss.update this tick),
+    // start the death sequence using the last known position.
     if (!mothership) {
       if (this.mothershipId) {
-        const pos = this.mothershipLastPos ?? { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 };
         this.mothershipId = null;
-        this.spawnNemesis(sim, pos);
-        this.phaseState.current = 4;
+        this.mothershipDyingCountdown = MOTHERSHIP_DEATH_TICKS;
+        this.deathRingCooldown = 0; // fire first ring immediately
+        this.deathRingAngle = 0;
+        this.updateMothershipDying(sim);
       }
       return;
     }
@@ -214,13 +264,15 @@ export class BossManager {
       this.phaseState.current = 3;
     }
 
-    // Mothership dies → explode and spawn Nemesis for phase 4
+    // boss.update caught hp=0 before sim deleted it (test scenario or same-tick death)
     if (mothership.hp <= 0) {
-      const pos = { x: mothership.pos.x, y: mothership.pos.y };
+      this.mothershipLastPos = { x: mothership.pos.x, y: mothership.pos.y };
       sim.entities.delete(this.mothershipId!);
       this.mothershipId = null;
-      this.spawnNemesis(sim, pos);
-      this.phaseState.current = 4;
+      this.mothershipDyingCountdown = MOTHERSHIP_DEATH_TICKS;
+      this.deathRingCooldown = 0; // fire first ring immediately
+      this.deathRingAngle = 0;
+      this.updateMothershipDying(sim);
     }
   }
 

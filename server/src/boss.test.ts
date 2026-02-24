@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { BossManager } from "./boss.js";
 import { Simulation } from "./sim.js";
-import { AIManager } from "./ai.js";
 import { MOTHERSHIP_HP, NEMESIS_HP, ENEMY_TEAM, WORLD_WIDTH, WORLD_HEIGHT } from "shared";
 
 describe("BossManager", () => {
@@ -129,12 +128,29 @@ describe("BossManager", () => {
   });
 
   describe("win condition", () => {
-    it("mothership death spawns Nemesis and transitions to phase 4", () => {
+    it("mothership death starts death sequence — entity removed immediately, phase still 3", () => {
       const mothership = boss.spawnMothership(sim);
-      boss.phaseState.current = 3; // make vulnerable
+      boss.phaseState.current = 3;
 
       mothership.hp = 0;
       boss.update(sim);
+
+      // Entity is removed right away
+      expect(sim.entities.has(mothership.id)).toBe(false);
+      // But Nemesis hasn't spawned yet — still in death sequence
+      expect(boss.phaseState.current).toBe(3);
+      expect(boss.nemesisId).toBeNull();
+    });
+
+    it("mothership death spawns Nemesis and transitions to phase 4 after death sequence", () => {
+      const mothership = boss.spawnMothership(sim);
+      boss.phaseState.current = 3;
+
+      mothership.hp = 0;
+      // Run through the 60-tick death sequence
+      for (let i = 0; i < 62; i++) {
+        boss.update(sim);
+      }
 
       expect(boss.phaseState.current).toBe(4);
       expect(boss.phaseState.matchOver).toBe(false);
@@ -202,7 +218,7 @@ describe("BossManager", () => {
     });
 
     it("returns correct phase 3 info", () => {
-      const mothership = boss.spawnMothership(sim);
+      boss.spawnMothership(sim);
       boss.phaseState.current = 3;
 
       const info = boss.getPhaseInfo(sim);
