@@ -114,7 +114,9 @@ describe("AIManager", () => {
       expect(aiState.fireCooldown).toBe(MINION_FIRE_COOLDOWN_TICKS - 1);
     });
 
-    it("patrols when no players exist", () => {
+    it("patrols when no players exist (turrets still alive)", () => {
+      // Spawn a live tower so minions don't enter return_to_base
+      sim.spawnEnemy("tower", 2000, 2000);
       const minion = sim.spawnEnemy("minion_ship", 500, 300);
       registerReady(ai, minion.id);
 
@@ -167,7 +169,10 @@ describe("AIManager", () => {
       expect(state.aiMode).toBe("chase");
     });
 
-    it("switches back to patrol when player leaves deaggro range", () => {
+    it("switches back to patrol when player leaves deaggro range (turrets alive)", () => {
+      // Live tower keeps minions in patrol mode after deaggro
+      sim.spawnEnemy("tower", 2000, 2000);
+
       const player = sim.addPlayer("p1");
       player.pos.x = 500;
       player.pos.y = 300;
@@ -190,7 +195,10 @@ describe("AIManager", () => {
       expect(state.aiMode).toBe("patrol");
     });
 
-    it("does not aggro when player is outside aggro range", () => {
+    it("does not aggro when player is outside aggro range (turrets alive)", () => {
+      // Live tower keeps minion in patrol (not return_to_base)
+      sim.spawnEnemy("tower", 2000, 2000);
+
       const player = sim.addPlayer("p1");
       player.pos.x = 500;
       player.pos.y = 300;
@@ -325,11 +333,11 @@ describe("AIManager", () => {
 
     it("fires a burst of MISSILE_BURST_SIZE missiles", () => {
       const player = sim.addPlayer("p1");
-      // Place player 1000px away so missiles can't reach during the burst window
+      // Place player 600px away (within range) so missiles can't reach during the burst window
       player.pos.x = 100;
       player.pos.y = 300;
 
-      const mt = sim.spawnEnemy("missile_tower", 1100, 300);
+      const mt = sim.spawnEnemy("missile_tower", 700, 300);
       registerReady(ai, mt.id);
 
       // burstCooldown is set to BURST_DELAY after each shot and decremented each ai tick,
@@ -360,11 +368,11 @@ describe("AIManager", () => {
 
     it("respects main fire cooldown between bursts", () => {
       const player = sim.addPlayer("p1");
-      // Place player 1000px away so missiles can't reach during the burst window
+      // Place player 600px away (within range) so missiles can't reach during the burst window
       player.pos.x = 100;
       player.pos.y = 300;
 
-      const mt = sim.spawnEnemy("missile_tower", 1100, 300);
+      const mt = sim.spawnEnemy("missile_tower", 700, 300);
       registerReady(ai, mt.id);
 
       // Complete first burst — each inter-shot gap = BURST_DELAY + 1 ticks
@@ -382,6 +390,164 @@ describe("AIManager", () => {
       }
       const aiState = ai.aiStates.get(mt.id)!;
       expect(aiState.fireCooldown).toBeGreaterThan(0);
+    });
+  });
+
+  describe("minion orb collection", () => {
+    it("minion in patrol mode steers toward nearest orb", () => {
+      // Live tower keeps minion in patrol mode (not return_to_base)
+      sim.spawnEnemy("tower", 2000, 2000);
+      const minion = sim.spawnEnemy("minion_ship", 500, 500);
+      ai.registerEntity(minion.id);
+
+      // Place an orb to the left of the minion
+      sim.entities.set("orb1", {
+        id: "orb1", kind: "energy_orb",
+        pos: { x: 100, y: 500 }, vel: { x: 0, y: 0 }, hp: 1, team: 0,
+      });
+
+      sim.update();
+      ai.update(sim);
+
+      // Minion should have moved left toward the orb
+      expect(minion.pos.x).toBeLessThan(500);
+    });
+
+    it("minion collects orb on contact and adds pendingEnemyResources", () => {
+      // Live tower keeps minion in patrol mode (not return_to_base)
+      sim.spawnEnemy("tower", 2000, 2000);
+      const minion = sim.spawnEnemy("minion_ship", 500, 500);
+      ai.registerEntity(minion.id);
+
+      // Place orb directly on top of minion
+      sim.entities.set("orb1", {
+        id: "orb1", kind: "energy_orb",
+        pos: { x: 500, y: 500 }, vel: { x: 0, y: 0 }, hp: 1, team: 0,
+      });
+
+      sim.update();
+      ai.update(sim);
+
+      expect(sim.pendingEnemyResources).toBeGreaterThan(0);
+      expect(sim.entities.get("orb1")!.hp).toBe(0);
+    });
+
+    it("minion ignores orbs when chasing a player", () => {
+      const player = sim.addPlayer("p1");
+      player.pos = { x: 100, y: 500 };
+
+      const minion = sim.spawnEnemy("minion_ship", 500, 500);
+      ai.registerEntity(minion.id);
+
+      // Place an orb far to the right
+      sim.entities.set("orb1", {
+        id: "orb1", kind: "energy_orb",
+        pos: { x: 900, y: 500 }, vel: { x: 0, y: 0 }, hp: 1, team: 0,
+      });
+
+      sim.update();
+      ai.update(sim);
+
+      // Minion should chase player (move left), not the orb (move right)
+      expect(minion.pos.x).toBeLessThan(500);
+    });
+  });
+
+  describe("minion return_to_base behavior", () => {
+    it("switches to return_to_base when all turrets are destroyed", () => {
+      // No turrets, no players → minion should rally back to base
+      const minion = sim.spawnEnemy("minion_ship", 500, 300);
+      registerReady(ai, minion.id);
+
+      sim.update();
+      ai.update(sim);
+
+      expect(ai.aiStates.get(minion.id)!.aiMode).toBe("return_to_base");
+    });
+
+    it("stays in patrol (not return_to_base) when a turret still exists", () => {
+      sim.spawnEnemy("tower", 2000, 2000);
+      const minion = sim.spawnEnemy("minion_ship", 500, 300);
+      registerReady(ai, minion.id);
+
+      sim.update();
+      ai.update(sim);
+
+      expect(ai.aiStates.get(minion.id)!.aiMode).toBe("patrol");
+    });
+
+    it("moves toward mothership in return_to_base mode", () => {
+      ai.setPatrolCenter({ x: 2000, y: 2000 });
+      // Minion placed at top-left, mothership at center — should move right + down
+      const minion = sim.spawnEnemy("minion_ship", 500, 500);
+      registerReady(ai, minion.id);
+
+      sim.update();
+      ai.update(sim);
+
+      expect(ai.aiStates.get(minion.id)!.aiMode).toBe("return_to_base");
+      expect(minion.vel.x).toBeGreaterThan(0);
+      expect(minion.vel.y).toBeGreaterThan(0);
+    });
+
+    it("attacks player that enters aggro range while returning to base", () => {
+      ai.setPatrolCenter({ x: 2000, y: 2000 });
+      const minion = sim.spawnEnemy("minion_ship", 500, 500);
+      registerReady(ai, minion.id);
+
+      // First tick: enter return_to_base
+      sim.update();
+      ai.update(sim);
+      expect(ai.aiStates.get(minion.id)!.aiMode).toBe("return_to_base");
+
+      // Player walks within aggro range
+      const player = sim.addPlayer("p1");
+      player.pos.x = minion.pos.x + ENEMY_AGGRO_RANGE - 50;
+      player.pos.y = minion.pos.y;
+
+      sim.update();
+      ai.update(sim);
+
+      expect(ai.aiStates.get(minion.id)!.aiMode).toBe("chase");
+    });
+
+    it("returns to return_to_base after player leaves deaggro range with no turrets", () => {
+      ai.setPatrolCenter({ x: 2000, y: 2000 });
+      const player = sim.addPlayer("p1");
+      player.pos.x = 500;
+      player.pos.y = 300;
+
+      const minion = sim.spawnEnemy("minion_ship", 500 + ENEMY_AGGRO_RANGE - 50, 300);
+      registerReady(ai, minion.id);
+
+      // Enter chase
+      sim.update();
+      ai.update(sim);
+      expect(ai.aiStates.get(minion.id)!.aiMode).toBe("chase");
+
+      // Player retreats beyond deaggro range
+      player.pos.x = minion.pos.x + ENEMY_DEAGGRO_RANGE + 100;
+
+      sim.update();
+      ai.update(sim);
+
+      // No turrets alive → should rally back, not patrol
+      expect(ai.aiStates.get(minion.id)!.aiMode).toBe("return_to_base");
+    });
+
+    it("stops near mothership when already close", () => {
+      const center = { x: 2000, y: 2000 };
+      ai.setPatrolCenter(center);
+      // Place minion within the stop threshold (ENEMY_PATROL_RADIUS * 0.25 = 100px)
+      const minion = sim.spawnEnemy("minion_ship", center.x + 50, center.y);
+      registerReady(ai, minion.id);
+
+      sim.update();
+      ai.update(sim);
+
+      expect(ai.aiStates.get(minion.id)!.aiMode).toBe("return_to_base");
+      expect(minion.vel.x).toBe(0);
+      expect(minion.vel.y).toBe(0);
     });
   });
 

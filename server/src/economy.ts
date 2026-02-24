@@ -39,6 +39,12 @@ export class Economy {
     // Accrue income
     this.balance += this.incomePerTick;
 
+    // Collect resources from minion orb pickups
+    if (sim.pendingEnemyResources > 0) {
+      this.balance += sim.pendingEnemyResources;
+      sim.pendingEnemyResources = 0;
+    }
+
     // Process build queue
     const ready: QueuedBuild[] = [];
     const remaining: QueuedBuild[] = [];

@@ -28,7 +28,7 @@ export class FakeAI {
 
     // Priority 1: defense near mothership if low tower count.
     const towers = sim.getEntitiesByKind("tower").length;
-    if (towers < 2 && sim.tick >= this.nextTowerTick) {
+    if (towers < 3 && sim.tick >= this.nextTowerTick) {
       const p = this.pickTowerPos(mothershipPos);
       const towerResult = agent.processCommand({
         v: 1,
@@ -45,7 +45,7 @@ export class FakeAI {
 
     // Priority 2: build a missile tower if we can afford one and don't have one yet.
     const missileTowers = sim.getEntitiesByKind("missile_tower").length;
-    if (missileTowers < 1 && economy.balance >= 200 && sim.tick >= this.nextMissileTowerTick) {
+    if (missileTowers < 2 && economy.balance >= 200 && sim.tick >= this.nextMissileTowerTick) {
       const p = this.pickTowerPos(mothershipPos);
       const result = economy.requestBuild(
         { unitKind: "missile_tower", x: p.x, y: p.y },

@@ -11,6 +11,7 @@ import {
   WORLD_WIDTH,
   WORLD_HEIGHT,
   TOWER_MAX_SPAWN_DISTANCE,
+  MINION_ORB_RESOURCE,
 } from "shared";
 
 describe("Economy", () => {
@@ -31,6 +32,22 @@ describe("Economy", () => {
 
     it("has empty build queue", () => {
       expect(economy.buildQueue).toHaveLength(0);
+    });
+  });
+
+  describe("minion orb resources", () => {
+    it("drains pendingEnemyResources into balance each tick", () => {
+      sim.pendingEnemyResources = MINION_ORB_RESOURCE * 3;
+      const startBalance = economy.balance;
+      economy.update(sim, ai);
+      expect(economy.balance).toBeCloseTo(startBalance + MINION_ORB_RESOURCE * 3 + INCOME_PER_TICK, 5);
+      expect(sim.pendingEnemyResources).toBe(0);
+    });
+
+    it("does not change balance when no pending resources", () => {
+      const startBalance = economy.balance;
+      economy.update(sim, ai);
+      expect(economy.balance).toBeCloseTo(startBalance + INCOME_PER_TICK, 5);
     });
   });
 

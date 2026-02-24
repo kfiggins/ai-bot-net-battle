@@ -18,97 +18,102 @@ pnpm dev
 ```
 
 ## Deliverables
-- [ ] Add `energy_orb` entity kind to shared protocol
-- [ ] Add XP/level constants to `/shared/src/constants.ts`
-- [ ] Server: orb spawning system (constant drip, random positions, max cap)
-- [ ] Server: orb pickup detection (player overlaps orb → collect, award XP)
-- [ ] Server: XP tracking per player, level-up calculation with scaling curve
-- [ ] Server: full XP/level reset on player death
-- [ ] Protocol: include `level` and `xp` fields in snapshot for each player entity
-- [ ] Client: render energy orbs (small glowing circles)
-- [ ] Client: XP bar + level indicator in HUD
-- [ ] Client: level-up visual feedback (flash or pulse)
-- [ ] Tests for orb spawning, pickup, XP scaling, level-up, death reset
+- [x] Add `energy_orb` entity kind to shared protocol
+- [x] Add XP/level constants to `/shared/src/constants.ts`
+- [x] Server: orb spawning system (constant drip, random positions, max cap)
+- [x] Server: orb pickup detection (player overlaps orb → collect, award XP)
+- [x] Server: XP tracking per player, level-up calculation with scaling curve
+- [x] Server: full XP/level reset on player death
+- [x] Protocol: include `level` and `xp` fields in snapshot for each player entity
+- [x] Client: render energy orbs (small glowing circles)
+- [x] Client: XP bar + level indicator in HUD
+- [x] Client: level-up visual feedback (flash or pulse)
+- [x] Tests for orb spawning, pickup, XP scaling, level-up, death reset
 
-## Key Files to Create/Modify
-- `/shared/src/protocol.ts` - Add `energy_orb` kind, player `level`/`xp`/`xpToNext` fields in snapshot
-- `/shared/src/constants.ts` - Orb and XP/leveling constants
-- `/server/src/sim.ts` - Orb spawning, pickup collision, XP tracking, level calculation
-- `/server/src/room.ts` - Hook orb system into tick loop
-- `/client/src/game.ts` - Render orbs, show XP bar and level in HUD
-- `/client/src/ui.ts` - XP bar component, level-up effects
+### Phase 13 Additions (beyond original plan)
+- [x] **Initial orb seeding**: `sim.initOrbs()` pre-seeds `ORB_INITIAL_COUNT` (100) orbs at match start so the map isn't empty at the opening
+- [x] **Kill XP**: Killing enemy units awards XP — `MINION_KILL_XP` (10) for minion_ship, `TOWER_KILL_XP` (25) for tower/missile_tower
+- [x] **Minion orb collection**: Enemy minions collect energy orbs while patrolling, converting each to `MINION_ORB_RESOURCE` (10) enemy economy resources via `sim.pendingEnemyResources`
+- [x] **Enemy economy drain**: `Economy.update()` drains `sim.pendingEnemyResources` into the enemy balance each tick
+- [x] Orb spawning simplified to **fully random** positions (removed player-bias that caused orb clustering)
 
-## New Constants
+## Key Files Created/Modified
+- `/shared/src/protocol.ts` — Added `energy_orb` kind, player `level`/`xp`/`xpToNext` fields in snapshot
+- `/shared/src/constants.ts` — Orb and XP/leveling constants
+- `/server/src/sim.ts` — Orb spawning, `initOrbs()`, `collectOrbForEnemy()`, orb pickup collision, XP tracking, level calculation, kill XP via `awardKillXP()`
+- `/server/src/room.ts` — `sim.initOrbs()` called on match start and reset
+- `/server/src/economy.ts` — Drains `pendingEnemyResources` into balance
+- `/client/src/game.ts` — Renders orbs, XP bar and level in HUD
+
+## Constants (actual values)
 ```typescript
 // Energy Orbs
-export const ORB_RADIUS = 8;            // pixels
-export const ORB_XP_VALUE = 5;          // XP per orb collected
+export const ORB_RADIUS = 8;
+export const ORB_XP_VALUE = 5;           // XP per orb player collects
 export const ORB_SPAWN_INTERVAL_TICKS = 15;  // spawn 1 orb every 0.5s
-export const ORB_MAX_ON_MAP = 150;      // cap to prevent endless buildup
-export const ORB_SPAWN_PADDING = 100;   // pixels from world edge
+export const ORB_MAX_ON_MAP = 200;       // cap to prevent endless buildup
+export const ORB_SPAWN_PADDING = 100;    // pixels from world edge
+export const ORB_INITIAL_COUNT = 100;    // orbs pre-seeded at match start
+
+// Kill XP
+export const MINION_KILL_XP = 10;        // XP awarded for killing a minion_ship
+export const TOWER_KILL_XP = 25;         // XP awarded for killing a tower/missile_tower
+
+// Minion orb collection (enemy economy)
+export const MINION_ORB_RESOURCE = 10;   // mothership resources per orb collected
+export const MINION_ORB_PICKUP_RANGE = 20; // pixels (minion radius + orb radius)
 
 // XP & Leveling
 export const MAX_LEVEL = 15;
-export const XP_BASE = 10;              // XP needed for level 1→2
-export const XP_SCALING = 1.5;          // exponent for scaling curve
+export const XP_BASE = 10;
+export const XP_SCALING = 1.5;
 // Formula: xpToNext(level) = floor(XP_BASE * level^XP_SCALING)
 // Level 1→2:  10 XP  (2 orbs)
 // Level 2→3:  28 XP  (6 orbs)
-// Level 3→4:  52 XP  (11 orbs)
 // Level 5→6:  112 XP (23 orbs)
 // Level 10→11: 316 XP (64 orbs)
 // Level 14→15: 524 XP (105 orbs)
-// Early levels fly by, late levels require real commitment.
 
-// Milestone levels (cannon upgrades — handled in Phase 14)
 export const MILESTONE_LEVELS = [5, 10, 15];
 ```
 
 ## Entity: Energy Orb
 ```typescript
-// New entity kind added to EntityKind union
 kind: "energy_orb"
-// Orbs are stationary (vel: {x:0, y:0}), team: 0 (neutral), hp: 1
+// Stationary (vel: {x:0, y:0}), team: 0 (neutral), hp: 1
 // Radius: ORB_RADIUS (8px)
-// No TTL — persist until collected or map is full
+// No TTL — persists until collected
 ```
 
 ## Implementation Notes
 
 ### Orb Spawning (Server)
-- Every `ORB_SPAWN_INTERVAL_TICKS`, if current orb count < `ORB_MAX_ON_MAP`, spawn one orb
-- Random position: `(random(PADDING, WORLD_WIDTH - PADDING), random(PADDING, WORLD_HEIGHT - PADDING))`
-- Orbs are neutral (team 0) — no collision with bullets, only with player ships
-- Orbs don't move, don't take damage, don't interact with AI
+- Every `ORB_SPAWN_INTERVAL_TICKS`, if current orb count < `ORB_MAX_ON_MAP`, spawn one orb at a fully random position within world bounds (padded by `ORB_SPAWN_PADDING`)
+- `initOrbs()` pre-seeds 100 orbs at match start
+- Orbs are neutral (team 0) — only collected by player ships (and enemy minions while patrolling)
 
 ### Orb Pickup (Server)
 - In the collision check phase, test player_ship vs energy_orb overlap
 - On overlap: remove orb (hp → 0), award `ORB_XP_VALUE` XP to that player
-- Only team 1 (players) can collect orbs
+
+### Minion Orb Collection (Server)
+- During `updateMinionPatrol()`, minions check for orbs within `MINION_ORB_PICKUP_RANGE`
+- On contact: `sim.collectOrbForEnemy(orbId)` marks orb dead and adds `MINION_ORB_RESOURCE` to `sim.pendingEnemyResources`
+- `Economy.update()` drains pending resources into enemy balance each tick
+
+### Kill XP (Server)
+- `awardKillXP(ownerEntityId, killedKind)` called when a bullet/missile kills an enemy
+- `minion_ship` → 10 XP, `tower`/`missile_tower` → 25 XP
+- XP awarded to the player who fired the killing shot
 
 ### XP & Level Tracking (Server)
-- Each player entity gets: `xp: number`, `level: number`, `xpToNext: number`
-- `xpToNext(level) = floor(XP_BASE * level^XP_SCALING)`
-- When `xp >= xpToNext`: level up, subtract xpToNext from xp, recalculate xpToNext
-- Handle multiple level-ups from a single orb (loop until xp < xpToNext)
-- At `MAX_LEVEL`, stop accumulating XP
-- Track pending upgrade points (used in Phase 14)
+- Each player tracks: `xp`, `level`, `xpToNext`
+- When `xp >= xpToNext`: level up, subtract xpToNext, recalculate — handles multi-level in one shot
+- At `MAX_LEVEL`, no further XP accumulation
+- Pending upgrade points tracked for Phase 14
 
 ### Death Reset
-- On player death: reset `xp = 0`, `level = 1`, `xpToNext = XP_BASE`
-- Clear all upgrades (will matter more in Phase 14)
-- Player respawns at level 1 fresh
-
-### Snapshot Changes
-- Player entities in snapshot include: `level`, `xp`, `xpToNext`
-- Other entity kinds don't need these fields
-- Energy orbs appear in the entity list like any other entity
-
-### Client Rendering
-- **Orbs**: Small glowing circle (radius 8), bright cyan/teal color (#00ffcc), subtle pulse animation
-- **XP Bar**: Horizontal bar at bottom of screen, fills left→right as XP progresses toward next level
-- **Level Badge**: "Lv. X" text near the XP bar or player's ship
-- **Level-Up Flash**: Brief screen flash or ring animation when leveling up
+- `xp = 0`, `level = 1`, `xpToNext = XP_BASE`
 
 ## XP Curve Reference Table
 | Level | XP to Next | Cumulative XP | Orbs Needed (cumul.) |
@@ -130,13 +135,13 @@ kind: "energy_orb"
 
 ## 60-Second Smoke Test
 1. Run `pnpm dev` and start a match
-2. See energy orbs scattered across the map (small glowing circles)
+2. See 100 energy orbs pre-seeded across the map at game start
 3. Fly over an orb — it disappears, XP bar fills slightly
-4. Collect several orbs quickly — watch level counter increase (fast at first)
-5. Check that orbs keep spawning over time (constant drip)
+4. Kill a minion — XP bar jumps by 10; kill a tower — jumps by 25
+5. Collect several orbs quickly — watch level counter increase
 6. Die to an enemy — confirm level resets to 1 and XP bar empties
-7. Respawn and collect orbs again — leveling starts over from scratch
-8. Verify orbs don't exceed the max cap (no lag from thousands of orbs)
+7. Respawn and re-level — confirms orbs keep spawning over time
+8. Watch enemy minions collect orbs while patrolling between attacks
 
 ## After This Phase
-- Phase 14 adds the upgrade tree: stat upgrades per level + cannon milestones at 5/10/15
+- Phase 14 adds the upgrade tree: stat upgrades per level + cannon milestones at 5/10/15 ✅ (complete)

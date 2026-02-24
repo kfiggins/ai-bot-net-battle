@@ -65,6 +65,7 @@ export class Room {
   constructor(roomId: string) {
     this.roomId = roomId;
     this.sim = new Simulation();
+    this.sim.initOrbs();
     this.ai = new AIManager();
     this.economy = new Economy();
     this.agent = new AgentAPI();
@@ -237,6 +238,7 @@ export class Room {
 
     // Reset simulation and subsystems
     this.sim = new Simulation();
+    this.sim.initOrbs();
     this.ai = new AIManager();
     this.economy = new Economy();
     this.agent = new AgentAPI();

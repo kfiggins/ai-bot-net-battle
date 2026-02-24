@@ -28,11 +28,11 @@ export const TOWER_FIRE_RANGE = 900; // pixels
 export const MISSILE_TOWER_HP = 150;
 export const MISSILE_TOWER_RADIUS = 24;
 export const MISSILE_TOWER_FIRE_COOLDOWN_TICKS = 90; // fires every 3 seconds
-export const MISSILE_TOWER_FIRE_RANGE = 1400; // pixels
+export const MISSILE_TOWER_FIRE_RANGE = 700; // pixels
 export const MISSILE_BURST_SIZE = 3;           // missiles per burst
 export const MISSILE_BURST_DELAY_TICKS = 5;    // ~167ms between burst shots
 
-export const MISSILE_SPEED = 170; // pixels per second (slow, homing)
+export const MISSILE_SPEED = 250; // pixels per second (fast, homing)
 export const MISSILE_HP = 1;
 export const MISSILE_RADIUS = 6;
 export const MISSILE_TTL_TICKS = 480; // 816 seconds at 30Hz
@@ -52,7 +52,7 @@ export const INCOME_PER_TICK = INCOME_PER_SECOND / TICK_RATE;
 export const UNIT_COSTS: Record<string, number> = {
   minion_ship: 50,
   tower: 100,
-  missile_tower: 200,
+  missile_tower: 125,
 };
 
 export const UNIT_CAPS: Record<string, number> = {
@@ -92,9 +92,16 @@ export const ENEMY_PATROL_SPEED = 60;    // pixels/second — slower than chase 
 // Energy Orbs
 export const ORB_RADIUS = 8;
 export const ORB_XP_VALUE = 5;
+export const MINION_KILL_XP = 10;
+export const TOWER_KILL_XP = 25;
 export const ORB_SPAWN_INTERVAL_TICKS = 15;  // spawn 1 orb every 0.5s
-export const ORB_MAX_ON_MAP = 150;
+export const ORB_MAX_ON_MAP = 200;
 export const ORB_SPAWN_PADDING = 100;        // pixels from world edge
+export const ORB_INITIAL_COUNT = 100;        // orbs pre-seeded at game start
+
+// Minion orb collection
+export const MINION_ORB_RESOURCE = 10;       // mothership resources per orb collected
+export const MINION_ORB_PICKUP_RANGE = 20;   // pixels (minion radius + orb radius)
 
 // XP & Leveling
 export const MAX_LEVEL = 15;

@@ -33,9 +33,13 @@ import {
   BULLET_MAX_RANGE,
   ORB_RADIUS,
   ORB_XP_VALUE,
+  MINION_KILL_XP,
+  TOWER_KILL_XP,
   ORB_SPAWN_INTERVAL_TICKS,
   ORB_MAX_ON_MAP,
   ORB_SPAWN_PADDING,
+  ORB_INITIAL_COUNT,
+  MINION_ORB_RESOURCE,
   MAX_LEVEL,
   xpForLevel,
   MAX_UPGRADE_PER_STAT,
@@ -87,6 +91,7 @@ export class Simulation {
   bullets: Map<string, BulletState> = new Map();
   missiles: Map<string, MissileState> = new Map();
   private orbSpawnCooldown = ORB_SPAWN_INTERVAL_TICKS;
+  pendingEnemyResources = 0;
 
   private dt = 1 / TICK_RATE;
 
@@ -196,26 +201,8 @@ export class Simulation {
     }
     if (orbCount >= ORB_MAX_ON_MAP) return;
 
-    const alivePlayers: Entity[] = [];
-    for (const player of this.players.values()) {
-      const entity = this.entities.get(player.entityId);
-      if (entity && entity.hp > 0) alivePlayers.push(entity);
-    }
-
-    let x: number;
-    let y: number;
-
-    // Bias spawns around active players so orbs are encountered during play.
-    if (alivePlayers.length > 0 && Math.random() < 0.85) {
-      const anchor = alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 80 + Math.random() * 520;
-      x = clamp(anchor.pos.x + Math.cos(angle) * dist, ORB_SPAWN_PADDING, WORLD_WIDTH - ORB_SPAWN_PADDING);
-      y = clamp(anchor.pos.y + Math.sin(angle) * dist, ORB_SPAWN_PADDING, WORLD_HEIGHT - ORB_SPAWN_PADDING);
-    } else {
-      x = ORB_SPAWN_PADDING + Math.random() * (WORLD_WIDTH - 2 * ORB_SPAWN_PADDING);
-      y = ORB_SPAWN_PADDING + Math.random() * (WORLD_HEIGHT - 2 * ORB_SPAWN_PADDING);
-    }
+    const x = ORB_SPAWN_PADDING + Math.random() * (WORLD_WIDTH - 2 * ORB_SPAWN_PADDING);
+    const y = ORB_SPAWN_PADDING + Math.random() * (WORLD_HEIGHT - 2 * ORB_SPAWN_PADDING);
 
     const entityId = uuid();
     this.entities.set(entityId, {
@@ -226,6 +213,30 @@ export class Simulation {
       hp: 1,
       team: 0, // neutral
     });
+  }
+
+  initOrbs(count: number = ORB_INITIAL_COUNT): void {
+    for (let i = 0; i < count; i++) {
+      const entityId = uuid();
+      this.entities.set(entityId, {
+        id: entityId,
+        kind: "energy_orb",
+        pos: {
+          x: ORB_SPAWN_PADDING + Math.random() * (WORLD_WIDTH - 2 * ORB_SPAWN_PADDING),
+          y: ORB_SPAWN_PADDING + Math.random() * (WORLD_HEIGHT - 2 * ORB_SPAWN_PADDING),
+        },
+        vel: { x: 0, y: 0 },
+        hp: 1,
+        team: 0,
+      });
+    }
+  }
+
+  collectOrbForEnemy(orbId: string): void {
+    const orb = this.entities.get(orbId);
+    if (!orb || orb.kind !== "energy_orb" || orb.hp <= 0) return;
+    orb.hp = 0;
+    this.pendingEnemyResources += MINION_ORB_RESOURCE;
   }
 
   private checkOrbPickups(): void {
@@ -539,6 +550,7 @@ export class Simulation {
 
         if (circlesOverlap(bulletEntity.pos, BULLET_RADIUS, target.pos, targetRadius)) {
           target.hp -= bulletState.damage;
+          if (target.hp <= 0) this.awardKillXP(bulletState.ownerId, target.kind);
           bulletEntity.hp = 0;
           break;
         }
@@ -546,7 +558,7 @@ export class Simulation {
     }
 
     // Missiles hit any opposite-team non-projectile, non-orb entity
-    for (const [missileId] of this.missiles) {
+    for (const [missileId, missileState] of this.missiles) {
       const missileEntity = this.entities.get(missileId);
       if (!missileEntity || missileEntity.hp <= 0) continue;
 
@@ -560,9 +572,24 @@ export class Simulation {
 
         if (circlesOverlap(missileEntity.pos, MISSILE_RADIUS, target.pos, targetRadius)) {
           target.hp -= MISSILE_DAMAGE;
+          if (target.hp <= 0) this.awardKillXP(missileState.ownerId, target.kind);
           missileEntity.hp = 0;
           break;
         }
+      }
+    }
+  }
+
+  private awardKillXP(ownerEntityId: string, killedKind: string): void {
+    const xp =
+      killedKind === "minion_ship" ? MINION_KILL_XP :
+      killedKind === "tower" || killedKind === "missile_tower" ? TOWER_KILL_XP :
+      0;
+    if (xp === 0) return;
+    for (const player of this.players.values()) {
+      if (player.id === ownerEntityId) {
+        this.awardXP(player, xp);
+        return;
       }
     }
   }
@@ -677,8 +704,4 @@ export function circlesOverlap(
   const distSq = dx * dx + dy * dy;
   const radSum = ar + br;
   return distSq <= radSum * radSum;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
 }

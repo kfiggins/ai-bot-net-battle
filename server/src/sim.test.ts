@@ -20,6 +20,11 @@ import {
   ORB_SPAWN_INTERVAL_TICKS,
   ORB_MAX_ON_MAP,
   ORB_XP_VALUE,
+  ORB_INITIAL_COUNT,
+  ORB_SPAWN_PADDING,
+  MINION_ORB_RESOURCE,
+  MINION_KILL_XP,
+  TOWER_KILL_XP,
   MAX_LEVEL,
   xpForLevel,
   MAX_UPGRADE_PER_STAT,
@@ -735,19 +740,20 @@ describe("energy orbs", () => {
     expect(orbs.length).toBeLessThanOrEqual(ORB_MAX_ON_MAP);
   });
 
-  it("biases orb spawns near active players", () => {
-    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
+  it("spawns orbs at fully random positions across the map", () => {
+    // With Math.random mocked to 0.5, orb should land at map center (± padding)
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0.5);
     try {
-      const player = sim.addPlayer("p1");
-      player.pos.x = 800;
-      player.pos.y = 900;
-
+      sim.addPlayer("p1");
       for (let i = 0; i < ORB_SPAWN_INTERVAL_TICKS + 1; i++) sim.update();
 
       const orb = Array.from(sim.entities.values()).find(e => e.kind === "energy_orb");
       expect(orb).toBeDefined();
-      expect(orb!.pos.x).toBe(880);
-      expect(orb!.pos.y).toBe(900);
+      // pos should be near center (not biased toward player position)
+      expect(orb!.pos.x).toBeGreaterThan(ORB_SPAWN_PADDING);
+      expect(orb!.pos.y).toBeGreaterThan(ORB_SPAWN_PADDING);
+      expect(orb!.pos.x).toBeLessThan(WORLD_WIDTH - ORB_SPAWN_PADDING);
+      expect(orb!.pos.y).toBeLessThan(WORLD_HEIGHT - ORB_SPAWN_PADDING);
     } finally {
       randomSpy.mockRestore();
     }
@@ -802,6 +808,108 @@ describe("energy orbs", () => {
     // Note: orb may have been picked up by player if overlapping - move orb further
     // Check that a bullet still exists (wasn't consumed by orb)
     expect(sim.bullets.size).toBe(1);
+  });
+});
+
+describe("initOrbs", () => {
+  it("seeds exactly ORB_INITIAL_COUNT orbs", () => {
+    const sim = new Simulation();
+    sim.initOrbs();
+    const orbs = Array.from(sim.entities.values()).filter(e => e.kind === "energy_orb");
+    expect(orbs).toHaveLength(ORB_INITIAL_COUNT);
+  });
+
+  it("all seeded orbs are within map bounds", () => {
+    const sim = new Simulation();
+    sim.initOrbs();
+    for (const orb of sim.entities.values()) {
+      if (orb.kind !== "energy_orb") continue;
+      expect(orb.pos.x).toBeGreaterThanOrEqual(ORB_SPAWN_PADDING);
+      expect(orb.pos.x).toBeLessThanOrEqual(WORLD_WIDTH - ORB_SPAWN_PADDING);
+      expect(orb.pos.y).toBeGreaterThanOrEqual(ORB_SPAWN_PADDING);
+      expect(orb.pos.y).toBeLessThanOrEqual(WORLD_HEIGHT - ORB_SPAWN_PADDING);
+    }
+  });
+
+  it("seeded orbs are neutral team 0 with hp 1", () => {
+    const sim = new Simulation();
+    sim.initOrbs();
+    for (const orb of sim.entities.values()) {
+      if (orb.kind !== "energy_orb") continue;
+      expect(orb.team).toBe(0);
+      expect(orb.hp).toBe(1);
+    }
+  });
+});
+
+describe("collectOrbForEnemy", () => {
+  it("marks the orb dead and adds to pendingEnemyResources", () => {
+    const sim = new Simulation();
+    const orbId = "test-orb";
+    sim.entities.set(orbId, {
+      id: orbId, kind: "energy_orb",
+      pos: { x: 500, y: 500 }, vel: { x: 0, y: 0 }, hp: 1, team: 0,
+    });
+
+    expect(sim.pendingEnemyResources).toBe(0);
+    sim.collectOrbForEnemy(orbId);
+
+    expect(sim.entities.get(orbId)!.hp).toBe(0);
+    expect(sim.pendingEnemyResources).toBe(MINION_ORB_RESOURCE);
+  });
+
+  it("is a no-op for a dead or missing orb", () => {
+    const sim = new Simulation();
+    sim.collectOrbForEnemy("nonexistent");
+    expect(sim.pendingEnemyResources).toBe(0);
+  });
+});
+
+describe("kill XP", () => {
+  let sim: Simulation;
+
+  beforeEach(() => { sim = new Simulation(); });
+
+  it("killing a minion awards MINION_KILL_XP to the player", () => {
+    const playerEntity = sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    // Pre-level to 2 so xpToNext=28, safely above MINION_KILL_XP (10)
+    sim.awardXP(ps, xpForLevel(1));
+    expect(ps.level).toBe(2);
+    playerEntity.pos = { x: 100, y: 300 };
+
+    const minion = sim.spawnEnemy("minion_ship", 150, 300);
+    sim.spawnBullet(playerEntity, "p1", 0, minion.hp);
+    sim.update();
+
+    expect(ps.xp).toBe(MINION_KILL_XP);
+  });
+
+  it("killing a tower awards TOWER_KILL_XP to the player", () => {
+    const playerEntity = sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    // Pre-level to 2 so xpToNext=28, safely above TOWER_KILL_XP (25)
+    sim.awardXP(ps, xpForLevel(1));
+    expect(ps.level).toBe(2);
+    playerEntity.pos = { x: 100, y: 300 };
+
+    const tower = sim.spawnEnemy("tower", 120, 300);
+    sim.spawnBullet(playerEntity, "p1", 0, tower.hp);
+    sim.update();
+
+    expect(ps.xp).toBe(TOWER_KILL_XP);
+  });
+
+  it("partial damage (no kill) awards no kill XP", () => {
+    const playerEntity = sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    playerEntity.pos = { x: 100, y: 300 };
+
+    const minion = sim.spawnEnemy("minion_ship", 150, 300);
+    sim.spawnBullet(playerEntity, "p1", 0, minion.hp - 1); // leave 1 hp
+    sim.update();
+
+    expect(ps.xp).toBe(0);
   });
 });
 

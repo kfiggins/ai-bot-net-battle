@@ -17,10 +17,11 @@ import {
   ENEMY_DEAGGRO_RANGE,
   ENEMY_PATROL_RADIUS,
   ENEMY_PATROL_SPEED,
+  MINION_ORB_PICKUP_RANGE,
 } from "shared";
 import { Simulation, entityRadius } from "./sim.js";
 
-export type AIMode = "patrol" | "chase";
+export type AIMode = "patrol" | "chase" | "return_to_base";
 
 export interface AIState {
   entityId: string;
@@ -89,8 +90,16 @@ export class AIManager {
     }
   }
 
+  private allTurretsDestroyed(sim: Simulation): boolean {
+    return (
+      sim.getEntitiesByKind("tower").length === 0 &&
+      sim.getEntitiesByKind("missile_tower").length === 0
+    );
+  }
+
   private updateMinion(entity: Entity, aiState: AIState, sim: Simulation): void {
     const target = this.findNearestEnemy(entity, sim);
+    const noTurrets = this.allTurretsDestroyed(sim);
 
     // Determine aggro state transitions
     if (target) {
@@ -98,27 +107,41 @@ export class AIManager {
       const dy = target.pos.y - entity.pos.y;
       const distToTarget = Math.sqrt(dx * dx + dy * dy);
 
-      if (aiState.aiMode === "patrol" && distToTarget < ENEMY_AGGRO_RANGE) {
+      if (aiState.aiMode !== "chase" && distToTarget < ENEMY_AGGRO_RANGE) {
         aiState.aiMode = "chase";
       } else if (aiState.aiMode === "chase" && distToTarget > ENEMY_DEAGGRO_RANGE) {
-        aiState.aiMode = "patrol";
-        // Pick a new waypoint heading back toward mothership
-        const wp = this.randomPatrolWaypoint();
-        aiState.waypointX = wp.x;
-        aiState.waypointY = wp.y;
+        if (noTurrets) {
+          aiState.aiMode = "return_to_base";
+        } else {
+          aiState.aiMode = "patrol";
+          const wp = this.randomPatrolWaypoint();
+          aiState.waypointX = wp.x;
+          aiState.waypointY = wp.y;
+        }
       }
     } else {
-      // No targets at all — patrol
+      // No targets at all
       if (aiState.aiMode === "chase") {
-        aiState.aiMode = "patrol";
-        const wp = this.randomPatrolWaypoint();
-        aiState.waypointX = wp.x;
-        aiState.waypointY = wp.y;
+        if (noTurrets) {
+          aiState.aiMode = "return_to_base";
+        } else {
+          aiState.aiMode = "patrol";
+          const wp = this.randomPatrolWaypoint();
+          aiState.waypointX = wp.x;
+          aiState.waypointY = wp.y;
+        }
       }
+    }
+
+    // Patrol → return_to_base when all turrets have fallen
+    if (aiState.aiMode === "patrol" && noTurrets) {
+      aiState.aiMode = "return_to_base";
     }
 
     if (aiState.aiMode === "chase" && target) {
       this.updateMinionChase(entity, aiState, sim, target);
+    } else if (aiState.aiMode === "return_to_base") {
+      this.updateMinionReturnToBase(entity, aiState);
     } else {
       this.updateMinionPatrol(entity, aiState, sim);
     }
@@ -163,16 +186,35 @@ export class AIManager {
     }
   }
 
-  private updateMinionPatrol(entity: Entity, aiState: AIState, _sim: Simulation): void {
+  private updateMinionPatrol(entity: Entity, aiState: AIState, sim: Simulation): void {
+    // Collect any orb we're touching
+    for (const [orbId, orb] of sim.entities) {
+      if (orb.kind !== "energy_orb" || orb.hp <= 0) continue;
+      const dx = orb.pos.x - entity.pos.x;
+      const dy = orb.pos.y - entity.pos.y;
+      if (dx * dx + dy * dy <= MINION_ORB_PICKUP_RANGE * MINION_ORB_PICKUP_RANGE) {
+        sim.collectOrbForEnemy(orbId);
+      }
+    }
+
+    // Steer toward nearest orb; fall back to random waypoint if none
+    const nearestOrb = this.findNearestOrb(entity, sim);
+    if (nearestOrb) {
+      aiState.waypointX = nearestOrb.pos.x;
+      aiState.waypointY = nearestOrb.pos.y;
+    }
+
     const dx = aiState.waypointX - entity.pos.x;
     const dy = aiState.waypointY - entity.pos.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
     if (dist < 20) {
-      // Arrived at waypoint — pick a new one
-      const wp = this.randomPatrolWaypoint();
-      aiState.waypointX = wp.x;
-      aiState.waypointY = wp.y;
+      if (!nearestOrb) {
+        // No orbs on map — wander back toward mothership
+        const wp = this.randomPatrolWaypoint();
+        aiState.waypointX = wp.x;
+        aiState.waypointY = wp.y;
+      }
       entity.vel = { x: 0, y: 0 };
       return;
     }
@@ -184,6 +226,41 @@ export class AIManager {
     entity.vel = { x: nx * speed, y: ny * speed };
     entity.pos.x += entity.vel.x * this.dt;
     entity.pos.y += entity.vel.y * this.dt;
+  }
+
+  private updateMinionReturnToBase(entity: Entity, aiState: AIState): void {
+    const dx = this.patrolCenter.x - entity.pos.x;
+    const dy = this.patrolCenter.y - entity.pos.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    // Stop once close enough to mothership
+    if (dist < ENEMY_PATROL_RADIUS * 0.25) {
+      entity.vel = { x: 0, y: 0 };
+      return;
+    }
+
+    const nx = dx / dist;
+    const ny = dy / dist;
+    const speed = ENEMY_PATROL_SPEED * aiState.moveSpeedScale;
+    entity.vel = { x: nx * speed, y: ny * speed };
+    entity.pos.x += entity.vel.x * this.dt;
+    entity.pos.y += entity.vel.y * this.dt;
+  }
+
+  private findNearestOrb(entity: Entity, sim: Simulation): Entity | null {
+    let nearest: Entity | null = null;
+    let nearestDistSq = Infinity;
+    for (const orb of sim.entities.values()) {
+      if (orb.kind !== "energy_orb" || orb.hp <= 0) continue;
+      const dx = orb.pos.x - entity.pos.x;
+      const dy = orb.pos.y - entity.pos.y;
+      const distSq = dx * dx + dy * dy;
+      if (distSq < nearestDistSq) {
+        nearestDistSq = distSq;
+        nearest = orb;
+      }
+    }
+    return nearest;
   }
 
   private randomPatrolWaypoint(): { x: number; y: number } {
@@ -254,6 +331,8 @@ export class AIManager {
     for (const other of sim.entities.values()) {
       if (other.team === entity.team) continue;
       if (other.kind === "bullet") continue;
+      if (other.kind === "missile") continue;
+      if (other.kind === "energy_orb") continue;
       if (other.hp <= 0) continue;
 
       const dx = other.pos.x - entity.pos.x;
