@@ -58,7 +58,12 @@ export class NetClient {
       try {
         const data = JSON.parse(event.data);
         const result = ServerMessageSchema.safeParse(data);
-        if (!result.success) return;
+        if (!result.success) {
+          if (data?.type === "snapshot") {
+            console.warn("[net] Snapshot Zod validation FAILED:", result.error.issues.slice(0, 3));
+          }
+          return;
+        }
 
         const msg = result.data;
         if (msg.type === "welcome") {

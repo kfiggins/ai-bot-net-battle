@@ -184,6 +184,10 @@ export class Simulation {
     this.orbSpawnCooldown--;
     if (this.orbSpawnCooldown > 0) return;
     this.orbSpawnCooldown = ORB_SPAWN_INTERVAL_TICKS;
+    if (this.tick % 300 === 0) {
+      const orbCount = Array.from(this.entities.values()).filter(e => e.kind === "energy_orb").length;
+      console.log(`[orb-debug] tick=${this.tick} orbCount=${orbCount} entities=${this.entities.size}`);
+    }
 
     // Count current orbs
     let orbCount = 0;
@@ -192,8 +196,27 @@ export class Simulation {
     }
     if (orbCount >= ORB_MAX_ON_MAP) return;
 
-    const x = ORB_SPAWN_PADDING + Math.random() * (WORLD_WIDTH - 2 * ORB_SPAWN_PADDING);
-    const y = ORB_SPAWN_PADDING + Math.random() * (WORLD_HEIGHT - 2 * ORB_SPAWN_PADDING);
+    const alivePlayers: Entity[] = [];
+    for (const player of this.players.values()) {
+      const entity = this.entities.get(player.entityId);
+      if (entity && entity.hp > 0) alivePlayers.push(entity);
+    }
+
+    let x: number;
+    let y: number;
+
+    // Bias spawns around active players so orbs are encountered during play.
+    if (alivePlayers.length > 0 && Math.random() < 0.85) {
+      const anchor = alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 80 + Math.random() * 520;
+      x = clamp(anchor.pos.x + Math.cos(angle) * dist, ORB_SPAWN_PADDING, WORLD_WIDTH - ORB_SPAWN_PADDING);
+      y = clamp(anchor.pos.y + Math.sin(angle) * dist, ORB_SPAWN_PADDING, WORLD_HEIGHT - ORB_SPAWN_PADDING);
+    } else {
+      x = ORB_SPAWN_PADDING + Math.random() * (WORLD_WIDTH - 2 * ORB_SPAWN_PADDING);
+      y = ORB_SPAWN_PADDING + Math.random() * (WORLD_HEIGHT - 2 * ORB_SPAWN_PADDING);
+    }
+
     const entityId = uuid();
     this.entities.set(entityId, {
       id: entityId,
@@ -654,4 +677,8 @@ export function circlesOverlap(
   const distSq = dx * dx + dy * dy;
   const radSum = ar + br;
   return distSq <= radSum * radSum;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { Simulation, circlesOverlap, getCannonAngles, getEffectiveMaxHp } from "./sim.js";
 import {
   PLAYER_HP,
@@ -733,6 +733,24 @@ describe("energy orbs", () => {
     }
     const orbs = Array.from(sim.entities.values()).filter(e => e.kind === "energy_orb");
     expect(orbs.length).toBeLessThanOrEqual(ORB_MAX_ON_MAP);
+  });
+
+  it("biases orb spawns near active players", () => {
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
+    try {
+      const player = sim.addPlayer("p1");
+      player.pos.x = 800;
+      player.pos.y = 900;
+
+      for (let i = 0; i < ORB_SPAWN_INTERVAL_TICKS + 1; i++) sim.update();
+
+      const orb = Array.from(sim.entities.values()).find(e => e.kind === "energy_orb");
+      expect(orb).toBeDefined();
+      expect(orb!.pos.x).toBe(880);
+      expect(orb!.pos.y).toBe(900);
+    } finally {
+      randomSpy.mockRestore();
+    }
   });
 
   it("player picks up orb on overlap and gains XP", () => {
