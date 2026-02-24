@@ -10,7 +10,7 @@ export const PLAYER_RADIUS = 16;
 export const BULLET_SPEED = 500; // pixels per second
 export const BULLET_HP = 1;
 export const BULLET_RADIUS = 4;
-export const BULLET_TTL_TICKS = 90; // 3 seconds at 30Hz
+export const BULLET_TTL_TICKS = 120; // 4 seconds at 30Hz
 export const BULLET_DAMAGE = 10;
 export const FIRE_COOLDOWN_TICKS = 6; // ~5 shots/second at 30Hz
 
@@ -140,3 +140,20 @@ export const CANNON_SPREAD_ANGLE = 0.15; // radians between each cannon (~8.6 de
 export const MAX_ROOMS = 10;
 export const MAX_PLAYERS_PER_ROOM = 4;
 export const RECONNECT_TIMEOUT_MS = 30_000; // 30 seconds to reconnect
+
+// Nemesis Boss (Phase 15)
+export const NEMESIS_HP = 1200;
+export const NEMESIS_RADIUS = 38;
+export const NEMESIS_SPEED = 170;               // px/s — slower than player (200), still threatening
+export const NEMESIS_BULLET_DAMAGE = 12;
+export const NEMESIS_SPIRAL_BULLET_SPEED = 400; // px/s (slower bullets, dodgeable by moving fast)
+export const NEMESIS_SPIRAL_COUNT = 6;          // bullets per volley
+export const NEMESIS_SPIRAL_FIRE_COOLDOWN_TICKS = 3;
+export const NEMESIS_SPIRAL_ROTATE_PER_SHOT = 0.12;   // radians per volley (~6.9°) for spiral arms
+export const NEMESIS_MISSILE_COOLDOWN_TICKS = 30;     // one missile per player every 2 seconds
+export const NEMESIS_KILL_XP = 500;                   // awarded to all players on Nemesis death
+
+// Body collision damage (player rams into solid enemy — not player vs player)
+export const BODY_COLLISION_DAMAGE = 8;           // for mothership, towers, minions
+export const NEMESIS_BODY_COLLISION_DAMAGE = 15;  // Nemesis does more on contact
+export const BODY_COLLISION_COOLDOWN_TICKS = 45;  // 1.5s per-entity immunity window

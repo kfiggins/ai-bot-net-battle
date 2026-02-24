@@ -343,6 +343,10 @@ export class GameScene extends Phaser.Scene {
         if (entity.kind !== "bullet" && entity.kind !== "missile" && entity.kind !== "energy_orb") {
           this.vfx.spawnTelegraph(entity.pos.x, entity.pos.y, getRadius(entity.kind));
         }
+        // Nemesis arrival: large explosion effect at spawn point
+        if (entity.kind === "nemesis") {
+          this.vfx.explosion(entity.pos.x, entity.pos.y, 0xaa00ff, 30);
+        }
       }
 
       sprite.setPosition(entity.pos.x, entity.pos.y);
@@ -488,6 +492,7 @@ function getColor(entity: Entity): number {
     case "tower": return 0xff2222;
     case "missile_tower": return 0xff8800;
     case "mothership": return 0xff00ff;
+    case "nemesis": return 0xaa00ff;
     case "energy_orb": return 0x00ffcc;
     default: return 0xffffff;
   }
@@ -502,6 +507,7 @@ function getRadius(kind: string): number {
     case "tower": return 20;
     case "missile_tower": return 24;
     case "mothership": return 40;
+    case "nemesis": return 38;
     case "energy_orb": return ORB_RADIUS;
     default: return 8;
   }

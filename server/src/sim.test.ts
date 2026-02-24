@@ -634,8 +634,9 @@ describe("missile physics", () => {
   it("missile damages player on contact", () => {
     const tower = sim.spawnEnemy("missile_tower", 500, 300);
     const player = sim.addPlayer("p1");
-    // Place player directly in front of the missile spawn point
-    player.pos.x = 540;
+    // Place player far enough right to avoid body collision with the tower
+    // (tower radius 24 + player radius 16 = 40; use 100px gap to be safe)
+    player.pos.x = 600;
     player.pos.y = 300;
 
     sim.spawnMissile(tower, tower.id, 0); // aim right at player

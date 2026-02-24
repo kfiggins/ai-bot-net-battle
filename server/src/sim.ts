@@ -51,6 +51,11 @@ import {
   CANNON_SPREAD_ANGLE,
   UpgradeType,
   MILESTONE_LEVELS,
+  NEMESIS_RADIUS,
+  NEMESIS_KILL_XP,
+  BODY_COLLISION_DAMAGE,
+  NEMESIS_BODY_COLLISION_DAMAGE,
+  BODY_COLLISION_COOLDOWN_TICKS,
 } from "shared";
 
 export interface PlayerState {
@@ -92,6 +97,8 @@ export class Simulation {
   missiles: Map<string, MissileState> = new Map();
   private orbSpawnCooldown = ORB_SPAWN_INTERVAL_TICKS;
   pendingEnemyResources = 0;
+  // playerId → enemyEntityId → ticksRemaining immunity
+  private bodyCollisionCooldowns: Map<string, Map<string, number>> = new Map();
 
   private dt = 1 / TICK_RATE;
 
@@ -180,6 +187,8 @@ export class Simulation {
     this.updateBullets();
     this.updateMissiles();
     this.checkCollisions();
+    this.updateBodyCollisionCooldowns();
+    this.checkBodyCollisions();
     this.checkOrbPickups();
     this.removeDeadEntities();
     this.respawnDeadPlayers();
@@ -392,11 +401,12 @@ export class Simulation {
     owner: Entity,
     ownerId: string,
     aimAngle: number,
-    damage: number = BULLET_DAMAGE
+    damage: number = BULLET_DAMAGE,
+    speed: number = BULLET_SPEED
   ): Entity {
     const entityId = uuid();
-    const vx = Math.cos(aimAngle) * BULLET_SPEED;
-    const vy = Math.sin(aimAngle) * BULLET_SPEED;
+    const vx = Math.cos(aimAngle) * speed;
+    const vy = Math.sin(aimAngle) * speed;
     const ownerRadius = entityRadius(owner.kind);
     const entity: Entity = {
       id: entityId,
@@ -424,12 +434,13 @@ export class Simulation {
     const entityId = uuid();
     const vx = Math.cos(aimAngle) * MISSILE_SPEED;
     const vy = Math.sin(aimAngle) * MISSILE_SPEED;
+    const ownerRadius = entityRadius(owner.kind);
     const entity: Entity = {
       id: entityId,
       kind: "missile",
       pos: {
-        x: owner.pos.x + Math.cos(aimAngle) * (MISSILE_TOWER_RADIUS + MISSILE_RADIUS + 2),
-        y: owner.pos.y + Math.sin(aimAngle) * (MISSILE_TOWER_RADIUS + MISSILE_RADIUS + 2),
+        x: owner.pos.x + Math.cos(aimAngle) * (ownerRadius + MISSILE_RADIUS + 2),
+        y: owner.pos.y + Math.sin(aimAngle) * (ownerRadius + MISSILE_RADIUS + 2),
       },
       vel: { x: vx, y: vy },
       hp: MISSILE_HP,
@@ -581,6 +592,13 @@ export class Simulation {
   }
 
   private awardKillXP(ownerEntityId: string, killedKind: string): void {
+    // Nemesis kill: award bonus XP to all players as a boss clear reward
+    if (killedKind === "nemesis") {
+      for (const player of this.players.values()) {
+        this.awardXP(player, NEMESIS_KILL_XP);
+      }
+      return;
+    }
     const xp =
       killedKind === "minion_ship" ? MINION_KILL_XP :
       killedKind === "tower" || killedKind === "missile_tower" ? TOWER_KILL_XP :
@@ -590,6 +608,52 @@ export class Simulation {
       if (player.id === ownerEntityId) {
         this.awardXP(player, xp);
         return;
+      }
+    }
+  }
+
+  private updateBodyCollisionCooldowns(): void {
+    for (const [playerId, cooldowns] of this.bodyCollisionCooldowns) {
+      for (const [enemyId, ticks] of cooldowns) {
+        if (ticks <= 1) {
+          cooldowns.delete(enemyId);
+        } else {
+          cooldowns.set(enemyId, ticks - 1);
+        }
+      }
+      if (cooldowns.size === 0) {
+        this.bodyCollisionCooldowns.delete(playerId);
+      }
+    }
+  }
+
+  private checkBodyCollisions(): void {
+    const solidKinds = new Set(["mothership", "tower", "missile_tower", "minion_ship", "nemesis"]);
+
+    for (const [playerId, player] of this.players) {
+      const playerEntity = this.entities.get(player.entityId);
+      if (!playerEntity || playerEntity.hp <= 0) continue;
+
+      let cooldowns = this.bodyCollisionCooldowns.get(playerId);
+      if (!cooldowns) {
+        cooldowns = new Map();
+        this.bodyCollisionCooldowns.set(playerId, cooldowns);
+      }
+
+      for (const [enemyId, enemy] of this.entities) {
+        if (!solidKinds.has(enemy.kind)) continue;
+        if (enemy.team === playerEntity.team) continue;
+        if (enemy.hp <= 0) continue;
+
+        const remaining = cooldowns.get(enemyId) ?? 0;
+        if (remaining > 0) continue;
+
+        const enemyRadius = entityRadius(enemy.kind);
+        if (!circlesOverlap(playerEntity.pos, PLAYER_RADIUS, enemy.pos, enemyRadius)) continue;
+
+        const damage = enemy.kind === "nemesis" ? NEMESIS_BODY_COLLISION_DAMAGE : BODY_COLLISION_DAMAGE;
+        playerEntity.hp -= damage;
+        cooldowns.set(enemyId, BODY_COLLISION_COOLDOWN_TICKS);
       }
     }
   }
@@ -671,6 +735,8 @@ export function entityRadius(kind: string): number {
       return MISSILE_TOWER_RADIUS;
     case "mothership":
       return MOTHERSHIP_RADIUS;
+    case "nemesis":
+      return NEMESIS_RADIUS;
     case "energy_orb":
       return ORB_RADIUS;
     default:

@@ -5,22 +5,38 @@ import {
   ENEMY_TEAM,
   WORLD_WIDTH,
   WORLD_HEIGHT,
+  TICK_RATE,
+  NEMESIS_HP,
+  NEMESIS_RADIUS,
+  NEMESIS_SPEED,
+  NEMESIS_BULLET_DAMAGE,
+  NEMESIS_SPIRAL_BULLET_SPEED,
+  NEMESIS_SPIRAL_COUNT,
+  NEMESIS_SPIRAL_FIRE_COOLDOWN_TICKS,
+  NEMESIS_SPIRAL_ROTATE_PER_SHOT,
+  NEMESIS_MISSILE_COOLDOWN_TICKS,
 } from "shared";
 import { Simulation } from "./sim.js";
 
 export interface BossPhaseState {
-  current: number; // 1, 2, 3 (final)
+  current: number; // 1, 2, 3 (mothership phases), 4 (Nemesis boss)
   matchOver: boolean;
   winner: "players" | "none";
 }
 
 export class BossManager {
   mothershipId: string | null = null;
+  nemesisId: string | null = null;
   phaseState: BossPhaseState = {
     current: 1,
     matchOver: false,
     winner: "none",
   };
+
+  private spiralAngle: number = 0;
+  private spiralFireCooldown: number = 0;
+  private missileFireCooldown: number = 0;
+  private mothershipLastPos: { x: number; y: number } | null = null;
 
   spawnMothership(sim: Simulation): Entity {
     const entityId = uuid();
@@ -34,6 +50,24 @@ export class BossManager {
     };
     sim.entities.set(entityId, entity);
     this.mothershipId = entityId;
+    return entity;
+  }
+
+  spawnNemesis(sim: Simulation, pos: { x: number; y: number }): Entity {
+    const entityId = uuid();
+    const entity: Entity = {
+      id: entityId,
+      kind: "nemesis",
+      pos: { x: pos.x, y: pos.y },
+      vel: { x: 0, y: 0 },
+      hp: NEMESIS_HP,
+      team: ENEMY_TEAM,
+    };
+    sim.entities.set(entityId, entity);
+    this.nemesisId = entityId;
+    this.spiralAngle = 0;
+    this.spiralFireCooldown = NEMESIS_SPIRAL_FIRE_COOLDOWN_TICKS;
+    this.missileFireCooldown = NEMESIS_MISSILE_COOLDOWN_TICKS;
     return entity;
   }
 
@@ -62,22 +96,106 @@ export class BossManager {
     }
   }
 
+  private updateNemesis(sim: Simulation): void {
+    if (!this.nemesisId) return;
+
+    const nemesis = sim.entities.get(this.nemesisId);
+    if (!nemesis || nemesis.hp <= 0) {
+      this.phaseState.matchOver = true;
+      this.phaseState.winner = "players";
+      this.nemesisId = null;
+      return;
+    }
+
+    const dt = 1 / TICK_RATE;
+
+    // Chase nearest alive player
+    const players = sim.getEntitiesByKind("player_ship");
+    let nearest: Entity | null = null;
+    let nearestDistSq = Infinity;
+    for (const player of players) {
+      if (player.hp <= 0) continue;
+      const dx = player.pos.x - nemesis.pos.x;
+      const dy = player.pos.y - nemesis.pos.y;
+      const distSq = dx * dx + dy * dy;
+      if (distSq < nearestDistSq) {
+        nearestDistSq = distSq;
+        nearest = player;
+      }
+    }
+
+    if (nearest) {
+      const dist = Math.sqrt(nearestDistSq);
+      if (dist > NEMESIS_RADIUS + 1) {
+        const nx = (nearest.pos.x - nemesis.pos.x) / dist;
+        const ny = (nearest.pos.y - nemesis.pos.y) / dist;
+        nemesis.vel.x = nx * NEMESIS_SPEED;
+        nemesis.vel.y = ny * NEMESIS_SPEED;
+        nemesis.pos.x += nemesis.vel.x * dt;
+        nemesis.pos.y += nemesis.vel.y * dt;
+      } else {
+        nemesis.vel.x = 0;
+        nemesis.vel.y = 0;
+      }
+    }
+
+    // Clamp to world bounds
+    nemesis.pos.x = Math.max(NEMESIS_RADIUS, Math.min(WORLD_WIDTH - NEMESIS_RADIUS, nemesis.pos.x));
+    nemesis.pos.y = Math.max(NEMESIS_RADIUS, Math.min(WORLD_HEIGHT - NEMESIS_RADIUS, nemesis.pos.y));
+
+    // Spiral bullet fire
+    this.spiralFireCooldown--;
+    if (this.spiralFireCooldown <= 0) {
+      for (let i = 0; i < NEMESIS_SPIRAL_COUNT; i++) {
+        const angle = this.spiralAngle + (i * Math.PI * 2 / NEMESIS_SPIRAL_COUNT);
+        sim.spawnBullet(nemesis, this.nemesisId, angle, NEMESIS_BULLET_DAMAGE, NEMESIS_SPIRAL_BULLET_SPEED);
+      }
+      this.spiralAngle += NEMESIS_SPIRAL_ROTATE_PER_SHOT;
+      this.spiralFireCooldown = NEMESIS_SPIRAL_FIRE_COOLDOWN_TICKS;
+    }
+
+    // Per-player homing missile fire (one per player every 2 seconds)
+    this.missileFireCooldown--;
+    if (this.missileFireCooldown <= 0) {
+      for (const player of players) {
+        if (player.hp <= 0) continue;
+        const dx = player.pos.x - nemesis.pos.x;
+        const dy = player.pos.y - nemesis.pos.y;
+        const aimAngle = Math.atan2(dy, dx);
+        sim.spawnMissile(nemesis, this.nemesisId, aimAngle);
+      }
+      this.missileFireCooldown = NEMESIS_MISSILE_COOLDOWN_TICKS;
+    }
+  }
+
   update(sim: Simulation): void {
     if (this.phaseState.matchOver) return;
 
+    // Phase 4: Nemesis fight — run its AI and return
+    if (this.phaseState.current === 4) {
+      this.updateNemesis(sim);
+      return;
+    }
+
+    // Phases 1–3: Mothership fight
     const mothership = this.mothershipId
       ? sim.entities.get(this.mothershipId)
       : null;
 
-    // If the mothership entity is gone, treat it as destroyed and end match.
-    // (Simulation may remove dead entities before boss.update runs.)
+    // If mothership entity is gone (removeDeadEntities may run before boss.update),
+    // transition to Nemesis fight using the last known position.
     if (!mothership) {
       if (this.mothershipId) {
-        this.phaseState.matchOver = true;
-        this.phaseState.winner = "players";
+        const pos = this.mothershipLastPos ?? { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 };
+        this.mothershipId = null;
+        this.spawnNemesis(sim, pos);
+        this.phaseState.current = 4;
       }
       return;
     }
+
+    // Store position for fallback in case entity is removed externally next tick
+    this.mothershipLastPos = { x: mothership.pos.x, y: mothership.pos.y };
 
     // Enforce shield: if shielded, undo any damage dealt this tick
     const shielded = this.isShielded(sim);
@@ -87,8 +205,8 @@ export class BossManager {
 
     // Phase transitions (one per tick max)
     const towers = sim.getEntitiesByKind("tower");
-    const missileTowers = sim.getEntitiesByKind("missile_tower");
     const minions = sim.getEntitiesByKind("minion_ship");
+    const missileTowers = sim.getEntitiesByKind("missile_tower");
 
     if (this.phaseState.current === 1 && towers.length === 0 && missileTowers.length === 0) {
       this.phaseState.current = 2;
@@ -96,11 +214,13 @@ export class BossManager {
       this.phaseState.current = 3;
     }
 
-    // Win condition
+    // Mothership dies → explode and spawn Nemesis for phase 4
     if (mothership.hp <= 0) {
-      this.phaseState.matchOver = true;
-      this.phaseState.winner = "players";
+      const pos = { x: mothership.pos.x, y: mothership.pos.y };
       sim.entities.delete(this.mothershipId!);
+      this.mothershipId = null;
+      this.spawnNemesis(sim, pos);
+      this.phaseState.current = 4;
     }
   }
 
@@ -133,6 +253,14 @@ export class BossManager {
         : null;
       if (mothership) {
         remaining.mothership = mothership.hp;
+      }
+    } else if (this.phaseState.current === 4) {
+      objectives.push("Defeat the Nemesis");
+      const nemesis = this.nemesisId
+        ? sim.entities.get(this.nemesisId)
+        : null;
+      if (nemesis) {
+        remaining.nemesis = nemesis.hp;
       }
     }
 

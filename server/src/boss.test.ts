@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { BossManager } from "./boss.js";
 import { Simulation } from "./sim.js";
 import { AIManager } from "./ai.js";
-import { MOTHERSHIP_HP, ENEMY_TEAM, WORLD_WIDTH, WORLD_HEIGHT } from "shared";
+import { MOTHERSHIP_HP, NEMESIS_HP, ENEMY_TEAM, WORLD_WIDTH, WORLD_HEIGHT } from "shared";
 
 describe("BossManager", () => {
   let boss: BossManager;
@@ -129,15 +129,19 @@ describe("BossManager", () => {
   });
 
   describe("win condition", () => {
-    it("match ends when mothership HP reaches 0", () => {
+    it("mothership death spawns Nemesis and transitions to phase 4", () => {
       const mothership = boss.spawnMothership(sim);
       boss.phaseState.current = 3; // make vulnerable
 
       mothership.hp = 0;
       boss.update(sim);
 
-      expect(boss.phaseState.matchOver).toBe(true);
-      expect(boss.phaseState.winner).toBe("players");
+      expect(boss.phaseState.current).toBe(4);
+      expect(boss.phaseState.matchOver).toBe(false);
+      expect(boss.nemesisId).not.toBeNull();
+      const nemesis = sim.entities.get(boss.nemesisId!);
+      expect(nemesis?.kind).toBe("nemesis");
+      expect(nemesis?.hp).toBe(NEMESIS_HP);
     });
 
     it("mothership entity is removed on death", () => {
@@ -148,6 +152,19 @@ describe("BossManager", () => {
       boss.update(sim);
 
       expect(sim.entities.has(mothership.id)).toBe(false);
+    });
+
+    it("match ends when Nemesis HP reaches 0", () => {
+      boss.spawnMothership(sim);
+      boss.phaseState.current = 3;
+      const nemesis = boss.spawnNemesis(sim, { x: 2000, y: 2000 });
+      boss.phaseState.current = 4;
+
+      nemesis.hp = 0;
+      boss.update(sim);
+
+      expect(boss.phaseState.matchOver).toBe(true);
+      expect(boss.phaseState.winner).toBe("players");
     });
 
     it("does not process further updates after match over", () => {
