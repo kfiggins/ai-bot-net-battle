@@ -321,13 +321,18 @@ export class GameScene extends Phaser.Scene {
       if (!sprite) {
         sprite = this.createEntitySprite(entity);
         this.entitySprites.set(entity.id, sprite);
-        // Spawn telegraph for non-bullet entities
-        if (entity.kind !== "bullet") {
+        // Spawn telegraph for non-projectile entities
+        if (entity.kind !== "bullet" && entity.kind !== "missile") {
           this.vfx.spawnTelegraph(entity.pos.x, entity.pos.y, getRadius(entity.kind));
         }
       }
 
       sprite.setPosition(entity.pos.x, entity.pos.y);
+
+      // Missile particle trail
+      if (entity.kind === "missile") {
+        this.vfx.missileTrail(entity.pos.x, entity.pos.y);
+      }
 
       // Apply hit flash tint
       if (this.vfx.isFlashing(entity.id)) {
@@ -455,8 +460,10 @@ function getColor(entity: Entity): number {
       return PLAYER_COLORS[idx % PLAYER_COLORS.length];
     }
     case "bullet": return entity.team === 1 ? 0xffff44 : 0xff4444;
+    case "missile": return 0xff8800;
     case "minion_ship": return 0xff6644;
     case "tower": return 0xff2222;
+    case "missile_tower": return 0xff8800;
     case "mothership": return 0xff00ff;
     default: return 0xffffff;
   }
@@ -466,8 +473,10 @@ function getRadius(kind: string): number {
   switch (kind) {
     case "player_ship": return 16;
     case "bullet": return 4;
+    case "missile": return 6;
     case "minion_ship": return 12;
     case "tower": return 20;
+    case "missile_tower": return 24;
     case "mothership": return 40;
     default: return 8;
   }

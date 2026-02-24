@@ -6,6 +6,10 @@ import {
   MINION_RADIUS,
   TOWER_FIRE_COOLDOWN_TICKS,
   TOWER_FIRE_RANGE,
+  MISSILE_TOWER_FIRE_COOLDOWN_TICKS,
+  MISSILE_TOWER_FIRE_RANGE,
+  MISSILE_BURST_SIZE,
+  MISSILE_BURST_DELAY_TICKS,
   TICK_RATE,
   WORLD_WIDTH,
   WORLD_HEIGHT,
@@ -28,6 +32,10 @@ export interface AIState {
   aiMode: AIMode;
   waypointX: number;
   waypointY: number;
+  // Missile tower burst state
+  burstRemaining: number;
+  burstCooldown: number;
+  burstAimAngle: number;
 }
 
 export class AIManager {
@@ -53,6 +61,9 @@ export class AIManager {
       aiMode: "patrol",
       waypointX: wp.x,
       waypointY: wp.y,
+      burstRemaining: 0,
+      burstCooldown: 0,
+      burstAimAngle: 0,
     });
   }
 
@@ -72,6 +83,8 @@ export class AIManager {
         this.updateMinion(entity, aiState, sim);
       } else if (entity.kind === "tower") {
         this.updateTower(entity, aiState, sim);
+      } else if (entity.kind === "missile_tower") {
+        this.updateMissileTower(entity, aiState, sim);
       }
     }
   }
@@ -198,6 +211,39 @@ export class AIManager {
       const aimAngle = Math.atan2(dy, dx);
       sim.spawnBullet(entity, entity.id, aimAngle);
       aiState.fireCooldown = TOWER_FIRE_COOLDOWN_TICKS;
+    }
+  }
+
+  private updateMissileTower(entity: Entity, aiState: AIState, sim: Simulation): void {
+    entity.vel = { x: 0, y: 0 };
+
+    // Continue an active burst
+    if (aiState.burstRemaining > 0) {
+      if (aiState.burstCooldown <= 0) {
+        sim.spawnMissile(entity, entity.id, aiState.burstAimAngle);
+        aiState.burstRemaining--;
+        aiState.burstCooldown = MISSILE_BURST_DELAY_TICKS;
+      } else {
+        aiState.burstCooldown--;
+      }
+      return;
+    }
+
+    // Start a new burst when a target is in range and ready
+    const target = this.findNearestEnemy(entity, sim);
+    if (!target) return;
+
+    const dx = target.pos.x - entity.pos.x;
+    const dy = target.pos.y - entity.pos.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist <= MISSILE_TOWER_FIRE_RANGE && aiState.fireCooldown <= 0) {
+      const aimAngle = Math.atan2(dy, dx);
+      sim.spawnMissile(entity, entity.id, aimAngle);
+      aiState.burstRemaining = MISSILE_BURST_SIZE - 1;
+      aiState.burstCooldown = MISSILE_BURST_DELAY_TICKS;
+      aiState.burstAimAngle = aimAngle;
+      aiState.fireCooldown = MISSILE_TOWER_FIRE_COOLDOWN_TICKS;
     }
   }
 

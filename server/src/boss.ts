@@ -40,9 +40,10 @@ export class BossManager {
   isShielded(sim: Simulation): boolean {
     if (this.phaseState.matchOver) return false;
 
-    // Towers always force mothership shield back on, regardless of phase.
+    // Any towers (regular or missile) force mothership shield on, regardless of phase.
     const towers = sim.getEntitiesByKind("tower");
-    if (towers.length > 0) return true;
+    const missileTowers = sim.getEntitiesByKind("missile_tower");
+    if (towers.length > 0 || missileTowers.length > 0) return true;
 
     const minions = sim.getEntitiesByKind("minion_ship");
 
@@ -86,9 +87,10 @@ export class BossManager {
 
     // Phase transitions (one per tick max)
     const towers = sim.getEntitiesByKind("tower");
+    const missileTowers = sim.getEntitiesByKind("missile_tower");
     const minions = sim.getEntitiesByKind("minion_ship");
 
-    if (this.phaseState.current === 1 && towers.length === 0) {
+    if (this.phaseState.current === 1 && towers.length === 0 && missileTowers.length === 0) {
       this.phaseState.current = 2;
     } else if (this.phaseState.current === 2 && minions.length === 0) {
       this.phaseState.current = 3;
@@ -111,6 +113,7 @@ export class BossManager {
 
   getPhaseInfo(sim: Simulation) {
     const towers = sim.getEntitiesByKind("tower");
+    const missileTowers = sim.getEntitiesByKind("missile_tower");
     const minions = sim.getEntitiesByKind("minion_ship");
 
     const objectives: string[] = [];
@@ -119,6 +122,7 @@ export class BossManager {
     if (this.phaseState.current === 1) {
       objectives.push("Destroy all towers");
       remaining.tower = towers.length;
+      remaining.missile_tower = missileTowers.length;
     } else if (this.phaseState.current === 2) {
       objectives.push("Destroy all minions");
       remaining.minion_ship = minions.length;

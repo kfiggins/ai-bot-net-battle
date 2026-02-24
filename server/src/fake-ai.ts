@@ -9,6 +9,7 @@ const FAKE_AI_SPAWN_COOLDOWN_TICKS = 30; // 1s
 export class FakeAI {
   private nextDecisionTick = 0;
   private nextTowerTick = 0;
+  private nextMissileTowerTick = 0;
   private nextSpawnTick = 0;
 
   update(sim: Simulation, economy: Economy, agent: AgentAPI, mothershipPos?: { x: number; y: number }): void {
@@ -42,7 +43,22 @@ export class FakeAI {
       }
     }
 
-    // Priority 2: keep pressure with minion waves.
+    // Priority 2: build a missile tower if we can afford one and don't have one yet.
+    const missileTowers = sim.getEntitiesByKind("missile_tower").length;
+    if (missileTowers < 1 && economy.balance >= 200 && sim.tick >= this.nextMissileTowerTick) {
+      const p = this.pickTowerPos(mothershipPos);
+      const result = economy.requestBuild(
+        { unitKind: "missile_tower", x: p.x, y: p.y },
+        sim,
+        mothershipPos
+      );
+      if (result.ok) {
+        this.nextMissileTowerTick = sim.tick + 300; // don't spam
+        return;
+      }
+    }
+
+    // Priority 3: keep pressure with minion waves.
     if (sim.tick >= this.nextSpawnTick) {
       const lanes: Array<"top" | "mid" | "bottom"> = ["top", "mid", "bottom"];
       const lane = lanes[Math.floor(Math.random() * lanes.length)];

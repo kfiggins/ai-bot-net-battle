@@ -145,8 +145,10 @@ export class HUD {
       player_ship: 0,
       minion_ship: 0,
       tower: 0,
+      missile_tower: 0,
       mothership: 0,
       bullet: 0,
+      missile: 0,
     };
 
     for (const e of entities) {
@@ -160,8 +162,10 @@ export class HUD {
       `players: ${counts.player_ship}`,
       `minions: ${counts.minion_ship}`,
       `towers: ${counts.tower}`,
+      `missile towers: ${counts.missile_tower}`,
       `boss: ${counts.mothership}`,
       `bullets: ${counts.bullet}`,
+      `missiles: ${counts.missile}`,
     ].join("\n"));
   }
 
@@ -228,6 +232,7 @@ function getMaxHp(kind: string): number {
     case "player_ship": return 100;
     case "minion_ship": return 30;
     case "tower": return 100;
+    case "missile_tower": return 150;
     case "mothership": return 500;
     default: return 0;
   }
@@ -238,6 +243,7 @@ function getBarOffset(kind: string): number {
     case "player_ship": return 22;
     case "minion_ship": return 18;
     case "tower": return 26;
+    case "missile_tower": return 30;
     case "mothership": return 48;
     default: return 16;
   }

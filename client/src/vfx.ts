@@ -58,6 +58,21 @@ export class VFXManager {
     });
   }
 
+  /** Continuous particle trail behind a missile — call every rendered frame */
+  missileTrail(x: number, y: number): void {
+    for (let i = 0; i < 2; i++) {
+      const color = i === 0 ? 0xff6600 : 0xffdd00;
+      const radius = 1 + Math.random() * 2;
+      const sprite = this.scene.add.circle(
+        x + (Math.random() - 0.5) * 6,
+        y + (Math.random() - 0.5) * 6,
+        radius, color, 0.9
+      );
+      sprite.setDepth(7);
+      this.particles.push({ sprite, vx: 0, vy: 0, life: 0, maxLife: 120 + Math.random() * 80 });
+    }
+  }
+
   /** Returns whether this entity should be rendered white (hit flash active) */
   isFlashing(entityId: string): boolean {
     return this.hitFlashes.has(entityId);

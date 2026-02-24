@@ -17,6 +17,14 @@ import {
   MINION_RADIUS,
   TOWER_HP,
   TOWER_RADIUS,
+  MISSILE_TOWER_HP,
+  MISSILE_TOWER_RADIUS,
+  MISSILE_SPEED,
+  MISSILE_HP,
+  MISSILE_RADIUS,
+  MISSILE_TTL_TICKS,
+  MISSILE_DAMAGE,
+  MISSILE_TURN_RATE,
   MOTHERSHIP_RADIUS,
   ENEMY_TEAM,
   WORLD_WIDTH,
@@ -38,11 +46,18 @@ export interface BulletState {
   originPos: { x: number; y: number };
 }
 
+export interface MissileState {
+  entityId: string;
+  ownerId: string;
+  ttl: number;
+}
+
 export class Simulation {
   tick = 0;
   entities: Map<string, Entity> = new Map();
   players: Map<string, PlayerState> = new Map();
   bullets: Map<string, BulletState> = new Map();
+  missiles: Map<string, MissileState> = new Map();
 
   private dt = 1 / TICK_RATE;
 
@@ -90,9 +105,12 @@ export class Simulation {
     }
   }
 
-  spawnEnemy(kind: "minion_ship" | "tower", x: number, y: number): Entity {
+  spawnEnemy(kind: "minion_ship" | "tower" | "missile_tower", x: number, y: number): Entity {
     const entityId = uuid();
-    const hp = kind === "minion_ship" ? MINION_HP : TOWER_HP;
+    const hp =
+      kind === "minion_ship" ? MINION_HP :
+      kind === "missile_tower" ? MISSILE_TOWER_HP :
+      TOWER_HP;
     const entity: Entity = {
       id: entityId,
       kind,
@@ -117,6 +135,7 @@ export class Simulation {
     this.tick++;
     this.updatePlayers();
     this.updateBullets();
+    this.updateMissiles();
     this.checkCollisions();
     this.removeDeadEntities();
   }
@@ -190,6 +209,26 @@ export class Simulation {
     return entity;
   }
 
+  spawnMissile(owner: Entity, ownerId: string, aimAngle: number): Entity {
+    const entityId = uuid();
+    const vx = Math.cos(aimAngle) * MISSILE_SPEED;
+    const vy = Math.sin(aimAngle) * MISSILE_SPEED;
+    const entity: Entity = {
+      id: entityId,
+      kind: "missile",
+      pos: {
+        x: owner.pos.x + Math.cos(aimAngle) * (MISSILE_TOWER_RADIUS + MISSILE_RADIUS + 2),
+        y: owner.pos.y + Math.sin(aimAngle) * (MISSILE_TOWER_RADIUS + MISSILE_RADIUS + 2),
+      },
+      vel: { x: vx, y: vy },
+      hp: MISSILE_HP,
+      team: owner.team,
+    };
+    this.entities.set(entityId, entity);
+    this.missiles.set(entityId, { entityId, ownerId, ttl: MISSILE_TTL_TICKS });
+    return entity;
+  }
+
   private updateBullets(): void {
     for (const [entityId, bullet] of this.bullets) {
       const entity = this.entities.get(entityId);
@@ -224,7 +263,68 @@ export class Simulation {
     }
   }
 
+  private updateMissiles(): void {
+    for (const [entityId, missile] of this.missiles) {
+      const entity = this.entities.get(entityId);
+      if (!entity || entity.hp <= 0) {
+        this.missiles.delete(entityId);
+        continue;
+      }
+
+      // Steer toward nearest opposite-team non-projectile entity
+      let nearest: Entity | null = null;
+      let nearestDistSq = Infinity;
+      for (const other of this.entities.values()) {
+        if (other.team === entity.team) continue;
+        if (other.kind === "bullet" || other.kind === "missile") continue;
+        if (other.hp <= 0) continue;
+        const dx = other.pos.x - entity.pos.x;
+        const dy = other.pos.y - entity.pos.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq < nearestDistSq) {
+          nearestDistSq = distSq;
+          nearest = other;
+        }
+      }
+
+      if (nearest) {
+        const dx = nearest.pos.x - entity.pos.x;
+        const dy = nearest.pos.y - entity.pos.y;
+        const desiredAngle = Math.atan2(dy, dx);
+        const currentAngle = Math.atan2(entity.vel.y, entity.vel.x);
+
+        // Normalize angle diff to [-π, π]
+        let angleDiff = desiredAngle - currentAngle;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+        const maxTurn = MISSILE_TURN_RATE * this.dt;
+        const turn = Math.max(-maxTurn, Math.min(maxTurn, angleDiff));
+        const newAngle = currentAngle + turn;
+        entity.vel = {
+          x: Math.cos(newAngle) * MISSILE_SPEED,
+          y: Math.sin(newAngle) * MISSILE_SPEED,
+        };
+      }
+
+      entity.pos.x += entity.vel.x * this.dt;
+      entity.pos.y += entity.vel.y * this.dt;
+
+      missile.ttl--;
+      if (
+        missile.ttl <= 0 ||
+        entity.pos.x < -MISSILE_RADIUS ||
+        entity.pos.x > WORLD_WIDTH + MISSILE_RADIUS ||
+        entity.pos.y < -MISSILE_RADIUS ||
+        entity.pos.y > WORLD_HEIGHT + MISSILE_RADIUS
+      ) {
+        entity.hp = 0;
+      }
+    }
+  }
+
   checkCollisions(): void {
+    // Bullets hit any opposite-team non-bullet entity (including missiles)
     for (const [bulletId] of this.bullets) {
       const bulletEntity = this.entities.get(bulletId);
       if (!bulletEntity || bulletEntity.hp <= 0) continue;
@@ -244,6 +344,27 @@ export class Simulation {
         }
       }
     }
+
+    // Missiles hit any opposite-team non-projectile entity
+    for (const [missileId] of this.missiles) {
+      const missileEntity = this.entities.get(missileId);
+      if (!missileEntity || missileEntity.hp <= 0) continue;
+
+      for (const [entityId, target] of this.entities) {
+        if (entityId === missileId) continue;
+        if (target.kind === "bullet" || target.kind === "missile") continue;
+        if (target.team === missileEntity.team) continue;
+        if (target.hp <= 0) continue;
+
+        const targetRadius = entityRadius(target.kind);
+
+        if (circlesOverlap(missileEntity.pos, MISSILE_RADIUS, target.pos, targetRadius)) {
+          target.hp -= MISSILE_DAMAGE;
+          missileEntity.hp = 0;
+          break;
+        }
+      }
+    }
   }
 
   private removeDeadEntities(): void {
@@ -251,6 +372,7 @@ export class Simulation {
       if (entity.hp <= 0) {
         this.entities.delete(id);
         this.bullets.delete(id);
+        this.missiles.delete(id);
       }
     }
   }
@@ -288,10 +410,14 @@ export function entityRadius(kind: string): number {
   switch (kind) {
     case "bullet":
       return BULLET_RADIUS;
+    case "missile":
+      return MISSILE_RADIUS;
     case "minion_ship":
       return MINION_RADIUS;
     case "tower":
       return TOWER_RADIUS;
+    case "missile_tower":
+      return MISSILE_TOWER_RADIUS;
     case "mothership":
       return MOTHERSHIP_RADIUS;
     default:

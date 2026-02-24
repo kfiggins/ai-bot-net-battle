@@ -292,6 +292,8 @@ export class Room {
     this.ai.registerEntity(t1.id);
     const t2 = this.sim.spawnEnemy("tower", cx - 150, cy + 250);
     this.ai.registerEntity(t2.id);
+    const mt1 = this.sim.spawnEnemy("missile_tower", cx + 100, cy - 300);
+    this.ai.registerEntity(mt1.id);
   }
 
   private startTickLoop(): void {

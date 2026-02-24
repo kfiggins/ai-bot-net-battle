@@ -12,7 +12,7 @@ import { Simulation } from "./sim.js";
 import { AIManager } from "./ai.js";
 
 export interface BuildRequest {
-  unitKind: "minion_ship" | "tower";
+  unitKind: "minion_ship" | "tower" | "missile_tower";
   x?: number;
   y?: number;
 }
@@ -24,7 +24,7 @@ export interface BuildResult {
 }
 
 export interface QueuedBuild {
-  unitKind: "minion_ship" | "tower";
+  unitKind: "minion_ship" | "tower" | "missile_tower";
   readyAtTick: number;
   x: number;
   y: number;
@@ -117,7 +117,7 @@ export class Economy {
     }
 
     // Validate tower distance from mothership
-    if (unitKind === "tower") {
+    if (unitKind === "tower" || unitKind === "missile_tower") {
       const dx = x - basePos.x;
       const dy = y - basePos.y;
       const dist = Math.sqrt(dx * dx + dy * dy);

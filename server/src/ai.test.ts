@@ -7,8 +7,13 @@ import {
   MINION_FIRE_COOLDOWN_TICKS,
   TOWER_FIRE_RANGE,
   TOWER_FIRE_COOLDOWN_TICKS,
+  MISSILE_TOWER_FIRE_RANGE,
+  MISSILE_TOWER_FIRE_COOLDOWN_TICKS,
+  MISSILE_BURST_SIZE,
+  MISSILE_BURST_DELAY_TICKS,
   MINION_HP,
   TOWER_HP,
+  MISSILE_TOWER_HP,
   ENEMY_TEAM,
   TICK_RATE,
   BULLET_DAMAGE,
@@ -276,6 +281,107 @@ describe("AIManager", () => {
       sim.update();
       ai.update(sim);
       expect(sim.bullets.size).toBe(1);
+    });
+  });
+
+  describe("missile_tower AI", () => {
+    it("does not move", () => {
+      const player = sim.addPlayer("p1");
+      player.pos.x = 400;
+      player.pos.y = 300;
+
+      const mt = sim.spawnEnemy("missile_tower", 500, 300);
+      registerReady(ai, mt.id);
+
+      sim.update();
+      ai.update(sim);
+
+      expect(mt.vel.x).toBe(0);
+      expect(mt.vel.y).toBe(0);
+      expect(mt.pos.x).toBe(500);
+      expect(mt.pos.y).toBe(300);
+    });
+
+    it("spawns with correct HP and team", () => {
+      const mt = sim.spawnEnemy("missile_tower", 500, 300);
+      expect(mt.hp).toBe(MISSILE_TOWER_HP);
+      expect(mt.team).toBe(ENEMY_TEAM);
+      expect(mt.kind).toBe("missile_tower");
+    });
+
+    it("fires a missile when a player is in range", () => {
+      const player = sim.addPlayer("p1");
+      player.pos.x = 400;
+      player.pos.y = 300;
+
+      const mt = sim.spawnEnemy("missile_tower", 500, 300);
+      registerReady(ai, mt.id);
+
+      sim.update();
+      ai.update(sim);
+
+      expect(sim.missiles.size).toBeGreaterThanOrEqual(1);
+    });
+
+    it("fires a burst of MISSILE_BURST_SIZE missiles", () => {
+      const player = sim.addPlayer("p1");
+      // Place player 1000px away so missiles can't reach during the burst window
+      player.pos.x = 100;
+      player.pos.y = 300;
+
+      const mt = sim.spawnEnemy("missile_tower", 1100, 300);
+      registerReady(ai, mt.id);
+
+      // burstCooldown is set to BURST_DELAY after each shot and decremented each ai tick,
+      // so each gap between shots = BURST_DELAY + 1 ticks.
+      // missile 1 fires on i=0, missile 2 on i=(DELAY+1), missile 3 on i=2*(DELAY+1)
+      const ticksNeeded = (MISSILE_BURST_SIZE - 1) * (MISSILE_BURST_DELAY_TICKS + 1) + 1;
+      for (let i = 0; i < ticksNeeded; i++) {
+        sim.update();
+        ai.update(sim);
+      }
+
+      expect(sim.missiles.size).toBe(MISSILE_BURST_SIZE);
+    });
+
+    it("does not fire when player is out of range", () => {
+      const player = sim.addPlayer("p1");
+      player.pos.x = 0;
+      player.pos.y = 300;
+
+      const mt = sim.spawnEnemy("missile_tower", MISSILE_TOWER_FIRE_RANGE + 200, 300);
+      registerReady(ai, mt.id);
+
+      sim.update();
+      ai.update(sim);
+
+      expect(sim.missiles.size).toBe(0);
+    });
+
+    it("respects main fire cooldown between bursts", () => {
+      const player = sim.addPlayer("p1");
+      // Place player 1000px away so missiles can't reach during the burst window
+      player.pos.x = 100;
+      player.pos.y = 300;
+
+      const mt = sim.spawnEnemy("missile_tower", 1100, 300);
+      registerReady(ai, mt.id);
+
+      // Complete first burst — each inter-shot gap = BURST_DELAY + 1 ticks
+      const burstTicks = (MISSILE_BURST_SIZE - 1) * (MISSILE_BURST_DELAY_TICKS + 1) + 1;
+      for (let i = 0; i < burstTicks; i++) {
+        sim.update();
+        ai.update(sim);
+      }
+      expect(sim.missiles.size).toBe(MISSILE_BURST_SIZE);
+
+      // Run a few more ticks — main fire cooldown is active, no new burst starts
+      for (let i = 0; i < 10; i++) {
+        sim.update();
+        ai.update(sim);
+      }
+      const aiState = ai.aiStates.get(mt.id)!;
+      expect(aiState.fireCooldown).toBeGreaterThan(0);
     });
   });
 

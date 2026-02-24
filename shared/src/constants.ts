@@ -25,6 +25,20 @@ export const TOWER_RADIUS = 20;
 export const TOWER_FIRE_COOLDOWN_TICKS = 20; // fires every ~0.67 seconds
 export const TOWER_FIRE_RANGE = 900; // pixels
 
+export const MISSILE_TOWER_HP = 150;
+export const MISSILE_TOWER_RADIUS = 24;
+export const MISSILE_TOWER_FIRE_COOLDOWN_TICKS = 90; // fires every 3 seconds
+export const MISSILE_TOWER_FIRE_RANGE = 1400; // pixels
+export const MISSILE_BURST_SIZE = 3;           // missiles per burst
+export const MISSILE_BURST_DELAY_TICKS = 5;    // ~167ms between burst shots
+
+export const MISSILE_SPEED = 170; // pixels per second (slow, homing)
+export const MISSILE_HP = 1;
+export const MISSILE_RADIUS = 6;
+export const MISSILE_TTL_TICKS = 480; // 816 seconds at 30Hz
+export const MISSILE_DAMAGE = 15;
+export const MISSILE_TURN_RATE = 2.5; // radians per second
+
 export const MOTHERSHIP_HP = 500;
 export const MOTHERSHIP_RADIUS = 40;
 
@@ -38,11 +52,13 @@ export const INCOME_PER_TICK = INCOME_PER_SECOND / TICK_RATE;
 export const UNIT_COSTS: Record<string, number> = {
   minion_ship: 50,
   tower: 100,
+  missile_tower: 200,
 };
 
 export const UNIT_CAPS: Record<string, number> = {
   minion_ship: 20,
   tower: 10,
+  missile_tower: 5,
 };
 
 export const BUILD_COOLDOWN_TICKS = 15; // 0.5 seconds between builds

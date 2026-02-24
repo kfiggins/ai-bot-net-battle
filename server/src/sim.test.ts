@@ -9,6 +9,10 @@ import {
   BULLET_TTL_TICKS,
   BULLET_MAX_RANGE,
   FIRE_COOLDOWN_TICKS,
+  MISSILE_TTL_TICKS,
+  MISSILE_DAMAGE,
+  MISSILE_TOWER_HP,
+  ENEMY_TEAM,
   TICK_RATE,
   WORLD_WIDTH,
   WORLD_HEIGHT,
@@ -515,5 +519,143 @@ describe("circlesOverlap", () => {
     expect(circlesOverlap({ x: 0, y: 0 }, 10, { x: 10, y: 10 }, 5)).toBe(true);
     // Distance = sqrt(20^2 + 20^2) = ~28.28, radii sum = 15
     expect(circlesOverlap({ x: 0, y: 0 }, 10, { x: 20, y: 20 }, 5)).toBe(false);
+  });
+});
+
+describe("missile_tower spawnEnemy", () => {
+  it("spawns a missile_tower with correct properties", () => {
+    const sim = new Simulation();
+    const mt = sim.spawnEnemy("missile_tower", 700, 400);
+    expect(mt.kind).toBe("missile_tower");
+    expect(mt.hp).toBe(MISSILE_TOWER_HP);
+    expect(mt.team).toBe(ENEMY_TEAM);
+    expect(mt.pos).toEqual({ x: 700, y: 400 });
+    expect(sim.entities.has(mt.id)).toBe(true);
+  });
+});
+
+describe("missile physics", () => {
+  let sim: Simulation;
+
+  beforeEach(() => {
+    sim = new Simulation();
+  });
+
+  it("spawnMissile creates a missile entity in missiles map", () => {
+    const tower = sim.spawnEnemy("missile_tower", 500, 300);
+    sim.spawnMissile(tower, tower.id, 0);
+
+    expect(sim.missiles.size).toBe(1);
+    const missile = Array.from(sim.entities.values()).find(e => e.kind === "missile");
+    expect(missile).toBeDefined();
+    expect(missile!.team).toBe(ENEMY_TEAM);
+  });
+
+  it("missile moves each tick", () => {
+    const tower = sim.spawnEnemy("missile_tower", 500, 300);
+    sim.spawnMissile(tower, tower.id, 0); // aim right
+    const missile = Array.from(sim.entities.values()).find(e => e.kind === "missile")!;
+    const startX = missile.pos.x;
+
+    sim.update();
+
+    expect(missile.pos.x).toBeGreaterThan(startX);
+  });
+
+  it("missile steers toward nearest enemy", () => {
+    // Tower fires missile heading right (angle 0), but player is directly below
+    const tower = sim.spawnEnemy("missile_tower", 500, 300);
+    sim.spawnMissile(tower, tower.id, 0); // initial heading: right
+    const missile = Array.from(sim.entities.values()).find(e => e.kind === "missile")!;
+
+    // Place player far below the missile's current path
+    const player = sim.addPlayer("p1");
+    player.pos.x = missile.pos.x;
+    player.pos.y = missile.pos.y + 800;
+
+    const velYBefore = missile.vel.y;
+
+    // Run a few ticks of steering
+    for (let i = 0; i < 5; i++) sim.update();
+
+    // Missile should have turned downward (positive vy) toward the player
+    expect(missile.vel.y).toBeGreaterThan(velYBefore);
+  });
+
+  it("missile expires after TTL", () => {
+    const tower = sim.spawnEnemy("missile_tower", WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+    sim.spawnMissile(tower, tower.id, 0);
+    expect(sim.missiles.size).toBe(1);
+
+    // Advance past TTL with no target so missile flies in a straight line
+    for (let i = 0; i < MISSILE_TTL_TICKS + 5; i++) sim.update();
+
+    expect(sim.missiles.size).toBe(0);
+  });
+
+  it("missile damages player on contact", () => {
+    const tower = sim.spawnEnemy("missile_tower", 500, 300);
+    const player = sim.addPlayer("p1");
+    // Place player directly in front of the missile spawn point
+    player.pos.x = 540;
+    player.pos.y = 300;
+
+    sim.spawnMissile(tower, tower.id, 0); // aim right at player
+    const startHp = player.hp;
+
+    for (let i = 0; i < 10; i++) sim.update();
+
+    expect(player.hp).toBe(startHp - MISSILE_DAMAGE);
+  });
+
+  it("missile is destroyed when it hits a player", () => {
+    const tower = sim.spawnEnemy("missile_tower", 500, 300);
+    const player = sim.addPlayer("p1");
+    player.pos.x = 540;
+    player.pos.y = 300;
+
+    sim.spawnMissile(tower, tower.id, 0);
+
+    for (let i = 0; i < 10; i++) sim.update();
+
+    expect(sim.missiles.size).toBe(0);
+  });
+
+  it("player bullet can shoot down a missile", () => {
+    const player = sim.addPlayer("p1");
+    player.pos.x = 300;
+    player.pos.y = 300;
+
+    const tower = sim.spawnEnemy("missile_tower", 600, 300);
+    // Spawn missile heading left toward player
+    sim.spawnMissile(tower, tower.id, Math.PI);
+    const missile = Array.from(sim.entities.values()).find(e => e.kind === "missile")!;
+
+    // Fire player bullet right at the missile
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: true, aimAngle: 0,
+    });
+
+    for (let i = 0; i < 30; i++) sim.update();
+
+    // Missile should be destroyed
+    expect(sim.entities.has(missile.id)).toBe(false);
+  });
+
+  it("missile is cleaned up from missiles map when destroyed", () => {
+    const tower = sim.spawnEnemy("missile_tower", 500, 300);
+    const player = sim.addPlayer("p1");
+    player.pos.x = 540;
+    player.pos.y = 300;
+
+    sim.spawnMissile(tower, tower.id, 0);
+    expect(sim.missiles.size).toBe(1);
+
+    for (let i = 0; i < 10; i++) sim.update();
+
+    expect(sim.missiles.size).toBe(0);
+    const missileEntities = Array.from(sim.entities.values()).filter(e => e.kind === "missile");
+    expect(missileEntities).toHaveLength(0);
   });
 });
