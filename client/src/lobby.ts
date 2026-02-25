@@ -17,6 +17,8 @@ export class LobbyScene extends Phaser.Scene {
   private startButton!: Phaser.GameObjects.Text;
   private modeToggle!: Phaser.GameObjects.Text;
   private modeLabel!: Phaser.GameObjects.Text;
+  private devLogToggle!: Phaser.GameObjects.Text;
+  private devLogLabel!: Phaser.GameObjects.Text;
   private mode: AgentControlMode = "builtin_fake_ai";
   private players: LobbyPlayer[] = [];
   private displayName = "Player";
@@ -140,6 +142,33 @@ export class LobbyScene extends Phaser.Scene {
       this.refreshModeUI();
     });
 
+    this.devLogLabel = this.add
+      .text(VIEWPORT_WIDTH - 24, VIEWPORT_HEIGHT - 118, "Dev Log", {
+        fontSize: "13px",
+        color: "#7d7db7",
+        fontFamily: "monospace",
+      })
+      .setOrigin(1, 0.5);
+
+    this.devLogToggle = this.add
+      .text(VIEWPORT_WIDTH - 24, VIEWPORT_HEIGHT - 92, "ON", {
+        fontSize: "18px",
+        color: "#111122",
+        fontFamily: "monospace",
+        fontStyle: "bold",
+        backgroundColor: "#ffae42",
+        padding: { x: 14, y: 6 },
+      })
+      .setOrigin(1, 0.5)
+      .setInteractive({ useHandCursor: true });
+
+    this.devLogToggle.on("pointerdown", () => {
+      if (!this.net) return;
+      this.net.debugLogEnabled = !this.net.debugLogEnabled;
+      localStorage.setItem("debugLogEnabled", this.net.debugLogEnabled ? "1" : "0");
+      this.refreshDevLogUI();
+    });
+
     // Set up networking — reuse existing NetClient if returning from game
     const existing = this.registry.get("net") as NetClient | undefined;
     if (existing) {
@@ -149,7 +178,12 @@ export class LobbyScene extends Phaser.Scene {
       this.registry.set("net", this.net);
     }
     this.mode = this.net.currentMode;
+    const storedDebug = localStorage.getItem("debugLogEnabled");
+    if (storedDebug !== null) {
+      this.net.debugLogEnabled = storedDebug === "1";
+    }
     this.refreshModeUI();
+    this.refreshDevLogUI();
 
     this.net.setWelcomeHandler((lobby) => {
       this.mode = lobby.mode;
@@ -198,6 +232,17 @@ export class LobbyScene extends Phaser.Scene {
       color: "#111122",
     });
     this.modeLabel.setText(`Agent Mode (${isAgent ? "Live" : "Kids"})`);
+  }
+
+  private refreshDevLogUI(): void {
+    if (!this.devLogToggle || !this.devLogLabel || !this.net) return;
+    const on = this.net.debugLogEnabled;
+    this.devLogToggle.setText(on ? "ON" : "OFF");
+    this.devLogToggle.setStyle({
+      backgroundColor: on ? "#ffae42" : "#66cc88",
+      color: "#111122",
+    });
+    this.devLogLabel.setText(`Dev Log (${on ? "Shown" : "Hidden"})`);
   }
 
   private renderPlayerList(): void {

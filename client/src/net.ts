@@ -20,6 +20,7 @@ export class NetClient {
   selfPlayerIndex: number | null = null;
   roomId: string | null = null;
   currentMode: AgentControlMode = "builtin_fake_ai";
+  debugLogEnabled = true;
   private reconnectToken: string | null = null;
   private targetRoomId: string = "default";
   private displayName: string = "Player";

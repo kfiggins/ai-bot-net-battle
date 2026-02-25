@@ -114,6 +114,7 @@ export const SnapshotMessageSchema = z.object({
   tick: z.number().int(),
   entities: z.array(EntitySchema),
   phase: PhaseInfoSchema,
+  botResources: z.number().int().optional(),
 });
 export type SnapshotMessage = z.infer<typeof SnapshotMessageSchema>;
 

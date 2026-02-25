@@ -674,7 +674,7 @@ export class Simulation {
     remaining: Record<string, number>;
     matchOver: boolean;
     mothershipShielded: boolean;
-  }) {
+  }, botResources?: number) {
     // Build player ID→state lookup for snapshot enrichment
     const playerByEntityId = new Map<string, PlayerState>();
     for (const p of this.players.values()) {
@@ -705,6 +705,7 @@ export class Simulation {
       tick: this.tick,
       entities,
       phase: phaseInfo,
+      botResources,
     };
   }
 }

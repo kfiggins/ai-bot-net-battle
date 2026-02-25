@@ -7,6 +7,7 @@ export class HUD {
   private objectiveText: Phaser.GameObjects.Text;
   private matchOverText: Phaser.GameObjects.Text;
   private debugText: Phaser.GameObjects.Text;
+  private debugEnabled = true;
   private victoryPanel: Phaser.GameObjects.Rectangle;
   private victoryTitle: Phaser.GameObjects.Text;
   private victoryStats: Phaser.GameObjects.Text;
@@ -331,7 +332,13 @@ export class HUD {
     this.returnButton.on("pointerdown", onReturn);
   }
 
-  updateDebug(entities: Entity[]): void {
+  setDebugEnabled(enabled: boolean): void {
+    this.debugEnabled = enabled;
+    this.debugText.setVisible(enabled);
+  }
+
+  updateDebug(entities: Entity[], botResources?: number): void {
+    if (!this.debugEnabled) return;
     const counts = {
       player_ship: 0,
       minion_ship: 0,
@@ -359,6 +366,7 @@ export class HUD {
       `bullets: ${counts.bullet}`,
       `missiles: ${counts.missile}`,
       `orbs: ${counts.energy_orb}`,
+      `bot resources: ${botResources ?? "n/a"}`,
     ].join("\n"));
   }
 

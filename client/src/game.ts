@@ -28,6 +28,7 @@ export class GameScene extends Phaser.Scene {
   private cameraPos: { x: number; y: number } | null = null;
   private modeText!: Phaser.GameObjects.Text;
   private predictedSpeed = PLAYER_SPEED;
+  private latestBotResources: number | undefined;
 
   constructor() {
     super({ key: "GameScene" });
@@ -72,6 +73,7 @@ export class GameScene extends Phaser.Scene {
 
     this.vfx = new VFXManager(this);
     this.hud = new HUD(this);
+    this.hud.setDebugEnabled(this.net.debugLogEnabled);
     this.hud.setUpgradeHandler((stat) => {
       this.net.sendUpgrade(stat as "damage" | "speed" | "health" | "fire_rate");
     });
@@ -116,6 +118,7 @@ export class GameScene extends Phaser.Scene {
     // correct as the camera scrolls (even while the pointer is held down).
 
     this.net.setSnapshotHandler((snapshot) => {
+      this.latestBotResources = snapshot.botResources;
       this.interpolator.pushSnapshot(snapshot);
     });
 
@@ -241,7 +244,7 @@ export class GameScene extends Phaser.Scene {
       this.renderEntities(entities);
       this.updateTeammateArrows(entities, selfId);
       this.hud.updateHealthBars(entities);
-      this.hud.updateDebug(entities);
+      this.hud.updateDebug(entities, this.latestBotResources);
 
       // Update XP bar and upgrades for local player
       if (selfId) {

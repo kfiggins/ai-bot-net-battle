@@ -125,6 +125,7 @@ describe("SnapshotMessageSchema", () => {
       v: 1,
       type: "snapshot",
       tick: 42,
+      botResources: 123,
       entities: [
         {
           id: "p1",

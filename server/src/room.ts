@@ -381,7 +381,7 @@ export class Room {
 
   private broadcastSnapshot(): void {
     const phaseInfo = this.boss.getPhaseInfo(this.sim);
-    const snapshot = JSON.stringify(this.sim.getSnapshot(phaseInfo));
+    const snapshot = JSON.stringify(this.sim.getSnapshot(phaseInfo, Math.floor(this.economy.balance)));
     for (const player of this.players.values()) {
       if (player.ws?.readyState === WebSocket.OPEN) {
         player.ws.send(snapshot);
