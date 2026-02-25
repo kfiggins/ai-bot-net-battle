@@ -620,16 +620,23 @@ describe("combat integration", () => {
     player.pos.x = 100;
     player.pos.y = 300;
 
-    const minion = sim.spawnEnemy("minion_ship", 140, 300);
+    // Place minion far enough (>MINION_FIRE_RANGE*0.7=294px) so it uses "closing in"
+    // mode and approaches head-on rather than strafing sideways.
+    const minion = sim.spawnEnemy("minion_ship", 500, 300);
     ai.registerEntity(minion.id);
 
-    sim.setInput("p1", {
-      up: false, down: false, left: false, right: false,
-      fire: true, aimAngle: 0,
-    });
-
-    // Run until minion is destroyed
-    for (let i = 0; i < 60; i++) {
+    // Aim at the minion (rightward); track each tick so strafe weave doesn't cause all misses
+    for (let i = 0; i < 120; i++) {
+      const playerEntity = sim.entities.get(sim.players.get("p1")!.entityId);
+      const minionEntity = sim.entities.get(minion.id);
+      if (!minionEntity || minionEntity.hp <= 0) break;
+      const aimAngle = playerEntity && minionEntity
+        ? Math.atan2(minionEntity.pos.y - playerEntity.pos.y, minionEntity.pos.x - playerEntity.pos.x)
+        : 0;
+      sim.setInput("p1", {
+        up: false, down: false, left: false, right: false,
+        fire: true, aimAngle,
+      });
       sim.update();
       ai.update(sim);
     }

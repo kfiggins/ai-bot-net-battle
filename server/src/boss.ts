@@ -9,6 +9,8 @@ import {
   NEMESIS_HP,
   NEMESIS_RADIUS,
   NEMESIS_SPEED,
+  NEMESIS_ACCEL,
+  PLAYER_BRAKE_FRICTION,
   NEMESIS_BULLET_DAMAGE,
   NEMESIS_SPIRAL_BULLET_SPEED,
   NEMESIS_SPIRAL_COUNT,
@@ -172,14 +174,29 @@ export class BossManager {
       if (dist > NEMESIS_RADIUS + 1) {
         const nx = (nearest.pos.x - nemesis.pos.x) / dist;
         const ny = (nearest.pos.y - nemesis.pos.y) / dist;
-        nemesis.vel.x = nx * NEMESIS_SPEED;
-        nemesis.vel.y = ny * NEMESIS_SPEED;
-        nemesis.pos.x += nemesis.vel.x * dt;
-        nemesis.pos.y += nemesis.vel.y * dt;
+        nemesis.vel.x += nx * NEMESIS_ACCEL * dt;
+        nemesis.vel.y += ny * NEMESIS_ACCEL * dt;
+        // Clamp to max speed
+        const speed = Math.sqrt(nemesis.vel.x * nemesis.vel.x + nemesis.vel.y * nemesis.vel.y);
+        if (speed > NEMESIS_SPEED) {
+          nemesis.vel.x = (nemesis.vel.x / speed) * NEMESIS_SPEED;
+          nemesis.vel.y = (nemesis.vel.y / speed) * NEMESIS_SPEED;
+        }
       } else {
-        nemesis.vel.x = 0;
-        nemesis.vel.y = 0;
+        // Repel Nemesis away from player when touching
+        const nx = (nemesis.pos.x - nearest.pos.x) / dist;
+        const ny = (nemesis.pos.y - nearest.pos.y) / dist;
+        nemesis.vel.x += nx * NEMESIS_ACCEL * dt;
+        nemesis.vel.y += ny * NEMESIS_ACCEL * dt;
+        // Clamp to max speed
+        const speed = Math.sqrt(nemesis.vel.x * nemesis.vel.x + nemesis.vel.y * nemesis.vel.y);
+        if (speed > NEMESIS_SPEED) {
+          nemesis.vel.x = (nemesis.vel.x / speed) * NEMESIS_SPEED;
+          nemesis.vel.y = (nemesis.vel.y / speed) * NEMESIS_SPEED;
+        }
       }
+      nemesis.pos.x += nemesis.vel.x * dt;
+      nemesis.pos.y += nemesis.vel.y * dt;
     }
 
     // Clamp to world bounds

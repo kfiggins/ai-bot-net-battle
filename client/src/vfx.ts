@@ -36,7 +36,7 @@ export class VFXManager {
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         life: 0,
-        maxLife: 400 + Math.random() * 200,
+        maxLife: 800 + Math.random() * 200,
       });
     }
   }
@@ -54,8 +54,35 @@ export class VFXManager {
     this.telegraphs.push({
       sprite,
       life: 0,
-      maxLife: 500, // 500ms telegraph
+      maxLife: 1000, // 500ms telegraph
     });
+  }
+
+  /** Thruster boost particles — emit each frame while entity is thrusting.
+   *  dirX/dirY is the direction particles travel (opposite to thrust direction).
+   *  offset shifts the spawn point along dir so particles appear behind the entity. */
+  boostParticle(x: number, y: number, dirX: number, dirY: number, color: number, offset = 0): void {
+    const spawnX = x + dirX * offset;
+    const spawnY = y + dirY * offset;
+    for (let i = 0; i < 2; i++) {
+      const spread = (Math.random() - 0.5) * 0.5;
+      const baseAngle = Math.atan2(dirY, dirX) + spread;
+      const speed = 40 + Math.random() * 60;
+      const radius = 1 + Math.random() * 2;
+      const sprite = this.scene.add.circle(
+        spawnX + (Math.random() - 0.5) * 6,
+        spawnY + (Math.random() - 0.5) * 6,
+        radius, color, 0.8
+      );
+      sprite.setDepth(8);
+      this.particles.push({
+        sprite,
+        vx: Math.cos(baseAngle) * speed,
+        vy: Math.sin(baseAngle) * speed,
+        life: 0,
+        maxLife: 220 + Math.random() * 100,
+      });
+    }
   }
 
   /** Continuous particle trail behind a missile — call every rendered frame */
@@ -69,7 +96,7 @@ export class VFXManager {
         radius, color, 0.9
       );
       sprite.setDepth(7);
-      this.particles.push({ sprite, vx: 0, vy: 0, life: 0, maxLife: 120 + Math.random() * 80 });
+      this.particles.push({ sprite, vx: 0, vy: 0, life: 0, maxLife: 500 + Math.random() * 80 });
     }
   }
 

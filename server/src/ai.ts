@@ -1,6 +1,8 @@
 import {
   Entity,
   MINION_SPEED,
+  MINION_ACCEL,
+  MINION_BRAKE_FRICTION,
   MINION_FIRE_COOLDOWN_TICKS,
   MINION_FIRE_RANGE,
   MINION_RADIUS,
@@ -158,25 +160,44 @@ export class AIManager {
 
     const nx = dist > 0 ? dx / dist : 0;
     const ny = dist > 0 ? dy / dist : 0;
-    const px = -ny;
+    const px = -ny; // perpendicular for strafing
     const py = nx;
     const strafe = Math.sin((sim.tick / TICK_RATE) * aiState.strafeFrequency + aiState.strafePhase) * aiState.strafeAmplitude;
 
-    if (dist > MINION_FIRE_RANGE * 0.7) {
-      const desiredX = nx * MINION_SPEED * aiState.moveSpeedScale + px * strafe * 0.6;
-      const desiredY = ny * MINION_SPEED * aiState.moveSpeedScale + py * strafe * 0.6;
+    // Compute a desired thrust direction (chase + strafe blend), then apply acceleration
+    let thrustX: number;
+    let thrustY: number;
 
-      entity.vel = { x: desiredX, y: desiredY };
-      entity.pos.x += desiredX * this.dt;
-      entity.pos.y += desiredY * this.dt;
+    if (dist > MINION_FIRE_RANGE * 0.7) {
+      // Closing in: thrust toward target with a strafe weave
+      thrustX = nx * aiState.moveSpeedScale + px * (strafe / MINION_SPEED) * 0.6;
+      thrustY = ny * aiState.moveSpeedScale + py * (strafe / MINION_SPEED) * 0.6;
     } else {
-      entity.vel = {
-        x: px * strafe * 0.35,
-        y: py * strafe * 0.35,
-      };
-      entity.pos.x += entity.vel.x * this.dt;
-      entity.pos.y += entity.vel.y * this.dt;
+      // In fire range: strafe only (orbit the target)
+      thrustX = px * (strafe / MINION_SPEED) * 0.35;
+      thrustY = py * (strafe / MINION_SPEED) * 0.35;
     }
+
+    const tMag = Math.sqrt(thrustX * thrustX + thrustY * thrustY);
+    if (tMag > 0.01) {
+      entity.vel.x += (thrustX / tMag) * MINION_ACCEL * this.dt;
+      entity.vel.y += (thrustY / tMag) * MINION_ACCEL * this.dt;
+    } else {
+      // No meaningful thrust direction — apply braking
+      entity.vel.x *= MINION_BRAKE_FRICTION;
+      entity.vel.y *= MINION_BRAKE_FRICTION;
+    }
+
+    // Clamp to max speed
+    const maxSpeed = MINION_SPEED * aiState.moveSpeedScale;
+    const speed = Math.sqrt(entity.vel.x * entity.vel.x + entity.vel.y * entity.vel.y);
+    if (speed > maxSpeed) {
+      entity.vel.x = (entity.vel.x / speed) * maxSpeed;
+      entity.vel.y = (entity.vel.y / speed) * maxSpeed;
+    }
+
+    entity.pos.x += entity.vel.x * this.dt;
+    entity.pos.y += entity.vel.y * this.dt;
 
     // Fire at target if in range
     if (dist <= MINION_FIRE_RANGE && aiState.fireCooldown <= 0) {
@@ -210,20 +231,32 @@ export class AIManager {
 
     if (dist < 20) {
       if (!nearestOrb) {
-        // No orbs on map — wander back toward mothership
+        // No orbs on map — wander to a new random waypoint
         const wp = this.randomPatrolWaypoint();
         aiState.waypointX = wp.x;
         aiState.waypointY = wp.y;
       }
-      entity.vel = { x: 0, y: 0 };
+      // Brake to a stop at the waypoint
+      entity.vel.x *= MINION_BRAKE_FRICTION;
+      entity.vel.y *= MINION_BRAKE_FRICTION;
+      if (Math.abs(entity.vel.x) < 0.1) entity.vel.x = 0;
+      if (Math.abs(entity.vel.y) < 0.1) entity.vel.y = 0;
       return;
     }
 
-    // Move toward waypoint at patrol speed
+    // Accelerate toward waypoint, capped at patrol speed
     const nx = dx / dist;
     const ny = dy / dist;
-    const speed = ENEMY_PATROL_SPEED * aiState.moveSpeedScale;
-    entity.vel = { x: nx * speed, y: ny * speed };
+    entity.vel.x += nx * MINION_ACCEL * this.dt;
+    entity.vel.y += ny * MINION_ACCEL * this.dt;
+
+    const maxSpeed = ENEMY_PATROL_SPEED * aiState.moveSpeedScale;
+    const speed = Math.sqrt(entity.vel.x * entity.vel.x + entity.vel.y * entity.vel.y);
+    if (speed > maxSpeed) {
+      entity.vel.x = (entity.vel.x / speed) * maxSpeed;
+      entity.vel.y = (entity.vel.y / speed) * maxSpeed;
+    }
+
     entity.pos.x += entity.vel.x * this.dt;
     entity.pos.y += entity.vel.y * this.dt;
   }
@@ -233,16 +266,20 @@ export class AIManager {
     const dy = this.patrolCenter.y - entity.pos.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    // Stop once close enough to mothership
-    if (dist < ENEMY_PATROL_RADIUS * 0.25) {
-      entity.vel = { x: 0, y: 0 };
-      return;
-    }
-
+    // Lightspeed: accelerate toward base with much higher speed and acceleration
     const nx = dx / dist;
     const ny = dy / dist;
-    const speed = ENEMY_PATROL_SPEED * aiState.moveSpeedScale;
-    entity.vel = { x: nx * speed*100, y: ny * speed*100};
+    const LIGHTSPEED_FACTOR = 4;
+    entity.vel.x += nx * MINION_ACCEL * this.dt * LIGHTSPEED_FACTOR;
+    entity.vel.y += ny * MINION_ACCEL * this.dt * LIGHTSPEED_FACTOR;
+
+    const maxSpeed = ENEMY_PATROL_SPEED * aiState.moveSpeedScale * LIGHTSPEED_FACTOR;
+    const speed = Math.sqrt(entity.vel.x * entity.vel.x + entity.vel.y * entity.vel.y);
+    if (speed > maxSpeed) {
+      entity.vel.x = (entity.vel.x / speed) * maxSpeed;
+      entity.vel.y = (entity.vel.y / speed) * maxSpeed;
+    }
+
     entity.pos.x += entity.vel.x * this.dt;
     entity.pos.y += entity.vel.y * this.dt;
   }

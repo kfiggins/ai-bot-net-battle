@@ -3,7 +3,9 @@ export const TICK_MS = 1000 / TICK_RATE;
 export const SNAPSHOT_RATE = 20; // Hz (broadcast rate)
 export const SNAPSHOT_INTERVAL = Math.ceil(TICK_RATE / SNAPSHOT_RATE); // ticks between snapshots
 
-export const PLAYER_SPEED = 200; // pixels per second
+export const PLAYER_MAX_SPEED = 200; // pixels per second (max speed cap)
+export const PLAYER_ACCEL = 800;      // px/s² — thrust acceleration (~0.33s to max speed)
+export const PLAYER_BRAKE_FRICTION = 0.80; // per-tick vel multiplier when no input (~0.3s to stop)
 export const PLAYER_HP = 100;
 export const PLAYER_RADIUS = 16;
 
@@ -13,10 +15,11 @@ export const BULLET_RADIUS = 4;
 export const BULLET_TTL_TICKS = 120; // 4 seconds at 30Hz
 export const BULLET_DAMAGE = 10;
 export const FIRE_COOLDOWN_TICKS = 6; // ~5 shots/second at 30Hz
-export const BULLET_RECOIL_FORCE = 60;  // px/s impulse per shot opposite to aim
-export const RECOIL_FRICTION = 0.82;    // recoilVel decay per tick (~115ms half-life)
+export const BULLET_RECOIL_FORCE = 60; // px/s impulse per shot opposite to aim (applied to entity.vel)
 
-export const MINION_SPEED = 120; // pixels per second
+export const MINION_SPEED = 120; // pixels per second (max speed cap)
+export const MINION_ACCEL = 400;           // px/s² — thrust acceleration for minions
+export const MINION_BRAKE_FRICTION = 0.78; // per-tick vel multiplier when braking
 export const MINION_HP = 30;
 export const MINION_RADIUS = 12;
 export const MINION_FIRE_COOLDOWN_TICKS = 30; // fires every 1 second
@@ -126,7 +129,7 @@ export const MAX_UPGRADE_PER_STAT = 5;
 
 // Per-point bonuses (additive per upgrade level)
 export const DAMAGE_PER_UPGRADE = 3;    // +3 bullet damage per point (base 10 → max 25)
-export const SPEED_PER_UPGRADE = 25;    // +25 px/s per point (base 200 → max 325)
+export const SPEED_PER_UPGRADE = 25;    // +25 px/s per point raises max speed cap (base 200 → max 325)
 export const HEALTH_PER_UPGRADE = 20;   // +20 max HP per point (base 100 → max 200)
 export const FIRE_RATE_PER_UPGRADE = 1; // -1 tick off cooldown per point (base 6 → min 1)
 
@@ -149,7 +152,8 @@ export const RECONNECT_TIMEOUT_MS = 30_000; // 30 seconds to reconnect
 // Nemesis Boss (Phase 15)
 export const NEMESIS_HP = 1200;
 export const NEMESIS_RADIUS = 38;
-export const NEMESIS_SPEED = 170;               // px/s — slower than player (200), still threatening
+export const NEMESIS_SPEED = 220;               // px/s — max speed cap (slower than player)
+export const NEMESIS_ACCEL = 300;               // px/s² — high accel so it feels reactive
 export const NEMESIS_BULLET_DAMAGE = 12;
 export const NEMESIS_SPIRAL_BULLET_SPEED = 400; // px/s (slower bullets, dodgeable by moving fast)
 export const NEMESIS_SPIRAL_COUNT = 6;          // bullets per volley
@@ -157,6 +161,9 @@ export const NEMESIS_SPIRAL_FIRE_COOLDOWN_TICKS = 3;
 export const NEMESIS_SPIRAL_ROTATE_PER_SHOT = 0.12;   // radians per volley (~6.9°) for spiral arms
 export const NEMESIS_MISSILE_COOLDOWN_TICKS = 30;     // one missile per player every 2 seconds
 export const NEMESIS_KILL_XP = 500;                   // awarded to all players on Nemesis death
+
+// Boost particles
+export const BOOST_PARTICLE_THRESHOLD = 30; // px/s — min speed to emit boost particles on AI/remote entities
 
 // Body collision damage (player rams into solid enemy — not player vs player)
 export const BODY_COLLISION_DAMAGE = 8;           // for mothership, towers, minions

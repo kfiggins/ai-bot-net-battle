@@ -2,7 +2,9 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { Simulation, circlesOverlap, getCannonAngles, getEffectiveMaxHp } from "./sim.js";
 import {
   PLAYER_HP,
-  PLAYER_SPEED,
+  PLAYER_MAX_SPEED,
+  PLAYER_ACCEL,
+  PLAYER_BRAKE_FRICTION,
   PLAYER_RADIUS,
   BULLET_SPEED,
   BULLET_DAMAGE,
@@ -36,7 +38,6 @@ import {
   CANNON_MILESTONES,
   MILESTONE_LEVELS,
   BULLET_RECOIL_FORCE,
-  RECOIL_FRICTION,
   CANNON_OFFSET_LATERAL,
   BULLET_RADIUS,
 } from "shared";
@@ -127,7 +128,7 @@ describe("Simulation", () => {
   });
 
   describe("movement", () => {
-    it("moves player when input is pressed", () => {
+    it("accelerates player from rest when input is pressed", () => {
       const entity = sim.addPlayer("p1");
       const startX = entity.pos.x;
 
@@ -137,8 +138,26 @@ describe("Simulation", () => {
       });
       sim.update();
 
+      // After one tick from rest: vel.x = PLAYER_ACCEL * dt, pos moves by vel * dt
       const dt = 1 / TICK_RATE;
-      expect(entity.pos.x).toBeCloseTo(startX + PLAYER_SPEED * dt, 5);
+      const expectedVel = PLAYER_ACCEL * dt;
+      expect(entity.vel.x).toBeCloseTo(expectedVel, 3);
+      expect(entity.pos.x).toBeCloseTo(startX + expectedVel * dt, 3);
+    });
+
+    it("approaches max speed after enough ticks", () => {
+      const entity = sim.addPlayer("p1");
+      entity.pos.x = WORLD_WIDTH / 2;
+      entity.pos.y = WORLD_HEIGHT / 2;
+
+      sim.setInput("p1", {
+        up: false, down: false, left: false, right: true,
+        fire: false, aimAngle: 0,
+      });
+      // Need ceil(PLAYER_MAX_SPEED / (PLAYER_ACCEL / TICK_RATE)) ticks to reach max speed
+      for (let i = 0; i < 20; i++) sim.update();
+
+      expect(entity.vel.x).toBeCloseTo(PLAYER_MAX_SPEED, 1);
     });
 
     it("does not move player with no input", () => {
@@ -152,7 +171,30 @@ describe("Simulation", () => {
       expect(entity.pos.y).toBeCloseTo(startY, 5);
     });
 
-    it("normalizes diagonal movement", () => {
+    it("brakes to zero when input is released after moving", () => {
+      const entity = sim.addPlayer("p1");
+      entity.pos.x = WORLD_WIDTH / 2;
+      entity.pos.y = WORLD_HEIGHT / 2;
+
+      // Accelerate to near max speed
+      sim.setInput("p1", {
+        up: false, down: false, left: false, right: true,
+        fire: false, aimAngle: 0,
+      });
+      for (let i = 0; i < 20; i++) sim.update();
+      expect(entity.vel.x).toBeGreaterThan(0);
+
+      // Release input — brake applies
+      sim.setInput("p1", {
+        up: false, down: false, left: false, right: false,
+        fire: false, aimAngle: 0,
+      });
+      for (let i = 0; i < 60; i++) sim.update();
+
+      expect(entity.vel.x).toBeCloseTo(0, 1);
+    });
+
+    it("normalizes diagonal movement direction at max speed", () => {
       const entity = sim.addPlayer("p1");
       entity.pos.x = WORLD_WIDTH / 2;
       entity.pos.y = WORLD_HEIGHT / 2;
@@ -161,10 +203,13 @@ describe("Simulation", () => {
         up: true, down: false, left: false, right: true,
         fire: false, aimAngle: 0,
       });
-      sim.update();
+      // Run enough ticks to reach max speed diagonally
+      for (let i = 0; i < 20; i++) sim.update();
 
-      expect(entity.vel.x).toBeCloseTo(PLAYER_SPEED / Math.sqrt(2), 5);
-      expect(entity.vel.y).toBeCloseTo(-PLAYER_SPEED / Math.sqrt(2), 5);
+      // At max speed, each diagonal component = PLAYER_MAX_SPEED / sqrt(2)
+      const expectedComponent = PLAYER_MAX_SPEED / Math.sqrt(2);
+      expect(entity.vel.x).toBeCloseTo(expectedComponent, 1);
+      expect(entity.vel.y).toBeCloseTo(-expectedComponent, 1);
     });
 
     it("clamps position to world bounds", () => {
@@ -1156,29 +1201,29 @@ describe("stat upgrades", () => {
     expect(entity.hp).toBe(PLAYER_HP + HEALTH_PER_UPGRADE);
   });
 
-  it("effective speed increases with speed upgrades", () => {
+  it("speed upgrade raises max speed cap", () => {
     const entity = sim.addPlayer("p1");
     const ps = sim.players.get("p1")!;
     entity.pos.x = WORLD_WIDTH / 2;
     entity.pos.y = WORLD_HEIGHT / 2;
 
-    // Move right at base speed
+    // Run enough ticks to reach base max speed
     sim.setInput("p1", {
       up: false, down: false, left: false, right: true,
       fire: false, aimAngle: 0,
     });
-    sim.update();
-    const baseMove = entity.pos.x - WORLD_WIDTH / 2;
+    for (let i = 0; i < 20; i++) sim.update();
+    expect(entity.vel.x).toBeCloseTo(PLAYER_MAX_SPEED, 1);
 
-    // Reset position and add speed upgrade
+    // Reset velocity and position, then apply speed upgrade and saturate again
+    entity.vel.x = 0;
+    entity.vel.y = 0;
     entity.pos.x = WORLD_WIDTH / 2;
     ps.upgrades.speed = 3;
-    sim.update();
-    const upgradedMove = entity.pos.x - WORLD_WIDTH / 2;
+    for (let i = 0; i < 25; i++) sim.update();
 
-    expect(upgradedMove).toBeGreaterThan(baseMove);
-    const expectedRatio = (PLAYER_SPEED + 3 * SPEED_PER_UPGRADE) / PLAYER_SPEED;
-    expect(upgradedMove / baseMove).toBeCloseTo(expectedRatio, 2);
+    const expectedMaxSpeed = PLAYER_MAX_SPEED + 3 * SPEED_PER_UPGRADE;
+    expect(entity.vel.x).toBeCloseTo(expectedMaxSpeed, 1);
   });
 
   it("effective fire cooldown decreases with fire_rate upgrades", () => {
@@ -1463,136 +1508,147 @@ describe("bullet recoil physics", () => {
     sim = new Simulation();
   });
 
-  it("recoilVel starts at zero", () => {
-    sim.addPlayer("p1");
-    const player = sim.players.get("p1")!;
-    expect(player.recoilVel).toEqual({ x: 0, y: 0 });
+  it("entity vel starts at zero on spawn", () => {
+    const entity = sim.addPlayer("p1");
+    expect(entity.vel).toEqual({ x: 0, y: 0 });
   });
 
-  it("firing adds recoil impulse opposite to aimAngle", () => {
+  it("firing adds recoil impulse to entity.vel opposite to aimAngle", () => {
     const entity = sim.addPlayer("p1");
     entity.pos.x = WORLD_WIDTH / 2;
     entity.pos.y = WORLD_HEIGHT / 2;
 
-    // Aim right (angle = 0), recoil should push left (negative x)
+    // Aim right (angle = 0) with no movement — recoil should push vel leftward
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
       fire: true, aimAngle: 0,
     });
     sim.update();
 
-    const player = sim.players.get("p1")!;
-    expect(player.recoilVel.x).toBeCloseTo(-BULLET_RECOIL_FORCE, 1);
-    expect(player.recoilVel.y).toBeCloseTo(0, 1);
+    expect(entity.vel.x).toBeCloseTo(-BULLET_RECOIL_FORCE, 1);
+    expect(entity.vel.y).toBeCloseTo(0, 1);
   });
 
-  it("recoilVel decays each tick by RECOIL_FRICTION", () => {
-    sim.addPlayer("p1");
-    const player = sim.players.get("p1")!;
-    player.recoilVel = { x: 100, y: 0 };
+  it("entity vel decays with PLAYER_BRAKE_FRICTION when no input held", () => {
+    const entity = sim.addPlayer("p1");
+    entity.pos.x = WORLD_WIDTH / 2;
+    entity.pos.y = WORLD_HEIGHT / 2;
+    // Seed a known velocity directly
+    entity.vel.x = 100;
+    entity.vel.y = 0;
 
-    // One tick with no firing — recoil should decay
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
       fire: false, aimAngle: 0,
     });
     sim.update();
 
-    expect(player.recoilVel.x).toBeCloseTo(100 * RECOIL_FRICTION, 1);
+    expect(entity.vel.x).toBeCloseTo(100 * PLAYER_BRAKE_FRICTION, 1);
   });
 
-  it("recoil affects entity velocity (combined with input vel)", () => {
+  it("recoil impulse can push vel beyond max speed", () => {
     const entity = sim.addPlayer("p1");
     entity.pos.x = WORLD_WIDTH / 2;
     entity.pos.y = WORLD_HEIGHT / 2;
-    const player = sim.players.get("p1")!;
 
-    // Set recoil pushing right
-    player.recoilVel = { x: 50, y: 0 };
-
-    // Move right as well
+    // Saturate velocity rightward first (many ticks pressing right)
     sim.setInput("p1", {
       up: false, down: false, left: false, right: true,
       fire: false, aimAngle: 0,
     });
-    sim.update();
-
-    // Entity velocity should be input speed + decayed recoil
-    const expectedRecoil = 50 * RECOIL_FRICTION;
-    expect(entity.vel.x).toBeCloseTo(PLAYER_SPEED + expectedRecoil, 1);
-  });
-
-  it("shooting opposite to movement boosts effective speed", () => {
-    const entity = sim.addPlayer("p1");
-    entity.pos.x = WORLD_WIDTH / 2;
-    entity.pos.y = WORLD_HEIGHT / 2;
-
-    // Move right, shoot left (aimAngle = PI)
+    for (let i = 0; i < 30; i++) sim.update();
+    // Now fire leftward — recoil pushes right, past max speed
     sim.setInput("p1", {
       up: false, down: false, left: false, right: true,
       fire: true, aimAngle: Math.PI,
     });
-    // Tick 1: fires, recoil impulse applied after movement
-    sim.update();
-    const posAfterTick1 = entity.pos.x;
-
-    // Tick 2: recoil is now active, boosting rightward movement
-    // Set fire=false so cooldown doesn't matter
-    sim.setInput("p1", {
-      up: false, down: false, left: false, right: true,
-      fire: false, aimAngle: Math.PI,
-    });
     sim.update();
 
-    const dt = 1 / TICK_RATE;
-    const movedTick2 = entity.pos.x - posAfterTick1;
-    // Should have moved more than just PLAYER_SPEED because recoil pushes right
-    expect(movedTick2).toBeGreaterThan(PLAYER_SPEED * dt);
+    expect(entity.vel.x).toBeGreaterThan(PLAYER_MAX_SPEED);
   });
 
-  it("shooting in movement direction reduces effective speed", () => {
+  it("shooting opposite to movement direction boosts next-tick movement", () => {
+    // Recoil is applied to vel AFTER pos is updated, so its effect on position
+    // shows up in the FOLLOWING tick. We compare movement one tick after releasing
+    // keys: with vs without leftward-shot recoil (which pushes vel rightward).
     const entity = sim.addPlayer("p1");
     entity.pos.x = WORLD_WIDTH / 2;
     entity.pos.y = WORLD_HEIGHT / 2;
 
-    // Move right, shoot right (aimAngle = 0)
-    sim.setInput("p1", {
-      up: false, down: false, left: false, right: true,
-      fire: true, aimAngle: 0,
-    });
-    // Tick 1: fires, recoil impulse applied after movement
+    // Establish baseline: coast at max speed for one tick with no thrust
+    entity.vel.x = PLAYER_MAX_SPEED;
+    entity.vel.y = 0;
+    sim.setInput("p1", { up: false, down: false, left: false, right: false, fire: false, aimAngle: 0 });
+    const baselineStart = entity.pos.x;
     sim.update();
-    const posAfterTick1 = entity.pos.x;
+    const distWithout = entity.pos.x - baselineStart; // = PLAYER_MAX_SPEED * BRAKE_FRICTION / TICK_RATE
 
-    // Tick 2: recoil is now active, slowing rightward movement
-    sim.setInput("p1", {
-      up: false, down: false, left: false, right: true,
-      fire: false, aimAngle: 0,
-    });
+    // Now fire leftward while at max speed — recoil pushes vel.x above PLAYER_MAX_SPEED
+    entity.vel.x = PLAYER_MAX_SPEED;
+    entity.vel.y = 0;
+    entity.pos.x = baselineStart;
+    // Fire tick (pos still moves at PLAYER_MAX_SPEED this tick; recoil enters vel)
+    sim.setInput("p1", { up: false, down: false, left: false, right: false, fire: true, aimAngle: Math.PI });
     sim.update();
+    // Coast tick: no thrust — vel.x = (PLAYER_MAX_SPEED + BULLET_RECOIL_FORCE) * BRAKE_FRICTION
+    const afterFireX = entity.pos.x;
+    sim.setInput("p1", { up: false, down: false, left: false, right: false, fire: false, aimAngle: 0 });
+    sim.update();
+    const distWithRecoil = entity.pos.x - afterFireX;
 
-    const dt = 1 / TICK_RATE;
-    const movedTick2 = entity.pos.x - posAfterTick1;
-    // Should have moved less than just PLAYER_SPEED because recoil pushes left
-    expect(movedTick2).toBeLessThan(PLAYER_SPEED * dt);
+    expect(distWithRecoil).toBeGreaterThan(distWithout);
   });
 
-  it("recoilVel resets to zero on player respawn", () => {
+  it("shooting in movement direction reduces next-tick movement", () => {
+    // Recoil in the direction of travel reduces vel.x below PLAYER_MAX_SPEED.
     const entity = sim.addPlayer("p1");
-    const player = sim.players.get("p1")!;
-    player.recoilVel = { x: 100, y: -50 };
+    entity.pos.x = WORLD_WIDTH / 2;
+    entity.pos.y = WORLD_HEIGHT / 2;
+
+    // Establish baseline: coast at max speed for one tick with no thrust
+    entity.vel.x = PLAYER_MAX_SPEED;
+    entity.vel.y = 0;
+    sim.setInput("p1", { up: false, down: false, left: false, right: false, fire: false, aimAngle: 0 });
+    const baselineStart = entity.pos.x;
+    sim.update();
+    const distWithout = entity.pos.x - baselineStart;
+
+    // Fire rightward while at max speed — recoil pushes vel.x below PLAYER_MAX_SPEED
+    entity.vel.x = PLAYER_MAX_SPEED;
+    entity.vel.y = 0;
+    entity.pos.x = baselineStart;
+    sim.setInput("p1", { up: false, down: false, left: false, right: false, fire: true, aimAngle: 0 });
+    sim.update();
+    // Coast tick: vel.x = (PLAYER_MAX_SPEED - BULLET_RECOIL_FORCE) * BRAKE_FRICTION
+    const afterFireX = entity.pos.x;
+    sim.setInput("p1", { up: false, down: false, left: false, right: false, fire: false, aimAngle: 0 });
+    sim.update();
+    const distWithRecoil = entity.pos.x - afterFireX;
+
+    expect(distWithRecoil).toBeLessThan(distWithout);
+  });
+
+  it("entity vel resets to zero on player respawn", () => {
+    const entity = sim.addPlayer("p1");
+    entity.vel.x = 100;
+    entity.vel.y = -50;
 
     // Kill the player
     entity.hp = 0;
-    sim.update(); // removes dead entities and respawns
+    sim.update(); // removes dead entity and respawns
 
-    expect(player.recoilVel).toEqual({ x: 0, y: 0 });
+    // After respawn the new entity should have zero velocity
+    const player = sim.players.get("p1")!;
+    const newEntity = sim.entities.get(player.entityId)!;
+    expect(newEntity.vel).toEqual({ x: 0, y: 0 });
   });
 
-  it("recoil snaps to zero below threshold", () => {
-    sim.addPlayer("p1");
-    const player = sim.players.get("p1")!;
-    player.recoilVel = { x: 0.05, y: -0.05 };
+  it("entity vel snaps to zero below threshold when braking", () => {
+    const entity = sim.addPlayer("p1");
+    entity.pos.x = WORLD_WIDTH / 2;
+    entity.pos.y = WORLD_HEIGHT / 2;
+    entity.vel.x = 0.05;
+    entity.vel.y = -0.05;
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
@@ -1600,8 +1656,8 @@ describe("bullet recoil physics", () => {
     });
     sim.update();
 
-    expect(player.recoilVel.x).toBe(0);
-    expect(player.recoilVel.y).toBe(0);
+    expect(entity.vel.x).toBe(0);
+    expect(entity.vel.y).toBe(0);
   });
 });
 

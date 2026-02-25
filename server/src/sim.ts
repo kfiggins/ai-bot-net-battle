@@ -5,7 +5,9 @@ import {
   Upgrades,
   PlayerInputData,
   TICK_RATE,
-  PLAYER_SPEED,
+  PLAYER_MAX_SPEED,
+  PLAYER_ACCEL,
+  PLAYER_BRAKE_FRICTION,
   PLAYER_HP,
   PLAYER_RADIUS,
   BULLET_SPEED,
@@ -57,7 +59,6 @@ import {
   NEMESIS_BODY_COLLISION_DAMAGE,
   BODY_COLLISION_COOLDOWN_TICKS,
   BULLET_RECOIL_FORCE,
-  RECOIL_FRICTION,
   CANNON_OFFSET_LATERAL,
 } from "shared";
 
@@ -76,7 +77,6 @@ export interface PlayerState {
   upgrades: Upgrades;
   cannons: number;
   pendingUpgrades: number;
-  recoilVel: { x: number; y: number };
 }
 
 export interface BulletState {
@@ -139,7 +139,6 @@ export class Simulation {
       upgrades: { damage: 0, speed: 0, health: 0, fire_rate: 0 },
       cannons: 1,
       pendingUpgrades: 0,
-      recoilVel: { x: 0, y: 0 },
     });
     return entity;
   }
@@ -348,7 +347,7 @@ export class Simulation {
       player.upgrades = { damage: 0, speed: 0, health: 0, fire_rate: 0 };
       player.cannons = 1;
       player.pendingUpgrades = 0;
-      player.recoilVel = { x: 0, y: 0 };
+      // entity.vel already reset to {0,0} at respawn entity creation above
     }
   }
 
@@ -358,38 +357,44 @@ export class Simulation {
       if (!entity) continue;
 
       const { input } = player;
-      const effectiveSpeed = PLAYER_SPEED + player.upgrades.speed * SPEED_PER_UPGRADE;
+      const effectiveMaxSpeed = PLAYER_MAX_SPEED + player.upgrades.speed * SPEED_PER_UPGRADE;
       const effectiveCooldown = Math.max(1, FIRE_COOLDOWN_TICKS - player.upgrades.fire_rate * FIRE_RATE_PER_UPGRADE);
       const effectiveDamage = BULLET_DAMAGE + player.upgrades.damage * DAMAGE_PER_UPGRADE;
 
-      let vx = 0;
-      let vy = 0;
+      // Compute thrust direction from input
+      let tx = 0;
+      let ty = 0;
+      if (input.up) ty -= 1;
+      if (input.down) ty += 1;
+      if (input.left) tx -= 1;
+      if (input.right) tx += 1;
 
-      if (input.up) vy -= 1;
-      if (input.down) vy += 1;
-      if (input.left) vx -= 1;
-      if (input.right) vx += 1;
+      const hasInput = tx !== 0 || ty !== 0;
 
-      // Normalize diagonal movement
-      const mag = Math.sqrt(vx * vx + vy * vy);
-      if (mag > 0) {
-        vx = (vx / mag) * effectiveSpeed;
-        vy = (vy / mag) * effectiveSpeed;
+      if (hasInput) {
+        // Normalize thrust direction and apply acceleration
+        const mag = Math.sqrt(tx * tx + ty * ty);
+        tx /= mag;
+        ty /= mag;
+        entity.vel.x += tx * PLAYER_ACCEL * this.dt;
+        entity.vel.y += ty * PLAYER_ACCEL * this.dt;
+
+        // Clamp to max speed (recoil impulses applied later can exceed this)
+        const speed = Math.sqrt(entity.vel.x * entity.vel.x + entity.vel.y * entity.vel.y);
+        if (speed > effectiveMaxSpeed) {
+          entity.vel.x = (entity.vel.x / speed) * effectiveMaxSpeed;
+          entity.vel.y = (entity.vel.y / speed) * effectiveMaxSpeed;
+        }
+      } else {
+        // No input — apply brake friction to decelerate
+        entity.vel.x *= PLAYER_BRAKE_FRICTION;
+        entity.vel.y *= PLAYER_BRAKE_FRICTION;
+        if (Math.abs(entity.vel.x) < 0.1) entity.vel.x = 0;
+        if (Math.abs(entity.vel.y) < 0.1) entity.vel.y = 0;
       }
 
-      // Decay recoil velocity each tick
-      player.recoilVel.x *= RECOIL_FRICTION;
-      player.recoilVel.y *= RECOIL_FRICTION;
-      if (Math.abs(player.recoilVel.x) < 0.1) player.recoilVel.x = 0;
-      if (Math.abs(player.recoilVel.y) < 0.1) player.recoilVel.y = 0;
-
-      // Combine input velocity with recoil
-      const finalVx = vx + player.recoilVel.x;
-      const finalVy = vy + player.recoilVel.y;
-
-      entity.vel = { x: finalVx, y: finalVy };
-      entity.pos.x += finalVx * this.dt;
-      entity.pos.y += finalVy * this.dt;
+      entity.pos.x += entity.vel.x * this.dt;
+      entity.pos.y += entity.vel.y * this.dt;
 
       // Clamp to world bounds
       entity.pos.x = Math.max(0, Math.min(WORLD_WIDTH, entity.pos.x));
@@ -414,12 +419,11 @@ export class Simulation {
       this.spawnBullet(owner, ownerId, angles[i], damage, BULLET_SPEED, lateralOffset);
     }
 
-    // Apply recoil impulse opposite to aim direction
-    const player = this.players.get(ownerId);
-    if (player) {
-      player.recoilVel.x -= Math.cos(aimAngle) * BULLET_RECOIL_FORCE;
-      player.recoilVel.y -= Math.sin(aimAngle) * BULLET_RECOIL_FORCE;
-    }
+    // Apply recoil impulse directly to entity velocity (opposite to aim direction).
+    // Applied after the max-speed clamp so recoil can briefly push past max speed,
+    // preserving the "boost by shooting backward" feel.
+    owner.vel.x -= Math.cos(aimAngle) * BULLET_RECOIL_FORCE;
+    owner.vel.y -= Math.sin(aimAngle) * BULLET_RECOIL_FORCE;
   }
 
   spawnBullet(

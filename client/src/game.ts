@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { Entity, PlayerInputData, WORLD_WIDTH, WORLD_HEIGHT, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, GRID_SPACING, PLAYER_SPEED, SPEED_PER_UPGRADE, ORB_RADIUS, CANNON_LENGTH, CANNON_WIDTH, CANNON_OFFSET_LATERAL, CANNON_SPREAD_ANGLE } from "shared";
+import { Entity, PlayerInputData, WORLD_WIDTH, WORLD_HEIGHT, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, GRID_SPACING, PLAYER_MAX_SPEED, PLAYER_ACCEL, PLAYER_BRAKE_FRICTION, SPEED_PER_UPGRADE, ORB_RADIUS, CANNON_LENGTH, CANNON_WIDTH, CANNON_OFFSET_LATERAL, CANNON_SPREAD_ANGLE, BOOST_PARTICLE_THRESHOLD, PLAYER_RADIUS } from "shared";
 import { NetClient } from "./net.js";
 import { SnapshotInterpolator, InterpolatedEntity } from "./interpolation.js";
 import { VFXManager } from "./vfx.js";
@@ -21,13 +21,14 @@ export class GameScene extends Phaser.Scene {
   private previousEntityHp: Map<string, number> = new Map();
   private previousEntityKinds: Map<string, string> = new Map();
   private teammateArrows: Map<string, Phaser.GameObjects.Graphics> = new Map();
-  /** Client-side predicted position for local player */
+  /** Client-side predicted position and velocity for local player */
   private predictedPos: { x: number; y: number } | null = null;
+  private predictedVel = { x: 0, y: 0 };
   private matchStartMs = 0;
   private victoryShown = false;
   private cameraPos: { x: number; y: number } | null = null;
   private modeText!: Phaser.GameObjects.Text;
-  private predictedSpeed = PLAYER_SPEED;
+  private predictedMaxSpeed = PLAYER_MAX_SPEED;
   private latestBotResources: number | undefined;
   private cannonSprites: Map<string, Phaser.GameObjects.Rectangle[]> = new Map();
   private localAimAngle = 0;
@@ -82,7 +83,8 @@ export class GameScene extends Phaser.Scene {
     });
     this.matchStartMs = performance.now();
     this.victoryShown = false;
-    this.predictedSpeed = PLAYER_SPEED;
+    this.predictedMaxSpeed = PLAYER_MAX_SPEED;
+    this.predictedVel = { x: 0, y: 0 };
 
     this.modeText = this.add
       .text(10, 10, `Mode: ${this.net.currentMode === "external_agent" ? "Agent ON" : "Kids AI"}`, {
@@ -128,6 +130,7 @@ export class GameScene extends Phaser.Scene {
     // Reset prediction when entity ID changes (reconnect / new player)
     this.net.setEntityChangeHandler(() => {
       this.predictedPos = null;
+      this.predictedVel = { x: 0, y: 0 };
       this.cameraPos = null;
     });
 
@@ -156,21 +159,41 @@ export class GameScene extends Phaser.Scene {
       aimAngle: 0, // set below after prediction
     };
 
-    // Client-side prediction: move local player immediately
+    // Client-side prediction: inertia model mirroring server updatePlayers()
     if (selfId && this.predictedPos) {
-      let vx = 0;
-      let vy = 0;
-      if (input.up) vy -= 1;
-      if (input.down) vy += 1;
-      if (input.left) vx -= 1;
-      if (input.right) vx += 1;
-      const mag = Math.sqrt(vx * vx + vy * vy);
-      if (mag > 0) {
-        vx = (vx / mag) * this.predictedSpeed;
-        vy = (vy / mag) * this.predictedSpeed;
+      let tx = 0;
+      let ty = 0;
+      if (input.up) ty -= 1;
+      if (input.down) ty += 1;
+      if (input.left) tx -= 1;
+      if (input.right) tx += 1;
+
+      const hasThrust = tx !== 0 || ty !== 0;
+      if (hasThrust) {
+        const mag = Math.sqrt(tx * tx + ty * ty);
+        tx /= mag;
+        ty /= mag;
+        this.predictedVel.x += tx * PLAYER_ACCEL * dtSec;
+        this.predictedVel.y += ty * PLAYER_ACCEL * dtSec;
+        const speed = Math.sqrt(this.predictedVel.x ** 2 + this.predictedVel.y ** 2);
+        if (speed > this.predictedMaxSpeed) {
+          this.predictedVel.x = (this.predictedVel.x / speed) * this.predictedMaxSpeed;
+          this.predictedVel.y = (this.predictedVel.y / speed) * this.predictedMaxSpeed;
+        }
+        // Boost particles for local player (opposite to thrust direction)
+        this.vfx.boostParticle(
+          this.predictedPos.x, this.predictedPos.y,
+          -tx, -ty, 0x88ddff, PLAYER_RADIUS
+        );
+      } else {
+        this.predictedVel.x *= PLAYER_BRAKE_FRICTION;
+        this.predictedVel.y *= PLAYER_BRAKE_FRICTION;
+        if (Math.abs(this.predictedVel.x) < 0.1) this.predictedVel.x = 0;
+        if (Math.abs(this.predictedVel.y) < 0.1) this.predictedVel.y = 0;
       }
-      this.predictedPos.x = Math.max(0, Math.min(WORLD_WIDTH, this.predictedPos.x + vx * dtSec));
-      this.predictedPos.y = Math.max(0, Math.min(WORLD_HEIGHT, this.predictedPos.y + vy * dtSec));
+
+      this.predictedPos.x = Math.max(0, Math.min(WORLD_WIDTH, this.predictedPos.x + this.predictedVel.x * dtSec));
+      this.predictedPos.y = Math.max(0, Math.min(WORLD_HEIGHT, this.predictedPos.y + this.predictedVel.y * dtSec));
     }
 
     // Calculate aim angle from predicted position (or sprite fallback)
@@ -191,11 +214,12 @@ export class GameScene extends Phaser.Scene {
 
     const entities = this.interpolator.getInterpolatedEntities();
     if (entities.length > 0) {
-      // Initialize predicted position from first snapshot containing our entity
+      // Initialize predicted position + velocity from first snapshot containing our entity
       if (selfId && !this.predictedPos) {
         const self = entities.find((e) => e.id === selfId);
         if (self) {
           this.predictedPos = { x: self.pos.x, y: self.pos.y };
+          this.predictedVel = { x: self.vel.x, y: self.vel.y };
         }
       }
 
@@ -212,6 +236,8 @@ export class GameScene extends Phaser.Scene {
             // Way off (packet delay/rejoin): hard snap.
             this.predictedPos.x = serverSelf.targetPos.x;
             this.predictedPos.y = serverSelf.targetPos.y;
+            this.predictedVel.x = serverSelf.vel.x;
+            this.predictedVel.y = serverSelf.vel.y;
           } else if (dist > 12) {
             // While moving, apply light correction; while idle, converge faster.
             const alpha = isMoving ? 0.04 : 0.16;
@@ -219,6 +245,19 @@ export class GameScene extends Phaser.Scene {
             const step = Math.min(maxStep, dist * alpha);
             this.predictedPos.x += (dx / dist) * step;
             this.predictedPos.y += (dy / dist) * step;
+          }
+
+          // Velocity reconciliation: sync when server vel diverges significantly
+          // (e.g. after recoil impulse applied server-side that client didn't predict)
+          const dvx = serverSelf.vel.x - this.predictedVel.x;
+          const dvy = serverSelf.vel.y - this.predictedVel.y;
+          const velDiff = Math.sqrt(dvx * dvx + dvy * dvy);
+          if (velDiff > 80) {
+            this.predictedVel.x = serverSelf.vel.x;
+            this.predictedVel.y = serverSelf.vel.y;
+          } else if (velDiff > 20) {
+            this.predictedVel.x += dvx * 0.15;
+            this.predictedVel.y += dvy * 0.15;
           }
         }
       }
@@ -257,8 +296,8 @@ export class GameScene extends Phaser.Scene {
           this.hud.updateXP(selfEntity.level ?? 1, selfEntity.xp ?? 0, selfEntity.xpToNext ?? 0);
           if (selfEntity.upgrades) {
             this.hud.updateUpgrades(selfEntity.upgrades, selfEntity.cannons ?? 1, selfEntity.pendingUpgrades ?? 0);
-            // Update predicted speed for client-side prediction
-            this.predictedSpeed = PLAYER_SPEED + (selfEntity.upgrades.speed ?? 0) * SPEED_PER_UPGRADE;
+            // Update predicted max speed cap for client-side prediction
+            this.predictedMaxSpeed = PLAYER_MAX_SPEED + (selfEntity.upgrades.speed ?? 0) * SPEED_PER_UPGRADE;
           }
         }
       }
@@ -341,7 +380,7 @@ export class GameScene extends Phaser.Scene {
                 this.time.delayedCall(delay, () => {
                   const ox = (Math.random() - 0.5) * 140;
                   const oy = (Math.random() - 0.5) * 140;
-                  this.vfx.explosion(pos.x + ox, pos.y + oy, 0xff00ff, 14);
+                  this.vfx.explosion(pos.x + ox, pos.y + oy, 0xff00ff, 100);
                 });
               }
             }
@@ -379,6 +418,20 @@ export class GameScene extends Phaser.Scene {
       // Missile particle trail
       if (entity.kind === "missile") {
         this.vfx.missileTrail(entity.pos.x, entity.pos.y);
+      }
+
+      // Boost particles for moving AI entities and remote players
+      if (entity.kind === "minion_ship" || entity.kind === "nemesis" ||
+          (entity.kind === "player_ship" && entity.id !== selfId)) {
+        const spd = Math.sqrt(entity.vel.x * entity.vel.x + entity.vel.y * entity.vel.y);
+        if (spd > BOOST_PARTICLE_THRESHOLD) {
+          const color = entity.team === 1 ? 0x88ddff : 0xff8844;
+          this.vfx.boostParticle(
+            entity.pos.x, entity.pos.y,
+            -entity.vel.x / spd, -entity.vel.y / spd,
+            color, PLAYER_RADIUS
+          );
+        }
       }
 
       // Apply hit flash tint
