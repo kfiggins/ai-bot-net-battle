@@ -435,12 +435,15 @@ export class Simulation {
     const vy = Math.sin(aimAngle) * speed;
     const ownerRadius = entityRadius(owner.kind);
     const perpAngle = aimAngle + Math.PI / 2;
+    // Offset spawn position by owner velocity to compensate for client-side prediction.
+    // The client renders the player ~1 tick ahead of the server snapshot, so without
+    // this offset bullets appear to originate from behind the player when moving fast.
     const entity: Entity = {
       id: entityId,
       kind: "bullet",
       pos: {
-        x: owner.pos.x + Math.cos(aimAngle) * (ownerRadius + BULLET_RADIUS + 2) + Math.cos(perpAngle) * lateralOffset,
-        y: owner.pos.y + Math.sin(aimAngle) * (ownerRadius + BULLET_RADIUS + 2) + Math.sin(perpAngle) * lateralOffset,
+        x: owner.pos.x + Math.cos(aimAngle) * (ownerRadius + BULLET_RADIUS + 2) + Math.cos(perpAngle) * lateralOffset + owner.vel.x * this.dt,
+        y: owner.pos.y + Math.sin(aimAngle) * (ownerRadius + BULLET_RADIUS + 2) + Math.sin(perpAngle) * lateralOffset + owner.vel.y * this.dt,
       },
       vel: { x: vx, y: vy },
       hp: BULLET_HP,
