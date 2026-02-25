@@ -13,6 +13,8 @@ export const BULLET_RADIUS = 4;
 export const BULLET_TTL_TICKS = 120; // 4 seconds at 30Hz
 export const BULLET_DAMAGE = 10;
 export const FIRE_COOLDOWN_TICKS = 6; // ~5 shots/second at 30Hz
+export const BULLET_RECOIL_FORCE = 60;  // px/s impulse per shot opposite to aim
+export const RECOIL_FRICTION = 0.82;    // recoilVel decay per tick (~115ms half-life)
 
 export const MINION_SPEED = 120; // pixels per second
 export const MINION_HP = 30;
@@ -135,6 +137,9 @@ export const CANNON_MILESTONES: Record<number, number> = {
   15: 4,  // level 15 → quad cannon
 };
 export const CANNON_SPREAD_ANGLE = 0.15; // radians between each cannon (~8.6 degrees)
+export const CANNON_LENGTH = 18;         // px from player center to cannon tip
+export const CANNON_WIDTH = 5;           // px width of cannon barrel
+export const CANNON_OFFSET_LATERAL = 6;  // px lateral spacing between cannon barrels
 
 // Rooms
 export const MAX_ROOMS = 10;

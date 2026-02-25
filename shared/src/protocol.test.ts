@@ -66,6 +66,33 @@ describe("EntitySchema", () => {
   it("rejects entities with missing fields", () => {
     expect(() => EntitySchema.parse({ id: "test-1" })).toThrow();
   });
+
+  it("accepts aimAngle as optional number", () => {
+    const entity = {
+      id: "test-1",
+      kind: "player_ship",
+      pos: { x: 100, y: 200 },
+      vel: { x: 0, y: 0 },
+      hp: 100,
+      team: 1,
+      aimAngle: 1.57,
+    };
+    const parsed = EntitySchema.parse(entity);
+    expect(parsed.aimAngle).toBeCloseTo(1.57, 5);
+  });
+
+  it("validates without aimAngle (backward compat)", () => {
+    const entity = {
+      id: "test-1",
+      kind: "bullet",
+      pos: { x: 50, y: 50 },
+      vel: { x: 10, y: 0 },
+      hp: 1,
+      team: 1,
+    };
+    const parsed = EntitySchema.parse(entity);
+    expect(parsed.aimAngle).toBeUndefined();
+  });
 });
 
 describe("PlayerInputMessageSchema", () => {

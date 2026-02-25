@@ -1,5 +1,26 @@
 # Changelog
 
+## Phase 16: Bullet Recoil Physics + Cannon Visuals
+
+### Added
+- Server: Bullet recoil physics — firing applies an impulse opposite to aim direction, decays per tick
+- Server: `recoilVel` field on `PlayerState`, initialized at spawn, reset on respawn
+- Server: Bullet spawn lateral offset — multi-cannon bullets originate from distinct barrel positions
+- Server: `aimAngle` included in snapshot enrichment for other players' cannon direction
+- Shared: `BULLET_RECOIL_FORCE` (60), `RECOIL_FRICTION` (0.82) constants
+- Shared: `CANNON_LENGTH` (18), `CANNON_WIDTH` (5), `CANNON_OFFSET_LATERAL` (6) constants
+- Shared: `aimAngle` optional field on `EntitySchema`
+- Client: Gray cannon barrel rectangles on player ships, rotating with aim angle
+- Client: Cannon count scales with level milestones (1→2→3→4)
+- Client: `cannonSprites` map with create/update/cleanup lifecycle
+- Recoil physics tests (7 tests), bullet origin offset tests (3 tests), snapshot aimAngle tests (3 tests), protocol tests (2 tests)
+
+### Changed
+- Server: `updatePlayers()` combines input velocity with decaying recoil velocity
+- Server: `fireMultiCannon()` applies recoil impulse and passes lateral offsets to `spawnBullet()`
+- Server: `spawnBullet()` accepts optional `lateralOffset` parameter for perpendicular spawn offset
+- Client: `renderEntities()` creates and updates cannon visuals for all player ships
+
 ## Phase 9: Lobby / Start Screen
 
 ### Added

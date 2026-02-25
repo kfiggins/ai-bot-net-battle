@@ -56,6 +56,9 @@ import {
   BODY_COLLISION_DAMAGE,
   NEMESIS_BODY_COLLISION_DAMAGE,
   BODY_COLLISION_COOLDOWN_TICKS,
+  BULLET_RECOIL_FORCE,
+  RECOIL_FRICTION,
+  CANNON_OFFSET_LATERAL,
 } from "shared";
 
 export interface PlayerState {
@@ -73,6 +76,7 @@ export interface PlayerState {
   upgrades: Upgrades;
   cannons: number;
   pendingUpgrades: number;
+  recoilVel: { x: number; y: number };
 }
 
 export interface BulletState {
@@ -135,6 +139,7 @@ export class Simulation {
       upgrades: { damage: 0, speed: 0, health: 0, fire_rate: 0 },
       cannons: 1,
       pendingUpgrades: 0,
+      recoilVel: { x: 0, y: 0 },
     });
     return entity;
   }
@@ -343,6 +348,7 @@ export class Simulation {
       player.upgrades = { damage: 0, speed: 0, health: 0, fire_rate: 0 };
       player.cannons = 1;
       player.pendingUpgrades = 0;
+      player.recoilVel = { x: 0, y: 0 };
     }
   }
 
@@ -371,9 +377,19 @@ export class Simulation {
         vy = (vy / mag) * effectiveSpeed;
       }
 
-      entity.vel = { x: vx, y: vy };
-      entity.pos.x += vx * this.dt;
-      entity.pos.y += vy * this.dt;
+      // Decay recoil velocity each tick
+      player.recoilVel.x *= RECOIL_FRICTION;
+      player.recoilVel.y *= RECOIL_FRICTION;
+      if (Math.abs(player.recoilVel.x) < 0.1) player.recoilVel.x = 0;
+      if (Math.abs(player.recoilVel.y) < 0.1) player.recoilVel.y = 0;
+
+      // Combine input velocity with recoil
+      const finalVx = vx + player.recoilVel.x;
+      const finalVy = vy + player.recoilVel.y;
+
+      entity.vel = { x: finalVx, y: finalVy };
+      entity.pos.x += finalVx * this.dt;
+      entity.pos.y += finalVy * this.dt;
 
       // Clamp to world bounds
       entity.pos.x = Math.max(0, Math.min(WORLD_WIDTH, entity.pos.x));
@@ -392,8 +408,17 @@ export class Simulation {
 
   private fireMultiCannon(owner: Entity, ownerId: string, aimAngle: number, cannons: number, damage: number): void {
     const angles = getCannonAngles(aimAngle, cannons);
-    for (const angle of angles) {
-      this.spawnBullet(owner, ownerId, angle, damage);
+    const half = (cannons - 1) / 2;
+    for (let i = 0; i < cannons; i++) {
+      const lateralOffset = (i - half) * CANNON_OFFSET_LATERAL;
+      this.spawnBullet(owner, ownerId, angles[i], damage, BULLET_SPEED, lateralOffset);
+    }
+
+    // Apply recoil impulse opposite to aim direction
+    const player = this.players.get(ownerId);
+    if (player) {
+      player.recoilVel.x -= Math.cos(aimAngle) * BULLET_RECOIL_FORCE;
+      player.recoilVel.y -= Math.sin(aimAngle) * BULLET_RECOIL_FORCE;
     }
   }
 
@@ -402,18 +427,20 @@ export class Simulation {
     ownerId: string,
     aimAngle: number,
     damage: number = BULLET_DAMAGE,
-    speed: number = BULLET_SPEED
+    speed: number = BULLET_SPEED,
+    lateralOffset: number = 0
   ): Entity {
     const entityId = uuid();
     const vx = Math.cos(aimAngle) * speed;
     const vy = Math.sin(aimAngle) * speed;
     const ownerRadius = entityRadius(owner.kind);
+    const perpAngle = aimAngle + Math.PI / 2;
     const entity: Entity = {
       id: entityId,
       kind: "bullet",
       pos: {
-        x: owner.pos.x + Math.cos(aimAngle) * (ownerRadius + BULLET_RADIUS + 2),
-        y: owner.pos.y + Math.sin(aimAngle) * (ownerRadius + BULLET_RADIUS + 2),
+        x: owner.pos.x + Math.cos(aimAngle) * (ownerRadius + BULLET_RADIUS + 2) + Math.cos(perpAngle) * lateralOffset,
+        y: owner.pos.y + Math.sin(aimAngle) * (ownerRadius + BULLET_RADIUS + 2) + Math.sin(perpAngle) * lateralOffset,
       },
       vel: { x: vx, y: vy },
       hp: BULLET_HP,
@@ -693,6 +720,7 @@ export class Simulation {
             upgrades: { ...ps.upgrades },
             cannons: ps.cannons,
             pendingUpgrades: ps.pendingUpgrades,
+            aimAngle: ps.input.aimAngle,
           };
         }
       }

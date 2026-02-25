@@ -35,6 +35,10 @@ import {
   CANNON_SPREAD_ANGLE,
   CANNON_MILESTONES,
   MILESTONE_LEVELS,
+  BULLET_RECOIL_FORCE,
+  RECOIL_FRICTION,
+  CANNON_OFFSET_LATERAL,
+  BULLET_RADIUS,
 } from "shared";
 
 describe("Simulation", () => {
@@ -1449,5 +1453,283 @@ describe("getEffectiveMaxHp", () => {
     const ps = sim.players.get("p1")!;
     ps.upgrades.health = 3;
     expect(getEffectiveMaxHp(ps)).toBe(PLAYER_HP + 3 * HEALTH_PER_UPGRADE);
+  });
+});
+
+describe("bullet recoil physics", () => {
+  let sim: Simulation;
+
+  beforeEach(() => {
+    sim = new Simulation();
+  });
+
+  it("recoilVel starts at zero", () => {
+    sim.addPlayer("p1");
+    const player = sim.players.get("p1")!;
+    expect(player.recoilVel).toEqual({ x: 0, y: 0 });
+  });
+
+  it("firing adds recoil impulse opposite to aimAngle", () => {
+    const entity = sim.addPlayer("p1");
+    entity.pos.x = WORLD_WIDTH / 2;
+    entity.pos.y = WORLD_HEIGHT / 2;
+
+    // Aim right (angle = 0), recoil should push left (negative x)
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: true, aimAngle: 0,
+    });
+    sim.update();
+
+    const player = sim.players.get("p1")!;
+    expect(player.recoilVel.x).toBeCloseTo(-BULLET_RECOIL_FORCE, 1);
+    expect(player.recoilVel.y).toBeCloseTo(0, 1);
+  });
+
+  it("recoilVel decays each tick by RECOIL_FRICTION", () => {
+    sim.addPlayer("p1");
+    const player = sim.players.get("p1")!;
+    player.recoilVel = { x: 100, y: 0 };
+
+    // One tick with no firing — recoil should decay
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, aimAngle: 0,
+    });
+    sim.update();
+
+    expect(player.recoilVel.x).toBeCloseTo(100 * RECOIL_FRICTION, 1);
+  });
+
+  it("recoil affects entity velocity (combined with input vel)", () => {
+    const entity = sim.addPlayer("p1");
+    entity.pos.x = WORLD_WIDTH / 2;
+    entity.pos.y = WORLD_HEIGHT / 2;
+    const player = sim.players.get("p1")!;
+
+    // Set recoil pushing right
+    player.recoilVel = { x: 50, y: 0 };
+
+    // Move right as well
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: true,
+      fire: false, aimAngle: 0,
+    });
+    sim.update();
+
+    // Entity velocity should be input speed + decayed recoil
+    const expectedRecoil = 50 * RECOIL_FRICTION;
+    expect(entity.vel.x).toBeCloseTo(PLAYER_SPEED + expectedRecoil, 1);
+  });
+
+  it("shooting opposite to movement boosts effective speed", () => {
+    const entity = sim.addPlayer("p1");
+    entity.pos.x = WORLD_WIDTH / 2;
+    entity.pos.y = WORLD_HEIGHT / 2;
+
+    // Move right, shoot left (aimAngle = PI)
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: true,
+      fire: true, aimAngle: Math.PI,
+    });
+    // Tick 1: fires, recoil impulse applied after movement
+    sim.update();
+    const posAfterTick1 = entity.pos.x;
+
+    // Tick 2: recoil is now active, boosting rightward movement
+    // Set fire=false so cooldown doesn't matter
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: true,
+      fire: false, aimAngle: Math.PI,
+    });
+    sim.update();
+
+    const dt = 1 / TICK_RATE;
+    const movedTick2 = entity.pos.x - posAfterTick1;
+    // Should have moved more than just PLAYER_SPEED because recoil pushes right
+    expect(movedTick2).toBeGreaterThan(PLAYER_SPEED * dt);
+  });
+
+  it("shooting in movement direction reduces effective speed", () => {
+    const entity = sim.addPlayer("p1");
+    entity.pos.x = WORLD_WIDTH / 2;
+    entity.pos.y = WORLD_HEIGHT / 2;
+
+    // Move right, shoot right (aimAngle = 0)
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: true,
+      fire: true, aimAngle: 0,
+    });
+    // Tick 1: fires, recoil impulse applied after movement
+    sim.update();
+    const posAfterTick1 = entity.pos.x;
+
+    // Tick 2: recoil is now active, slowing rightward movement
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: true,
+      fire: false, aimAngle: 0,
+    });
+    sim.update();
+
+    const dt = 1 / TICK_RATE;
+    const movedTick2 = entity.pos.x - posAfterTick1;
+    // Should have moved less than just PLAYER_SPEED because recoil pushes left
+    expect(movedTick2).toBeLessThan(PLAYER_SPEED * dt);
+  });
+
+  it("recoilVel resets to zero on player respawn", () => {
+    const entity = sim.addPlayer("p1");
+    const player = sim.players.get("p1")!;
+    player.recoilVel = { x: 100, y: -50 };
+
+    // Kill the player
+    entity.hp = 0;
+    sim.update(); // removes dead entities and respawns
+
+    expect(player.recoilVel).toEqual({ x: 0, y: 0 });
+  });
+
+  it("recoil snaps to zero below threshold", () => {
+    sim.addPlayer("p1");
+    const player = sim.players.get("p1")!;
+    player.recoilVel = { x: 0.05, y: -0.05 };
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, aimAngle: 0,
+    });
+    sim.update();
+
+    expect(player.recoilVel.x).toBe(0);
+    expect(player.recoilVel.y).toBe(0);
+  });
+});
+
+describe("bullet origin offset", () => {
+  let sim: Simulation;
+
+  beforeEach(() => {
+    sim = new Simulation();
+  });
+
+  it("single cannon bullet spawns at center (no lateral offset)", () => {
+    const entity = sim.addPlayer("p1");
+    entity.pos.x = WORLD_WIDTH / 2;
+    entity.pos.y = WORLD_HEIGHT / 2;
+    const player = sim.players.get("p1")!;
+    player.cannons = 1;
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: true, aimAngle: 0, // aim right
+    });
+    sim.update();
+
+    // Find the bullet
+    const bullets = Array.from(sim.entities.values()).filter(e => e.kind === "bullet");
+    expect(bullets.length).toBe(1);
+
+    // Bullet spawns at center + radius offset, then moves one tick
+    const dt = 1 / TICK_RATE;
+    const spawnOffsetX = PLAYER_RADIUS + BULLET_RADIUS + 2;
+    const expectedX = WORLD_WIDTH / 2 + spawnOffsetX + BULLET_SPEED * dt;
+    const expectedY = WORLD_HEIGHT / 2; // no lateral offset, no vertical velocity
+    expect(bullets[0].pos.x).toBeCloseTo(expectedX, 1);
+    expect(bullets[0].pos.y).toBeCloseTo(expectedY, 1);
+  });
+
+  it("2-cannon bullets spawn at symmetric lateral offsets", () => {
+    const entity = sim.addPlayer("p1");
+    entity.pos.x = WORLD_WIDTH / 2;
+    entity.pos.y = WORLD_HEIGHT / 2;
+    const player = sim.players.get("p1")!;
+    player.cannons = 2;
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: true, aimAngle: 0,
+    });
+    sim.update();
+
+    const bullets = Array.from(sim.entities.values()).filter(e => e.kind === "bullet");
+    expect(bullets.length).toBe(2);
+
+    // With aimAngle=0, perpendicular is PI/2 (downward in screen coords)
+    // Bullet 0: lateralOffset = -0.5 * CANNON_OFFSET_LATERAL (upward)
+    // Bullet 1: lateralOffset = +0.5 * CANNON_OFFSET_LATERAL (downward)
+    const yOffsets = bullets.map(b => b.pos.y - WORLD_HEIGHT / 2).sort((a, b) => a - b);
+    expect(yOffsets[0]).toBeLessThan(0); // one above center
+    expect(yOffsets[1]).toBeGreaterThan(0); // one below center
+    // Symmetric
+    expect(Math.abs(yOffsets[0])).toBeCloseTo(Math.abs(yOffsets[1]), 1);
+  });
+
+  it("4-cannon bullets have 4 distinct spawn positions", () => {
+    const entity = sim.addPlayer("p1");
+    entity.pos.x = WORLD_WIDTH / 2;
+    entity.pos.y = WORLD_HEIGHT / 2;
+    const player = sim.players.get("p1")!;
+    player.cannons = 4;
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: true, aimAngle: 0,
+    });
+    sim.update();
+
+    const bullets = Array.from(sim.entities.values()).filter(e => e.kind === "bullet");
+    expect(bullets.length).toBe(4);
+
+    // All should have distinct positions
+    const positions = bullets.map(b => `${b.pos.x.toFixed(2)},${b.pos.y.toFixed(2)}`);
+    const unique = new Set(positions);
+    expect(unique.size).toBe(4);
+  });
+});
+
+describe("snapshot aimAngle", () => {
+  it("snapshot includes aimAngle for player_ship entities", () => {
+    const sim = new Simulation();
+    sim.addPlayer("p1");
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, aimAngle: 1.23,
+    });
+
+    const snapshot = sim.getSnapshot();
+    const playerEntity = snapshot.entities.find(e => e.kind === "player_ship");
+    expect(playerEntity).toBeDefined();
+    expect(playerEntity!.aimAngle).toBeCloseTo(1.23, 5);
+  });
+
+  it("snapshot aimAngle matches most recent player input", () => {
+    const sim = new Simulation();
+    sim.addPlayer("p1");
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, aimAngle: 0.5,
+    });
+    let snapshot = sim.getSnapshot();
+    expect(snapshot.entities.find(e => e.kind === "player_ship")!.aimAngle).toBeCloseTo(0.5, 5);
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, aimAngle: -2.1,
+    });
+    snapshot = sim.getSnapshot();
+    expect(snapshot.entities.find(e => e.kind === "player_ship")!.aimAngle).toBeCloseTo(-2.1, 5);
+  });
+
+  it("snapshot validates against SnapshotMessageSchema with aimAngle", () => {
+    const sim = new Simulation();
+    sim.addPlayer("p1");
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, aimAngle: 0.75,
+    });
+
+    const snapshot = sim.getSnapshot();
+    expect(() => SnapshotMessageSchema.parse(snapshot)).not.toThrow();
   });
 });

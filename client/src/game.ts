@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { Entity, PlayerInputData, WORLD_WIDTH, WORLD_HEIGHT, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, GRID_SPACING, PLAYER_SPEED, SPEED_PER_UPGRADE, ORB_RADIUS } from "shared";
+import { Entity, PlayerInputData, WORLD_WIDTH, WORLD_HEIGHT, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, GRID_SPACING, PLAYER_SPEED, SPEED_PER_UPGRADE, ORB_RADIUS, CANNON_LENGTH, CANNON_WIDTH, CANNON_OFFSET_LATERAL, CANNON_SPREAD_ANGLE } from "shared";
 import { NetClient } from "./net.js";
 import { SnapshotInterpolator, InterpolatedEntity } from "./interpolation.js";
 import { VFXManager } from "./vfx.js";
@@ -29,6 +29,8 @@ export class GameScene extends Phaser.Scene {
   private modeText!: Phaser.GameObjects.Text;
   private predictedSpeed = PLAYER_SPEED;
   private latestBotResources: number | undefined;
+  private cannonSprites: Map<string, Phaser.GameObjects.Rectangle[]> = new Map();
+  private localAimAngle = 0;
 
   constructor() {
     super({ key: "GameScene" });
@@ -44,6 +46,7 @@ export class GameScene extends Phaser.Scene {
     this.previousEntityIds.clear();
     this.previousEntityHp.clear();
     this.previousEntityKinds.clear();
+    this.cannonSprites.clear();
     this.predictedPos = null;
     this.cameraPos = null;
     this.victoryShown = false;
@@ -182,6 +185,7 @@ export class GameScene extends Phaser.Scene {
       this.mouseWorldPos.y - playerY,
       this.mouseWorldPos.x - playerX
     );
+    this.localAimAngle = input.aimAngle;
 
     this.net.sendInput(input);
 
@@ -241,7 +245,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       this.detectEvents(entities);
-      this.renderEntities(entities);
+      this.renderEntities(entities, selfId);
       this.updateTeammateArrows(entities, selfId);
       this.hud.updateHealthBars(entities);
       this.hud.updateDebug(entities, this.latestBotResources);
@@ -350,7 +354,7 @@ export class GameScene extends Phaser.Scene {
     this.previousEntityHp = currentHp;
   }
 
-  private renderEntities(entities: InterpolatedEntity[]): void {
+  private renderEntities(entities: InterpolatedEntity[], selfId?: string | null): void {
     const activeIds = new Set<string>();
 
     for (const entity of entities) {
@@ -384,6 +388,18 @@ export class GameScene extends Phaser.Scene {
         sprite.setFillStyle(getColor(entity));
       }
 
+      // Cannon barrels for player ships
+      if (entity.kind === "player_ship") {
+        const cannons = entity.cannons ?? 1;
+        const existingRects = this.cannonSprites.get(entity.id);
+        if (!existingRects || existingRects.length !== cannons) {
+          this.createOrUpdateCannons(entity.id, cannons);
+        }
+        const aimAngle =
+          entity.id === selfId ? this.localAimAngle : (entity.aimAngle ?? 0);
+        this.updateCannonPositions(entity.id, entity.pos, aimAngle, cannons);
+      }
+
       // Player labels
       if (entity.label) {
         let label = this.entityLabels.get(entity.id);
@@ -408,7 +424,58 @@ export class GameScene extends Phaser.Scene {
           label.destroy();
           this.entityLabels.delete(id);
         }
+        const cannons = this.cannonSprites.get(id);
+        if (cannons) {
+          cannons.forEach((r) => r.destroy());
+          this.cannonSprites.delete(id);
+        }
       }
+    }
+  }
+
+  private createOrUpdateCannons(entityId: string, cannons: number): void {
+    const old = this.cannonSprites.get(entityId);
+    if (old) {
+      old.forEach((r) => r.destroy());
+    }
+    const rects: Phaser.GameObjects.Rectangle[] = [];
+    for (let i = 0; i < cannons; i++) {
+      const rect = this.add.rectangle(0, 0, CANNON_WIDTH, CANNON_LENGTH, 0x888888);
+      rect.setDepth(0.5); // above ship circle, below labels
+      rects.push(rect);
+    }
+    this.cannonSprites.set(entityId, rects);
+  }
+
+  private updateCannonPositions(
+    entityId: string,
+    pos: { x: number; y: number },
+    aimAngle: number,
+    cannons: number
+  ): void {
+    const rects = this.cannonSprites.get(entityId);
+    if (!rects || rects.length !== cannons) return;
+
+    const half = (cannons - 1) / 2;
+    const perpAngle = aimAngle + Math.PI / 2;
+    const forwardOffset = CANNON_LENGTH / 2;
+
+    for (let i = 0; i < cannons; i++) {
+      const lateralOffset = (i - half) * CANNON_OFFSET_LATERAL;
+      // Spread cannons angularly to match bullet spread
+      const cannonAngle = aimAngle + (i - half) * CANNON_SPREAD_ANGLE;
+
+      const cx =
+        pos.x +
+        Math.cos(cannonAngle) * forwardOffset +
+        Math.cos(perpAngle) * lateralOffset;
+      const cy =
+        pos.y +
+        Math.sin(cannonAngle) * forwardOffset +
+        Math.sin(perpAngle) * lateralOffset;
+
+      rects[i].setPosition(cx, cy);
+      rects[i].setRotation(cannonAngle + Math.PI / 2);
     }
   }
 
