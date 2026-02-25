@@ -3,48 +3,84 @@
 Node.js + TypeScript server that owns all game state. The client is just a renderer.
 
 ## Key Files
-- `src/index.ts` - Entry point, creates RoomManager + WS + HTTP servers, graceful shutdown
-- `src/config.ts` - Env-driven configuration (HOST, WS_PORT, HTTP_PORT, NODE_ENV, rate limits)
-- `src/logger.ts` - Structured logger with room/player correlation IDs, configurable log levels
-- `src/room.ts` - Room class: encapsulates per-match state (sim, AI, economy, agent, boss, players, tick loop, tick metrics)
-- `src/room-manager.ts` - RoomManager: creates/finds/cleans up rooms, enforces max room limit
-- `src/boss.ts` - Boss fight: mothership entity, phase gates (1→2→3), shield mechanics, win condition
-- `src/sim.ts` - Core simulation: player management, bullet spawning/movement, collision detection, entity lifecycle
-- `src/ws.ts` - WebSocket server with join_room handshake, room-scoped message routing, reconnect support, per-connection rate limiting
-- `src/ai.ts` - AI behavior for enemy entities (minions seek + shoot, towers shoot in range)
-- `src/economy.ts` - Resource system, build queue with cooldowns/caps, cost validation
-- `src/agent.ts` - Agent API with command processing, rate limiting, budget tracking
-- `src/http.ts` - HTTP server with `/healthz`, `/readyz`, `/metrics`, `/rooms`, `/rooms/:id/summary`, `/rooms/:id/agent/command`
+| File | Lines | Purpose |
+|---|---|---|
+| `src/sim.ts` | ~805 | Core simulation: players, bullets, missiles, collisions, XP, upgrades, respawning |
+| `src/room.ts` | ~409 | Room class: per-match state, tick loop, lobby, reconnect, snapshot broadcast |
+| `src/ai.ts` | ~350 | AI behavior: minion patrol/chase/fire, tower fire, missile tower bursts |
+| `src/boss.ts` | ~327 | Boss fight: mothership phases, shield, death sequence, Nemesis AI |
+| `src/ws.ts` | ~241 | WebSocket server: join_room, input routing, reconnect, rate limiting |
+| `src/http.ts` | ~232 | HTTP endpoints: healthz, metrics, rooms, agent commands |
+| `src/agent.ts` | ~199 | Agent API: command validation, budget, spawn/build/strategy handling |
+| `src/economy.ts` | ~167 | Economy: balance, income, build queue, cost/cap validation |
+| `src/fake-ai.ts` | ~87 | Built-in AI: auto-spawns towers/minions when not using external agent |
+| `src/room-manager.ts` | ~53 | Room lifecycle: create/find/cleanup rooms |
+| `src/logger.ts` | ~57 | Structured logger with correlation IDs |
+| `src/config.ts` | ~39 | Env-driven config (ports, rate limits) |
+| `src/index.ts` | ~54 | Entry point, graceful shutdown |
 
-## Architecture
-- **Rooms**: Each room is an isolated match with its own Simulation, AIManager, Economy, AgentAPI, BossManager, and tick loop
-- **Tick loop**: 30Hz simulation per room, snapshots broadcast every `SNAPSHOT_INTERVAL` ticks
-- **Tick metrics**: Each room tracks observed tick rate, max tick duration, total ticks for observability
-- **Connection flow**: Client connects → sends `join_room` → server creates/joins room → sends `welcome` with entityId + reconnectToken
-- **Reconnect**: Disconnected players have 30s to reconnect with their token and reclaim their entity
-- **Rate limiting**: Per-connection WS message rate (60/s), join rate (5/min); per-IP HTTP command rate (30/min)
-- **Graceful shutdown**: SIGTERM/SIGINT → stop accepting connections → destroy rooms → flush I/O → exit
-- **Simulation class**: Owns `entities` (Map<id, Entity>), `players` (Map<playerId, PlayerState>), `bullets` (Map<entityId, BulletState>)
-- **Update order**: `updatePlayers()` → `updateBullets()` → `checkCollisions()` → `removeDeadEntities()`
-- **AI runs after sim.update()** in the tick loop
-- **Economy runs after AI** in the tick loop (income accrual, build queue processing)
-- **Agent budget resets** checked after economy in tick loop
-- **Boss update** runs last: enforces shield, handles phase transitions, checks win condition
+## sim.ts Section Map
+| Lines | Section |
+|---|---|
+| 1-62 | Imports + constants from shared |
+| 64-95 | Interfaces: PlayerState, BulletState, MissileState |
+| 96-106 | Simulation class fields (entities, players, bullets, missiles maps) |
+| 109-160 | `addPlayer()`, `removePlayer()`, `setInput()` |
+| 162-183 | `spawnEnemy()`, `getEntitiesByKind()`, `getEntitiesByTeam()` |
+| 188-200 | `update()` — tick entry point, calls all subsystems in order |
+| 202-254 | Orb spawning + `initOrbs()` + `collectOrbForEnemy()` |
+| 256-323 | `checkOrbPickups()`, `awardXP()`, `applyUpgrade()` |
+| 325-353 | `respawnDeadPlayers()` — reset level/upgrades on death |
+| 355-407 | `updatePlayers()` — movement, recoil, firing |
+| 409-461 | `fireMultiCannon()`, `spawnBullet()` |
+| 463-482 | `spawnMissile()` |
+| 484-576 | `updateBullets()`, `updateMissiles()` (TTL, homing, out-of-bounds) |
+| 578-643 | `checkCollisions()` (bullet→entity, missile→entity), `awardKillXP()` |
+| 645-689 | Body collision cooldowns + `checkBodyCollisions()` |
+| 691-741 | `removeDeadEntities()`, `getSnapshot()` |
+| 744-805 | Helpers: `playerSpawnPosition()`, `entityRadius()`, `getEffectiveMaxHp()`, `getCannonAngles()`, `circlesOverlap()` |
 
-## Server Authority Rules
-- Client sends intents (input), server computes all state
-- All collision, damage, spawning, and economy decisions happen here
-- Snapshots are the only state the client receives
+## room.ts Section Map
+| Lines | Section |
+|---|---|
+| 1-40 | Imports, RoomPlayer/TickMetrics interfaces |
+| 41-74 | Room class fields (sim, ai, economy, agent, boss, fakeAI, players) |
+| 76-129 | `getLobbyState()`, `addPlayer()` |
+| 131-206 | `reconnectPlayer()`, `disconnectPlayer()`, `removePlayer()`, `cleanupDisconnected()` |
+| 208-281 | `startMatch()`, `resetToLobby()` |
+| 283-299 | `initGameState()` — spawns mothership + initial enemies |
+| 301-363 | `startTickLoop()` — 30Hz: sim → ai → economy → agent → fakeAI → boss |
+| 367-409 | `broadcastLobbyUpdate()`, `broadcastSnapshot()`, `destroy()`, `isEmpty()` |
 
-## Helpers
-- `entityRadius(kind)` - Returns collision radius by entity kind
-- `circlesOverlap(a, ar, b, br)` - Circle-circle collision test
+## Change Recipes
+
+### Add a new entity kind
+1. Add to `spawnEnemy()` (or create new spawn method)
+2. Add radius case to `entityRadius()`
+3. If it has AI: add update logic in `ai.ts` → `update()` method
+4. If it collides differently: modify `checkCollisions()` or `checkBodyCollisions()`
+
+### Add a new player ability
+1. Add input field to `PlayerInputData` in shared/protocol.ts
+2. Handle in `updatePlayers()` in sim.ts
+3. Add cooldown/state field to `PlayerState` interface (top of sim.ts)
+
+### Add a new agent command
+1. Define Zod schema in shared/protocol.ts, add to `AgentCommandSchema` union
+2. Add handler method in `agent.ts` → `processCommand()` switch
+3. HTTP endpoint already routes to `agent.processCommand()` — no http.ts changes needed
+
+### Modify tick loop order
+Edit `room.ts` → `startTickLoop()` (L301-363). Current order:
+`sim.update()` → `ai.update()` → `economy.update()` → `agent.update()` → `fakeAI.update()` → `boss.update()`
 
 ## Testing
-- `sim.test.ts` - Simulation unit tests (movement, bullets, collisions, snapshots)
-- `ai.test.ts` - AI behavior tests (seeking, firing, cooldowns, cleanup)
-- `economy.test.ts` - Economy tests (income, build requests, validation, queue processing)
-- `agent.test.ts` - Agent API tests (commands, rate limiting, validation, budget)
-- `boss.test.ts` - Boss fight tests (shield, phase transitions, win condition, combat integration)
-- `room.test.ts` - Room + RoomManager tests (create/join/leave, reconnect, cleanup, isolation)
-- `hardening.test.ts` - Config, logger, and tick metrics tests
+| Test File | Lines | Covers |
+|---|---|---|
+| `sim.test.ts` | ~1735 | Movement, bullets, collisions, snapshots, XP, upgrades, respawn |
+| `ai.test.ts` | ~686 | Seeking, firing, cooldowns, patrol, cleanup |
+| `room.test.ts` | ~386 | Create/join/leave, reconnect, cleanup, isolation |
+| `agent.test.ts` | ~326 | Commands, rate limiting, validation, budget |
+| `boss.test.ts` | ~292 | Shield, phase transitions, win condition, Nemesis |
+| `economy.test.ts` | ~237 | Income, build requests, validation, queue processing |
+| `hardening.test.ts` | ~129 | Config, logger, tick metrics |
