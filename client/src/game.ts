@@ -112,9 +112,8 @@ export class GameScene extends Phaser.Scene {
       this.scene.start("NameEntryScene");
     });
 
-    this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
-      this.mouseWorldPos = { x: pointer.worldX, y: pointer.worldY };
-    });
+    // mouseWorldPos is updated every frame in update() so it stays
+    // correct as the camera scrolls (even while the pointer is held down).
 
     this.net.setSnapshotHandler((snapshot) => {
       this.interpolator.pushSnapshot(snapshot);
@@ -135,6 +134,11 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, dt: number): void {
     const selfId = this.net.selfEntityId;
     const dtSec = dt / 1000;
+
+    // Recompute mouse world position every frame so aim stays correct
+    // as the camera scrolls (pointer.worldX/Y goes stale while held down).
+    const pointer = this.input.activePointer;
+    this.mouseWorldPos = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
 
     // Read input
     const input: PlayerInputData = {
