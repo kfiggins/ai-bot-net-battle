@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { BossManager } from "./boss.js";
 import { Simulation } from "./sim.js";
-import { MOTHERSHIP_HP, NEMESIS_HP, ENEMY_TEAM, WORLD_WIDTH, WORLD_HEIGHT } from "shared";
+import { MOTHERSHIP_HP, NEMESIS_HP, NEMESIS_RADIUS, ENEMY_TEAM, WORLD_WIDTH, WORLD_HEIGHT } from "shared";
 
 describe("BossManager", () => {
   let boss: BossManager;
@@ -234,6 +234,92 @@ describe("BossManager", () => {
 
       const info = boss.getPhaseInfo(sim);
       expect(info.matchOver).toBe(true);
+    });
+  });
+
+  describe("nemesis teleport", () => {
+    let nemesis: ReturnType<typeof boss.spawnNemesis>;
+
+    beforeEach(() => {
+      nemesis = boss.spawnNemesis(sim, { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 });
+      boss.phaseState.current = 4;
+      // No players in sim → movement AI is a no-op, isolating teleport behaviour
+    });
+
+    it("teleports into valid world bounds when HP crosses the 80% threshold", () => {
+      nemesis.hp = Math.floor(NEMESIS_HP * 0.8) - 1;
+      boss.update(sim);
+      expect(nemesis.pos.x).toBeGreaterThanOrEqual(NEMESIS_RADIUS);
+      expect(nemesis.pos.x).toBeLessThanOrEqual(WORLD_WIDTH - NEMESIS_RADIUS);
+      expect(nemesis.pos.y).toBeGreaterThanOrEqual(NEMESIS_RADIUS);
+      expect(nemesis.pos.y).toBeLessThanOrEqual(WORLD_HEIGHT - NEMESIS_RADIUS);
+    });
+
+    it("zeroes velocity on teleport", () => {
+      nemesis.vel.x = 200;
+      nemesis.vel.y = -150;
+      nemesis.hp = Math.floor(NEMESIS_HP * 0.8) - 1;
+      boss.update(sim);
+      expect(nemesis.vel.x).toBe(0);
+      expect(nemesis.vel.y).toBe(0);
+    });
+
+    it("does not teleport when HP is above all thresholds", () => {
+      const startX = nemesis.pos.x;
+      const startY = nemesis.pos.y;
+      nemesis.hp = NEMESIS_HP; // full HP — above all thresholds
+      boss.update(sim);
+      expect(nemesis.pos.x).toBe(startX);
+      expect(nemesis.pos.y).toBe(startY);
+    });
+
+    it("does not teleport when HP reaches 0 — Nemesis dies instead", () => {
+      nemesis.hp = 0;
+      boss.update(sim);
+      expect(boss.phaseState.matchOver).toBe(true);
+      expect(boss.phaseState.winner).toBe("players");
+    });
+
+    it("teleports at each 20% boundary — 4 times before death", () => {
+      for (const fraction of [0.79, 0.59, 0.39, 0.19]) {
+        nemesis.hp = Math.floor(NEMESIS_HP * fraction);
+        boss.update(sim);
+        expect(nemesis.pos.x).toBeGreaterThanOrEqual(NEMESIS_RADIUS);
+        expect(nemesis.pos.x).toBeLessThanOrEqual(WORLD_WIDTH - NEMESIS_RADIUS);
+        expect(nemesis.pos.y).toBeGreaterThanOrEqual(NEMESIS_RADIUS);
+        expect(nemesis.pos.y).toBeLessThanOrEqual(WORLD_HEIGHT - NEMESIS_RADIUS);
+        expect(nemesis.vel.x).toBe(0);
+        expect(nemesis.vel.y).toBe(0);
+      }
+    });
+
+    it("does not teleport again after all 4 thresholds are exhausted", () => {
+      for (const fraction of [0.79, 0.59, 0.39, 0.19]) {
+        nemesis.hp = Math.floor(NEMESIS_HP * fraction);
+        boss.update(sim);
+      }
+      // All thresholds consumed — pin to a known in-bounds position and verify no further teleport
+      nemesis.pos.x = 1234;
+      nemesis.pos.y = 2345;
+      nemesis.hp = 1; // barely alive
+      boss.update(sim);
+      expect(nemesis.pos.x).toBe(1234);
+      expect(nemesis.pos.y).toBe(2345);
+      expect(boss.phaseState.matchOver).toBe(false);
+    });
+
+    it("large single-tick damage spanning multiple thresholds still only teleports once", () => {
+      // Drop from full to 50% — crosses both the 80% (960) and 60% (720) thresholds
+      nemesis.hp = Math.floor(NEMESIS_HP * 0.5);
+      boss.update(sim);
+      expect(nemesis.pos.x).toBeGreaterThanOrEqual(NEMESIS_RADIUS);
+      expect(nemesis.pos.x).toBeLessThanOrEqual(WORLD_WIDTH - NEMESIS_RADIUS);
+
+      // Next threshold should now be at 40% (480) — verify a further drop triggers it
+      nemesis.hp = Math.floor(NEMESIS_HP * 0.39);
+      boss.update(sim);
+      expect(nemesis.pos.x).toBeGreaterThanOrEqual(NEMESIS_RADIUS);
+      expect(nemesis.pos.x).toBeLessThanOrEqual(WORLD_WIDTH - NEMESIS_RADIUS);
     });
   });
 });

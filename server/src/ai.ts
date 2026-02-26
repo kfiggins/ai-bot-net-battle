@@ -39,12 +39,16 @@ export interface AIState {
   burstRemaining: number;
   burstCooldown: number;
   burstAimAngle: number;
+  // Orb targeting — persists across ticks so minions don't swap targets every frame
+  targetOrbId: string | null;
 }
 
 export class AIManager {
   aiStates: Map<string, AIState> = new Map();
   /** Center point for patrol behavior (set to mothership position) */
   private patrolCenter: { x: number; y: number } = { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 };
+  /** Orbs claimed by a minion this tick — reset at the start of each update() */
+  private claimedOrbs: Set<string> = new Set();
 
   private dt = 1 / TICK_RATE;
 
@@ -67,10 +71,12 @@ export class AIManager {
       burstRemaining: 0,
       burstCooldown: 0,
       burstAimAngle: 0,
+      targetOrbId: null,
     });
   }
 
   update(sim: Simulation): void {
+    this.claimedOrbs.clear();
     for (const [entityId, aiState] of this.aiStates) {
       const entity = sim.entities.get(entityId);
       if (!entity) {
@@ -215,14 +221,33 @@ export class AIManager {
       const dy = orb.pos.y - entity.pos.y;
       if (dx * dx + dy * dy <= MINION_ORB_PICKUP_RANGE * MINION_ORB_PICKUP_RANGE) {
         sim.collectOrbForEnemy(orbId);
+        if (aiState.targetOrbId === orbId) aiState.targetOrbId = null;
       }
     }
 
-    // Steer toward nearest orb; fall back to random waypoint if none
-    const nearestOrb = this.findNearestOrb(entity, sim);
-    if (nearestOrb) {
-      aiState.waypointX = nearestOrb.pos.x;
-      aiState.waypointY = nearestOrb.pos.y;
+    // Keep the current target orb if it still exists; otherwise find the nearest unclaimed one.
+    // Registering the claim prevents other minions (processed later this tick) from picking the same orb.
+    let targetOrb: Entity | null = null;
+    if (aiState.targetOrbId) {
+      const existing = sim.entities.get(aiState.targetOrbId);
+      if (existing && existing.kind === "energy_orb" && existing.hp > 0) {
+        targetOrb = existing;
+        this.claimedOrbs.add(targetOrb.id);
+      } else {
+        aiState.targetOrbId = null;
+      }
+    }
+    if (!targetOrb) {
+      targetOrb = this.findNearestUnclaimedOrb(entity, sim);
+      if (targetOrb) {
+        aiState.targetOrbId = targetOrb.id;
+        this.claimedOrbs.add(targetOrb.id);
+      }
+    }
+
+    if (targetOrb) {
+      aiState.waypointX = targetOrb.pos.x;
+      aiState.waypointY = targetOrb.pos.y;
     }
 
     const dx = aiState.waypointX - entity.pos.x;
@@ -230,7 +255,7 @@ export class AIManager {
     const dist = Math.sqrt(dx * dx + dy * dy);
 
     if (dist < 20) {
-      if (!nearestOrb) {
+      if (!targetOrb) {
         // No orbs on map — wander to a new random waypoint
         const wp = this.randomPatrolWaypoint();
         aiState.waypointX = wp.x;
@@ -266,6 +291,17 @@ export class AIManager {
     const dy = this.patrolCenter.y - entity.pos.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
+    // Brake to a stop once home
+    if (dist < ENEMY_PATROL_RADIUS * 0.25) {
+      entity.vel.x *= MINION_BRAKE_FRICTION;
+      entity.vel.y *= MINION_BRAKE_FRICTION;
+      if (Math.abs(entity.vel.x) < 0.1) entity.vel.x = 0;
+      if (Math.abs(entity.vel.y) < 0.1) entity.vel.y = 0;
+      entity.pos.x += entity.vel.x * this.dt;
+      entity.pos.y += entity.vel.y * this.dt;
+      return;
+    }
+
     // Lightspeed: accelerate toward base with much higher speed and acceleration
     const nx = dx / dist;
     const ny = dy / dist;
@@ -284,11 +320,12 @@ export class AIManager {
     entity.pos.y += entity.vel.y * this.dt;
   }
 
-  private findNearestOrb(entity: Entity, sim: Simulation): Entity | null {
+  private findNearestUnclaimedOrb(entity: Entity, sim: Simulation): Entity | null {
     let nearest: Entity | null = null;
     let nearestDistSq = Infinity;
     for (const orb of sim.entities.values()) {
       if (orb.kind !== "energy_orb" || orb.hp <= 0) continue;
+      if (this.claimedOrbs.has(orb.id)) continue;
       const dx = orb.pos.x - entity.pos.x;
       const dy = orb.pos.y - entity.pos.y;
       const distSq = dx * dx + dy * dy;

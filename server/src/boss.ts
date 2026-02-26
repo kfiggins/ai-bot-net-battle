@@ -49,6 +49,7 @@ export class BossManager {
   private mothershipDyingCountdown: number = 0;
   private deathRingCooldown: number = 0;
   private deathRingAngle: number = 0;
+  private nemesisTeleportThreshold: number = 0; // next HP boundary that triggers a teleport
 
   spawnMothership(sim: Simulation): Entity {
     const entityId = uuid();
@@ -80,6 +81,7 @@ export class BossManager {
     this.spiralAngle = 0;
     this.spiralFireCooldown = NEMESIS_SPIRAL_FIRE_COOLDOWN_TICKS;
     this.missileFireCooldown = NEMESIS_MISSILE_COOLDOWN_TICKS;
+    this.nemesisTeleportThreshold = NEMESIS_HP * 0.8; // teleport at 80%, 60%, 40%, 20%
     return entity;
   }
 
@@ -150,6 +152,18 @@ export class BossManager {
       this.phaseState.winner = "players";
       this.nemesisId = null;
       return;
+    }
+
+    // Teleport at every 20% HP threshold (80%, 60%, 40%, 20%) — skip if already dead
+    if (this.nemesisTeleportThreshold > 0 && nemesis.hp <= this.nemesisTeleportThreshold) {
+      // Advance past all crossed thresholds (handles large single-tick damage)
+      while (nemesis.hp <= this.nemesisTeleportThreshold && this.nemesisTeleportThreshold > 0) {
+        this.nemesisTeleportThreshold -= NEMESIS_HP * 0.2;
+      }
+      nemesis.pos.x = NEMESIS_RADIUS + Math.random() * (WORLD_WIDTH - 2 * NEMESIS_RADIUS);
+      nemesis.pos.y = NEMESIS_RADIUS + Math.random() * (WORLD_HEIGHT - 2 * NEMESIS_RADIUS);
+      nemesis.vel.x = 0;
+      nemesis.vel.y = 0;
     }
 
     const dt = 1 / TICK_RATE;
