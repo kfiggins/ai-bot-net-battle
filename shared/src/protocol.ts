@@ -37,6 +37,7 @@ export const EntitySchema = z.object({
   cannons: z.number().int().optional(),
   pendingUpgrades: z.number().int().optional(),
   aimAngle: z.number().optional(),
+  ownerKind: z.string().optional(),
 });
 export type Entity = z.infer<typeof EntitySchema>;
 

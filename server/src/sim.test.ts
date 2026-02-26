@@ -38,6 +38,8 @@ import {
   CANNON_MILESTONES,
   MILESTONE_LEVELS,
   BULLET_RECOIL_FORCE,
+  RECOIL_REDUCTION_PER_SPEED_UPGRADE,
+  ACCEL_PER_SPEED_UPGRADE,
   CANNON_OFFSET_LATERAL,
   BULLET_RADIUS,
 } from "shared";
@@ -88,6 +90,30 @@ describe("Simulation", () => {
     it("initializes fire cooldown to 0", () => {
       sim.addPlayer("p1");
       expect(sim.players.get("p1")!.fireCooldown).toBe(0);
+    });
+
+    it("stores playerIndex on entity and player record", () => {
+      const entity = sim.addPlayer("p1", "Alice", 2);
+      expect(entity.playerIndex).toBe(2);
+      expect(sim.players.get("p1")!.playerIndex).toBe(2);
+    });
+
+    it("preserves distinct playerIndex values for all four players", () => {
+      const e1 = sim.addPlayer("p1", "Alice", 1);
+      const e2 = sim.addPlayer("p2", "Bob", 2);
+      const e3 = sim.addPlayer("p3", "Charlie", 3);
+      const e4 = sim.addPlayer("p4", "Dave", 4);
+      expect(e1.playerIndex).toBe(1);
+      expect(e2.playerIndex).toBe(2);
+      expect(e3.playerIndex).toBe(3);
+      expect(e4.playerIndex).toBe(4);
+    });
+
+    it("includes playerIndex in snapshot entities", () => {
+      sim.addPlayer("p1", "Alice", 3);
+      const snapshot = sim.getSnapshot();
+      const playerEntity = snapshot.entities.find((e) => e.kind === "player_ship");
+      expect(playerEntity?.playerIndex).toBe(3);
     });
   });
 
@@ -938,9 +964,9 @@ describe("kill XP", () => {
   it("killing a tower awards TOWER_KILL_XP to the player", () => {
     const playerEntity = sim.addPlayer("p1");
     const ps = sim.players.get("p1")!;
-    // Pre-level to 2 so xpToNext=28, safely above TOWER_KILL_XP (25)
-    sim.awardXP(ps, xpForLevel(1));
-    expect(ps.level).toBe(2);
+    // Pre-level to 3 so xpToNext=51, safely above TOWER_KILL_XP (32)
+    sim.awardXP(ps, xpForLevel(1) + xpForLevel(2));
+    expect(ps.level).toBe(3);
     playerEntity.pos = { x: 100, y: 300 };
 
     const tower = sim.spawnEnemy("tower", 120, 300);
@@ -1224,6 +1250,33 @@ describe("stat upgrades", () => {
 
     const expectedMaxSpeed = PLAYER_MAX_SPEED + 3 * SPEED_PER_UPGRADE;
     expect(entity.vel.x).toBeCloseTo(expectedMaxSpeed, 1);
+  });
+
+  it("speed upgrade increases thrust acceleration per tick", () => {
+    const entity = sim.addPlayer("p1");
+    entity.pos.x = WORLD_WIDTH / 2;
+    entity.pos.y = WORLD_HEIGHT / 2;
+    const ps = sim.players.get("p1")!;
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: true,
+      fire: false, aimAngle: 0,
+    });
+
+    // One tick from rest with no upgrades
+    sim.update();
+    const velNoUpgrade = entity.vel.x;
+
+    // Reset and apply 3 speed upgrades
+    entity.vel.x = 0;
+    entity.vel.y = 0;
+    entity.pos.x = WORLD_WIDTH / 2;
+    ps.upgrades.speed = 3;
+    sim.update();
+
+    expect(entity.vel.x).toBeGreaterThan(velNoUpgrade);
+    const dt = 1 / TICK_RATE;
+    expect(entity.vel.x).toBeCloseTo((PLAYER_ACCEL + 3 * ACCEL_PER_SPEED_UPGRADE) * dt, 1);
   });
 
   it("effective fire cooldown decreases with fire_rate upgrades", () => {
@@ -1529,6 +1582,41 @@ describe("bullet recoil physics", () => {
     expect(entity.vel.y).toBeCloseTo(0, 1);
   });
 
+  it("speed upgrade reduces recoil impulse proportionally", () => {
+    const entity = sim.addPlayer("p1");
+    entity.pos.x = WORLD_WIDTH / 2;
+    entity.pos.y = WORLD_HEIGHT / 2;
+    const ps = sim.players.get("p1")!;
+    ps.upgrades.speed = 3;
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: true, aimAngle: 0,
+    });
+    sim.update();
+
+    const expectedRecoil = BULLET_RECOIL_FORCE * (1 - 3 * RECOIL_REDUCTION_PER_SPEED_UPGRADE);
+    expect(entity.vel.x).toBeCloseTo(-expectedRecoil, 1);
+    expect(entity.vel.y).toBeCloseTo(0, 1);
+  });
+
+  it("max speed upgrade (5) reduces recoil to 25% of base", () => {
+    const entity = sim.addPlayer("p1");
+    entity.pos.x = WORLD_WIDTH / 2;
+    entity.pos.y = WORLD_HEIGHT / 2;
+    const ps = sim.players.get("p1")!;
+    ps.upgrades.speed = 5;
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: true, aimAngle: 0,
+    });
+    sim.update();
+
+    const expectedRecoil = BULLET_RECOIL_FORCE * (1 - 5 * RECOIL_REDUCTION_PER_SPEED_UPGRADE);
+    expect(entity.vel.x).toBeCloseTo(-expectedRecoil, 1);
+  });
+
   it("entity vel decays with PLAYER_BRAKE_FRICTION when no input held", () => {
     const entity = sim.addPlayer("p1");
     entity.pos.x = WORLD_WIDTH / 2;
@@ -1787,5 +1875,53 @@ describe("snapshot aimAngle", () => {
 
     const snapshot = sim.getSnapshot();
     expect(() => SnapshotMessageSchema.parse(snapshot)).not.toThrow();
+  });
+});
+
+describe("ownerKind on bullets", () => {
+  let sim: Simulation;
+
+  beforeEach(() => {
+    sim = new Simulation();
+  });
+
+  it("player bullet carries ownerKind 'player_ship'", () => {
+    const entity = sim.addPlayer("p1");
+    entity.pos.x = WORLD_WIDTH / 2;
+    entity.pos.y = WORLD_HEIGHT / 2;
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: true, aimAngle: 0,
+    });
+    sim.update();
+
+    const bullet = Array.from(sim.entities.values()).find(e => e.kind === "bullet")!;
+    expect(bullet.ownerKind).toBe("player_ship");
+  });
+
+  it("tower bullet carries ownerKind 'tower'", () => {
+    const tower = sim.spawnEnemy("tower", 500, 300);
+    sim.spawnBullet(tower, tower.id, 0);
+
+    const bullet = Array.from(sim.entities.values()).find(e => e.kind === "bullet")!;
+    expect(bullet.ownerKind).toBe("tower");
+  });
+
+  it("ownerKind is included in snapshot", () => {
+    const entity = sim.addPlayer("p1");
+    entity.pos.x = WORLD_WIDTH / 2;
+    entity.pos.y = WORLD_HEIGHT / 2;
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: true, aimAngle: 0,
+    });
+    sim.update();
+
+    const snapshot = sim.getSnapshot();
+    const bullet = snapshot.entities.find(e => e.kind === "bullet");
+    expect(bullet).toBeDefined();
+    expect(bullet!.ownerKind).toBe("player_ship");
   });
 });

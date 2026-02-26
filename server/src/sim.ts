@@ -59,6 +59,8 @@ import {
   NEMESIS_BODY_COLLISION_DAMAGE,
   BODY_COLLISION_COOLDOWN_TICKS,
   BULLET_RECOIL_FORCE,
+  RECOIL_REDUCTION_PER_SPEED_UPGRADE,
+  ACCEL_PER_SPEED_UPGRADE,
   CANNON_OFFSET_LATERAL,
 } from "shared";
 
@@ -358,6 +360,7 @@ export class Simulation {
 
       const { input } = player;
       const effectiveMaxSpeed = PLAYER_MAX_SPEED + player.upgrades.speed * SPEED_PER_UPGRADE;
+      const effectiveAccel = PLAYER_ACCEL + player.upgrades.speed * ACCEL_PER_SPEED_UPGRADE;
       const effectiveCooldown = Math.max(1, FIRE_COOLDOWN_TICKS - player.upgrades.fire_rate * FIRE_RATE_PER_UPGRADE);
       const effectiveDamage = BULLET_DAMAGE + player.upgrades.damage * DAMAGE_PER_UPGRADE;
 
@@ -376,8 +379,8 @@ export class Simulation {
         const mag = Math.sqrt(tx * tx + ty * ty);
         tx /= mag;
         ty /= mag;
-        entity.vel.x += tx * PLAYER_ACCEL * this.dt;
-        entity.vel.y += ty * PLAYER_ACCEL * this.dt;
+        entity.vel.x += tx * effectiveAccel * this.dt;
+        entity.vel.y += ty * effectiveAccel * this.dt;
 
         // Clamp to max speed (recoil impulses applied later can exceed this)
         const speed = Math.sqrt(entity.vel.x * entity.vel.x + entity.vel.y * entity.vel.y);
@@ -405,13 +408,13 @@ export class Simulation {
         player.fireCooldown--;
       }
       if (input.fire && player.fireCooldown <= 0) {
-        this.fireMultiCannon(entity, player.id, input.aimAngle, player.cannons, effectiveDamage);
+        this.fireMultiCannon(entity, player.id, input.aimAngle, player.cannons, effectiveDamage, player.upgrades.speed);
         player.fireCooldown = effectiveCooldown;
       }
     }
   }
 
-  private fireMultiCannon(owner: Entity, ownerId: string, aimAngle: number, cannons: number, damage: number): void {
+  private fireMultiCannon(owner: Entity, ownerId: string, aimAngle: number, cannons: number, damage: number, speedUpgrades: number = 0): void {
     const angles = getCannonAngles(aimAngle, cannons);
     const half = (cannons - 1) / 2;
     for (let i = 0; i < cannons; i++) {
@@ -422,8 +425,9 @@ export class Simulation {
     // Apply recoil impulse directly to entity velocity (opposite to aim direction).
     // Applied after the max-speed clamp so recoil can briefly push past max speed,
     // preserving the "boost by shooting backward" feel.
-    owner.vel.x -= Math.cos(aimAngle) * BULLET_RECOIL_FORCE;
-    owner.vel.y -= Math.sin(aimAngle) * BULLET_RECOIL_FORCE;
+    const recoil = BULLET_RECOIL_FORCE * (1 - speedUpgrades * RECOIL_REDUCTION_PER_SPEED_UPGRADE);
+    owner.vel.x -= Math.cos(aimAngle) * recoil;
+    owner.vel.y -= Math.sin(aimAngle) * recoil;
   }
 
   spawnBullet(
@@ -452,6 +456,7 @@ export class Simulation {
       vel: { x: vx, y: vy },
       hp: BULLET_HP,
       team: owner.team,
+      ownerKind: owner.kind,
     };
     this.entities.set(entityId, entity);
     this.bullets.set(entityId, {

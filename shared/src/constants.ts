@@ -96,9 +96,9 @@ export const ENEMY_PATROL_SPEED = 60;    // pixels/second — slower than chase 
 
 // Energy Orbs
 export const ORB_RADIUS = 8;
-export const ORB_XP_VALUE = 5;
-export const MINION_KILL_XP = 10;
-export const TOWER_KILL_XP = 25;
+export const ORB_XP_VALUE = 8;
+export const MINION_KILL_XP = 16;
+export const TOWER_KILL_XP = 32;
 export const ORB_SPAWN_INTERVAL_TICKS = 15;  // spawn 1 orb every 0.5s
 export const ORB_MAX_ON_MAP = 200;
 export const ORB_SPAWN_PADDING = 100;        // pixels from world edge
@@ -130,8 +130,10 @@ export const MAX_UPGRADE_PER_STAT = 5;
 // Per-point bonuses (additive per upgrade level)
 export const DAMAGE_PER_UPGRADE = 3;    // +3 bullet damage per point (base 10 → max 25)
 export const SPEED_PER_UPGRADE = 25;    // +25 px/s per point raises max speed cap (base 200 → max 325)
+export const ACCEL_PER_SPEED_UPGRADE = 60; // +40 px/s² per speed level (base 800 → max 1000)
 export const HEALTH_PER_UPGRADE = 20;   // +20 max HP per point (base 100 → max 200)
 export const FIRE_RATE_PER_UPGRADE = 1; // -1 tick off cooldown per point (base 6 → min 1)
+export const RECOIL_REDUCTION_PER_SPEED_UPGRADE = 0.15; // 15% recoil reduction per speed level (max 5 → 25% of base)
 
 // Cannon Milestones
 export const CANNON_MILESTONES: Record<number, number> = {

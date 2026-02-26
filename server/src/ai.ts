@@ -357,10 +357,12 @@ export class AIManager {
     const dy = target.pos.y - entity.pos.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
+    // Always track the aim angle toward the nearest target (for client rendering)
+    entity.aimAngle = Math.atan2(dy, dx);
+
     // Fire at target if in range
     if (dist <= TOWER_FIRE_RANGE && aiState.fireCooldown <= 0) {
-      const aimAngle = Math.atan2(dy, dx);
-      sim.spawnBullet(entity, entity.id, aimAngle);
+      sim.spawnBullet(entity, entity.id, entity.aimAngle);
       aiState.fireCooldown = TOWER_FIRE_COOLDOWN_TICKS;
     }
   }

@@ -9,7 +9,7 @@ import { computeTeammateArrow } from "./teammate-arrows.js";
 export class GameScene extends Phaser.Scene {
   private net!: NetClient;
   private interpolator!: SnapshotInterpolator;
-  private entitySprites: Map<string, Phaser.GameObjects.Arc> = new Map();
+  private entitySprites: Map<string, Phaser.GameObjects.Arc | Phaser.GameObjects.Image> = new Map();
   private entityLabels: Map<string, Phaser.GameObjects.Text> = new Map();
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd!: { w: Phaser.Input.Keyboard.Key; a: Phaser.Input.Keyboard.Key; s: Phaser.Input.Keyboard.Key; d: Phaser.Input.Keyboard.Key };
@@ -35,6 +35,18 @@ export class GameScene extends Phaser.Scene {
 
   constructor() {
     super({ key: "GameScene" });
+  }
+
+  preload(): void {
+    this.load.image("tower", "assets/tower.png");
+    this.load.image("blue_plasma", "assets/bluePlasma.png");
+    this.load.image("nemesis", "assets/nemesis.png");
+    this.load.image("rocket", "assets/rocket.png");
+    this.load.image("minion", "assets/minion.png");
+    this.load.image("spaceship_green", "assets/spaceship_green.png");
+    this.load.image("spaceship_blue", "assets/spaceship_blue.png");
+    this.load.image("spaceship_red", "assets/spaceship_red.png");
+    this.load.image("spaceship_purple", "assets/spaceship_purple.png");
   }
 
   create(): void {
@@ -370,7 +382,10 @@ export class GameScene extends Phaser.Scene {
         if (lastHp !== undefined && lastHp > 0) {
           const sprite = this.entitySprites.get(id);
           if (sprite) {
-            this.vfx.explosion(sprite.x, sprite.y, sprite.fillColor, 10);
+            const explosionColor = sprite instanceof Phaser.GameObjects.Arc
+              ? sprite.fillColor
+              : getColorByKind(this.previousEntityKinds.get(id) ?? "");
+            this.vfx.explosion(sprite.x, sprite.y, explosionColor, 10);
 
             // Mothership death: chain explosions over ~2 s before Nemesis arrives
             if (this.previousEntityKinds.get(id) === "mothership") {
@@ -434,11 +449,30 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
-      // Apply hit flash tint
-      if (this.vfx.isFlashing(entity.id)) {
-        sprite.setFillStyle(0xffffff);
-      } else {
-        sprite.setFillStyle(getColor(entity));
+      // Apply hit flash tint (Arc only — Image sprites use tint instead)
+      if (sprite instanceof Phaser.GameObjects.Arc) {
+        if (this.vfx.isFlashing(entity.id)) {
+          sprite.setFillStyle(0xffffff);
+        } else {
+          sprite.setFillStyle(getColor(entity));
+        }
+      } else if (sprite instanceof Phaser.GameObjects.Image) {
+        if (this.vfx.isFlashing(entity.id)) {
+          sprite.setTintFill(0xffffff);
+        } else {
+          sprite.clearTint();
+        }
+      }
+
+      // Tower rotation — image points up (−π/2), offset by +π/2 to align with aimAngle
+      if (entity.kind === "tower") {
+        sprite.setRotation((entity.aimAngle ?? 0) + Math.PI / 2);
+      }
+
+      // Plasma bullet / missile / minion rotation — image points up, rotate to match travel direction
+      if ((entity.kind === "bullet" || entity.kind === "missile" || entity.kind === "minion_ship") && sprite instanceof Phaser.GameObjects.Image) {
+        const travelAngle = Math.atan2(entity.vel.y, entity.vel.x);
+        sprite.setRotation(travelAngle + Math.PI / 2);
       }
 
       // Cannon barrels for player ships
@@ -532,7 +566,48 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private createEntitySprite(entity: Entity): Phaser.GameObjects.Arc {
+  private createEntitySprite(entity: Entity): Phaser.GameObjects.Arc | Phaser.GameObjects.Image {
+    if (entity.kind === "tower") {
+      const radius = getRadius("tower");
+      const img = this.add.image(entity.pos.x, entity.pos.y, "tower");
+      img.setDisplaySize(radius * 2, radius * 2);
+      return img;
+    }
+
+    if (entity.kind === "nemesis") {
+      const radius = getRadius("nemesis"); // 38 → 76px display size
+      const img = this.add.image(entity.pos.x, entity.pos.y, "nemesis");
+      img.setDisplaySize(radius * 2, radius * 2);
+      return img;
+    }
+
+    if (entity.kind === "minion_ship") {
+      const img = this.add.image(entity.pos.x, entity.pos.y, "minion");
+      img.setDisplaySize(36, 36);
+      return img;
+    }
+
+    if (entity.kind === "missile") {
+      const img = this.add.image(entity.pos.x, entity.pos.y, "rocket");
+      img.setDisplaySize(35, 70);
+      img.setDepth(8); // above trail particles (depth 7)
+      return img;
+    }
+
+    if (entity.kind === "bullet" && entity.ownerKind === "tower") {
+      const img = this.add.image(entity.pos.x, entity.pos.y, "blue_plasma");
+      img.setDisplaySize(20, 40);
+      return img;
+    }
+
+    if (entity.kind === "player_ship") {
+      const idx = (entity.playerIndex ?? 1) - 1;
+      const key = PLAYER_SHIP_TEXTURES[idx % PLAYER_SHIP_TEXTURES.length];
+      const img = this.add.image(entity.pos.x, entity.pos.y, key);
+      img.setDisplaySize(56, 56);
+      return img;
+    }
+
     const color = getColor(entity);
     const radius = getRadius(entity.kind);
     const circle = this.add.circle(entity.pos.x, entity.pos.y, radius, color);
@@ -620,6 +695,22 @@ export class GameScene extends Phaser.Scene {
 }
 
 const PLAYER_COLORS = [0x00ff88, 0x44aaff, 0xffaa00, 0xff44ff];
+const PLAYER_SHIP_TEXTURES = ["spaceship_green", "spaceship_blue", "spaceship_red", "spaceship_purple"] as const;
+
+function getColorByKind(kind: string): number {
+  switch (kind) {
+    case "player_ship": return 0x88ddff;
+    case "bullet": return 0xff4444;
+    case "missile": return 0xff8800;
+    case "minion_ship": return 0xff6644;
+    case "tower": return 0xff2222;
+    case "missile_tower": return 0xff8800;
+    case "mothership": return 0xff00ff;
+    case "nemesis": return 0xaa00ff;
+    case "energy_orb": return 0x00ffcc;
+    default: return 0xffffff;
+  }
+}
 
 function getColor(entity: Entity): number {
   switch (entity.kind) {
@@ -645,7 +736,7 @@ function getRadius(kind: string): number {
     case "bullet": return 4;
     case "missile": return 6;
     case "minion_ship": return 12;
-    case "tower": return 20;
+    case "tower": return 35;
     case "missile_tower": return 24;
     case "mothership": return 40;
     case "nemesis": return 38;

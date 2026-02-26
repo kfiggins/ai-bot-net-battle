@@ -290,6 +290,33 @@ describe("AIManager", () => {
       ai.update(sim);
       expect(sim.bullets.size).toBe(1);
     });
+
+    it("tracks aimAngle toward player every tick, even during fire cooldown", () => {
+      const player = sim.addPlayer("p1");
+      player.pos.x = 400;
+      player.pos.y = 300;
+
+      const tower = sim.spawnEnemy("tower", 500, 300);
+      registerReady(ai, tower.id);
+
+      // First tick: fires and sets aimAngle leftward (player is to the left)
+      sim.update();
+      ai.update(sim);
+      expect(tower.aimAngle).toBeCloseTo(Math.PI, 2); // pointing left
+
+      // Move player directly above the tower
+      player.pos.x = 500;
+      player.pos.y = 100;
+
+      // Second tick: cooldown is active — no new bullet, but aimAngle should update
+      const bulletsBefore = sim.bullets.size;
+      sim.update();
+      ai.update(sim);
+      expect(sim.bullets.size).toBe(bulletsBefore); // still in cooldown
+
+      // Tower at (500,300), player at (500,100) → aimAngle = atan2(-200, 0) = -PI/2
+      expect(tower.aimAngle).toBeCloseTo(-Math.PI / 2, 2);
+    });
   });
 
   describe("missile_tower AI", () => {
