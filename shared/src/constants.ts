@@ -14,7 +14,7 @@ export const BULLET_HP = 1;
 export const BULLET_RADIUS = 4;
 export const BULLET_TTL_TICKS = 120; // 4 seconds at 30Hz
 export const BULLET_DAMAGE = 10;
-export const FIRE_COOLDOWN_TICKS = 6; // ~5 shots/second at 30Hz
+export const FIRE_COOLDOWN_TICKS = 12; // ~5 shots/second at 30Hz
 export const BULLET_RECOIL_FORCE = 60; // px/s impulse per shot opposite to aim (applied to entity.vel)
 
 export const MINION_SPEED = 120; // pixels per second (max speed cap)
@@ -134,11 +134,11 @@ export type UpgradeType = (typeof UPGRADE_TYPES)[number];
 export const MAX_UPGRADE_PER_STAT = 5;
 
 // Per-point bonuses (additive per upgrade level)
-export const DAMAGE_PER_UPGRADE = 3;    // +3 bullet damage per point (base 10 → max 25)
-export const SPEED_PER_UPGRADE = 25;    // +25 px/s per point raises max speed cap (base 200 → max 325)
-export const ACCEL_PER_SPEED_UPGRADE = 60; // +40 px/s² per speed level (base 800 → max 1000)
-export const HEALTH_PER_UPGRADE = 20;   // +20 max HP per point (base 100 → max 200)
-export const FIRE_RATE_PER_UPGRADE = 1; // -1 tick off cooldown per point (base 6 → min 1)
+export const DAMAGE_PER_UPGRADE = 7;    // +3 bullet damage per point (base 10 → max 25)
+export const SPEED_PER_UPGRADE = 30;    // +25 px/s per point raises max speed cap (base 200 → max 325)
+export const ACCEL_PER_SPEED_UPGRADE = 70; // +40 px/s² per speed level (base 800 → max 1000)
+export const HEALTH_PER_UPGRADE = 30;   // +20 max HP per point (base 100 → max 200)
+export const FIRE_RATE_PER_UPGRADE = 1.2; // -1 tick off cooldown per point (base 6 → min 1)
 export const RECOIL_REDUCTION_PER_SPEED_UPGRADE = 0.15; // 15% recoil reduction per speed level (max 5 → 25% of base)
 
 // Cannon Milestones
@@ -173,8 +173,8 @@ export const NEMESIS_KILL_XP = 500;                   // awarded to all players 
 // Phantom Ship — fast flanker that attacks from behind the mothership
 export const PHANTOM_HP = 20;                      // very fragile (2 base bullets to kill)
 export const PHANTOM_RADIUS = 10;                   // small target — hard to hit
-export const PHANTOM_SPEED = 600;                   // faster than player (200 base)
-export const PHANTOM_ACCEL = 800;                   // snappy, reactive thrust
+export const PHANTOM_SPEED = 450;                   // faster than player (200 base)
+export const PHANTOM_ACCEL = 500;                   // snappy, reactive thrust
 export const PHANTOM_BRAKE_FRICTION = 0.82;
 export const PHANTOM_FIRE_RANGE = 800;              // switches from pursuit to orbit-and-fire
 export const PHANTOM_FIRE_COOLDOWN_TICKS = 90;      // 3 s between bursts

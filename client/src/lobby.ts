@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { AgentControlMode, LobbyPlayer, VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from "shared";
 import { NetClient } from "./net.js";
 
-const PLAYER_COLORS = [0x00ff88, 0x44aaff, 0xffaa00, 0xff44ff, 0xff6666, 0x66ffff, 0xffff66, 0xaa88ff];
+const PLAYER_COLORS = [0x88ff00, 0x00ddcc, 0xff8800, 0xff44aa, 0xffee00, 0xffffff, 0x003399, 0x222222];
 const CLIENT_VERSION = "v0.0.1+jitterfix2";
 
 function colorToHex(color: number): string {

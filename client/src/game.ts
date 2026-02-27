@@ -43,10 +43,14 @@ export class GameScene extends Phaser.Scene {
     this.load.image("nemesis", "assets/nemesis.png");
     this.load.image("rocket", "assets/rocket.png");
     this.load.image("minion", "assets/minion.png");
-    this.load.image("spaceship_green", "assets/spaceship_green.png");
-    this.load.image("spaceship_blue", "assets/spaceship_blue.png");
-    this.load.image("spaceship_red", "assets/spaceship_red.png");
-    this.load.image("spaceship_purple", "assets/spaceship_purple.png");
+    this.load.image("spaceship_lime_green", "assets/spaceship_lime_green.png");
+    this.load.image("spaceship_cyan_teal", "assets/spaceship_cyan_teal.png");
+    this.load.image("spaceship_orange", "assets/spaceship_orange.png");
+    this.load.image("spaceship_pink", "assets/spaceship_pink.png");
+    this.load.image("spaceship_yellow", "assets/spaceship_yellow.png");
+    this.load.image("spaceship_white", "assets/spaceship_white.png");
+    this.load.image("spaceship_navy", "assets/spaceship_navy.png");
+    this.load.image("spaceship_black", "assets/spaceship_black.png");
     // Phantom ship — place your sprite at client/public/assets/phantom.png
     this.load.image("phantom", "assets/phantom.png");
   }
@@ -714,10 +718,10 @@ export class GameScene extends Phaser.Scene {
   }
 }
 
-const PLAYER_COLORS = [0x00ff88, 0x44aaff, 0xffaa00, 0xff44ff, 0xff6666, 0x66ffff, 0xffff66, 0xaa88ff];
+const PLAYER_COLORS = [0x88ff00, 0x00ddcc, 0xff8800, 0xff44aa, 0xffee00, 0xffffff, 0x003399, 0x222222];
 const PLAYER_SHIP_TEXTURES = [
-  "spaceship_green", "spaceship_blue", "spaceship_red", "spaceship_purple",
-  "spaceship_red", "spaceship_blue", "spaceship_green", "spaceship_purple",
+  "spaceship_lime_green", "spaceship_cyan_teal", "spaceship_orange", "spaceship_pink",
+  "spaceship_yellow", "spaceship_white", "spaceship_navy", "spaceship_black",
 ] as const;
 
 function getColorByKind(kind: string): number {
