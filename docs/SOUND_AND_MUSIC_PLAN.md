@@ -1,223 +1,339 @@
-# Sound + Music Implementation Plan (Low-Complexity, High-Impact)
+# SOUND_AND_MUSIC_PLAN.md
 
-## Goal
-Add audio in a way that improves game feel **without** adding major code complexity.
+Deep-dive audio map for `ai-bot-net-battle`.
 
----
-
-## 1) Priority Sound Effects (by game surface)
-
-## Lobby / Menu
-
-### A. UI Hover
-- **When:** Hover over buttons/toggles (`Start`, mode toggles, dev log toggle, join)
-- **Type:** Soft digital tick / blip
-- **AI sound prompt:** "short clean UI hover blip, soft digital, 60ms, no reverb, non-intrusive"
-
-### B. UI Click / Confirm
-- **When:** Clicking buttons/toggles
-- **Type:** Slightly stronger click/chirp than hover
-- **AI sound prompt:** "short UI confirm click, bright but soft, 90ms, subtle synth click"
-
-### C. Invalid / Error (room full, bad join state)
-- **When:** `room_error` received
-- **Type:** Brief muted buzzer
-- **AI sound prompt:** "short UI error tone, low muted synth buzz, 120ms, not harsh"
-
-### D. Match Start Stinger
-- **When:** `match_start` event fires
-- **Type:** Tiny hype stinger
-- **AI sound prompt:** "short arcade match start stinger, energetic, 0.5s, sci-fi"
+This is the **exhaustive implementation checklist** for current gameplay/client flow.
+If an item is marked **[MANDATORY]**, it should not ship silent.
+If **[OPTIONAL]**, it is polish and can come later.
 
 ---
 
-## In-Game Core Combat
+## Audio Architecture (recommended)
 
-### E. Player Shot (bullet)
-- **When:** Local player fires main weapon
-- **Type:** Crisp laser pop
-- **AI sound prompt:** "retro sci-fi laser shot, punchy transient, 120ms, no tail mud"
+Create one centralized audio layer in client:
+- `client/src/audio.ts` (AudioManager)
+- preload all SFX/music there
+- expose `play(key, opts?)`, `setSfxEnabled`, `setMusicEnabled`, `setVolumes`
 
-### F. Right-Click Homing Missile Launch
-- **When:** Homing missile ability triggered
-- **Type:** Heavier launch with low-end thump
-- **AI sound prompt:** "sci-fi missile launch, mechanical whoosh + low thump, 250ms"
+Use 3 buses:
+- **UI bus** (quiet, short)
+- **Gameplay bus** (combat/events)
+- **Music bus** (looping tracks)
 
-### G. Enemy Bullet Shot
-- **When:** Enemy towers/minions fire
-- **Type:** Distinct from player shot (duller/red-team tone)
-- **AI sound prompt:** "enemy plasma shot, medium pitch, gritty, 120ms"
-
-### H. Missile Tower Burst Shot
-- **When:** Missile towers fire burst
-- **Type:** Triple pulse/launch feel
-- **AI sound prompt:** "burst missile pod fire, three quick launch pops, 300ms"
-
-### I. Hit Confirm (player dealt damage)
-- **When:** Local player bullets hit enemy
-- **Type:** Subtle tactile tick
-- **AI sound prompt:** "tiny hit marker tick, sharp but quiet, 40ms"
-
-### J. Player Hurt
-- **When:** Local player takes damage
-- **Type:** Soft impact + shield crack
-- **AI sound prompt:** "player damage impact, short shield crackle, 150ms"
-
-### K. Enemy Death Pop (minion/phantom)
-- **When:** Minion/phantom dies
-- **Type:** Small explosion pop
-- **AI sound prompt:** "small sci-fi explosion pop, 180ms, crisp"
-
-### L. Tower Destruction
-- **When:** Tower/missile tower destroyed
-- **Type:** Medium explosion + debris tone
-- **AI sound prompt:** "medium structure explosion, mechanical debris, 500ms"
-
-### M. Player Death
-- **When:** Local player dies/respawns
-- **Type:** Distinct fail cue + brief respawn shimmer
-- **AI sound prompt:** "player death burst, dramatic but short, 400ms" 
+Add user settings:
+- `SFX on/off`
+- `Music on/off`
+- `SFX volume`
+- `Music volume`
 
 ---
 
-## Boss / Event Moments
+## Event → Sound Matrix (deep dive)
 
-### N. Mothership Shield Up / Locked
-- **When:** Shielded objective state starts/returns
-- **Type:** Low humming shield cue
-- **AI sound prompt:** "sci-fi shield hum pulse, low and ominous, 500ms"
+## A) Menu / Lobby / Name Entry
 
-### O. Mothership Vulnerable
-- **When:** Shield drops (phase transition)
-- **Type:** Shield-down release sweep
-- **AI sound prompt:** "energy shield drop, descending sweep, 600ms"
+### 1) Name Entry Join button hover/click — `client/src/name-entry.ts`
+- Trigger: pointerover / pointerout / pointerdown on join button
+- Sound:
+  - hover: soft UI blip
+  - click: confirm click
+- Priority: **[MANDATORY]**
+- AI prompt:
+  - Hover: `"soft sci-fi ui hover blip, short 60ms, clean, non-intrusive"`
+  - Click: `"sci-fi ui confirm click, short 100ms, crisp"`
 
-### P. Mothership Death Sequence Start
-- **When:** 2-second death sequence begins
-- **Type:** Large alarm/explosion lead-in
-- **AI sound prompt:** "boss core critical alarm + swell, 1s, high tension"
+### 2) Lobby Start Game button hover/click — `client/src/lobby.ts`
+- Trigger: startButton pointerover/out/down
+- Sound:
+  - hover blip
+  - start confirm / match-ready stinger
+- Priority: **[MANDATORY]**
+- AI prompt:
+  - Start click: `"arcade match start confirm, short energetic stinger, 0.4s"`
 
-### Q. Nemesis Spawn / Teleport Blink
-- **When:** Nemesis appears / blink event
-- **Type:** Distortion warp snap
-- **AI sound prompt:** "sci-fi teleport warp snap, phase distortion, 200ms"
+### 3) Lobby toggles (Agent Mode / Dev Log) — `client/src/lobby.ts`
+- Trigger: modeToggle pointerdown, devLogToggle pointerdown
+- Sound:
+  - toggle on/off click (slightly different pitch for ON/OFF)
+- Priority: **[MANDATORY]**
+- AI prompt: `"toggle ui click, digital, short 80ms, two pitch variants"`
 
-### R. Victory
-- **When:** `matchOver` true and victory shown
-- **Type:** Short positive fanfare
-- **AI sound prompt:** "victory fanfare, sci-fi arcade, triumphant, 1.5s"
+### 4) Lobby/Name background ambience/music — `client/src/lobby.ts`, `client/src/name-entry.ts`, `client/src/starfield.ts`
+- Trigger: scene create
+- Sound:
+  - menu music loop
+  - optional subtle ambient bed
+- Priority: **[MANDATORY]** (music), ambience optional
+- AI prompt: `"seamless sci-fi menu loop, calm but hopeful, 90s"`
 
----
-
-## Progression / Economy Feedback
-
-### S. Orb Pickup (player)
-- **When:** Player collects XP orb
-- **Type:** Light sparkle chime
-- **AI sound prompt:** "small energy pickup chime, bright, 120ms"
-
-### T. Level Up
-- **When:** Player levels up
-- **Type:** Clear ascending tone
-- **AI sound prompt:** "arcade level-up arpeggio, uplifting, 400ms"
-
-### U. Upgrade Applied
-- **When:** Upgrade button chosen
-- **Type:** Mechanical power-up click
-- **AI sound prompt:** "power-up confirm click + short rise, 250ms"
-
-### V. Cannon Milestone Unlock
-- **When:** cannon count increases
-- **Type:** Bigger progression sting
-- **AI sound prompt:** "weapon upgrade stinger, metallic sci-fi, 600ms"
+### 5) Room/network error cue — `client/src/net.ts` (`room_error`)
+- Trigger: room full / invalid room state / errors
+- Sound:
+  - short muted error buzz
+- Priority: **[MANDATORY]**
+- AI prompt: `"ui error beep, soft low buzz, 120ms, non-harsh"`
 
 ---
 
-## 2) Music Plan (safe, low complexity)
+## B) Core Player Combat + Controls
 
-## Track 1 — Menu / Lobby Loop
-- **Mood:** Chill futuristic, anticipation
-- **Tempo:** 85-100 BPM
-- **Length:** 45-90s seamless loop
-- **Prompt:** "ambient synthwave game menu loop, calm but heroic, seamless loop"
+### 6) Primary fire (left click / space) — `client/src/game.ts` + fire handling
+- Trigger: local player fire input accepted (sync with cooldown to avoid spam mismatch)
+- Sound:
+  - player bullet shot (distinct from enemy)
+- Priority: **[MANDATORY]**
+- AI prompt: `"player laser shot, crisp transient, 120ms, futuristic arcade"`
 
-## Track 2 — Match Core Combat Loop
-- **Mood:** Energetic focus
-- **Tempo:** 110-130 BPM
-- **Length:** 60-120s loop
-- **Prompt:** "arcade sci-fi combat loop, driving rhythm, no vocals, seamless"
+### 7) Homing missile ability (right click) — `client/src/game.ts` + cooldown HUD
+- Trigger: missile launch accepted
+- Sound:
+  - launch whoosh + low impact transient
+- Priority: **[MANDATORY]**
+- AI prompt: `"sci-fi missile launch, short thrust whoosh + low thump, 250ms"`
 
-## Track 3 — Boss/Nemesis Intensifier Layer (optional)
-- **Mood:** Tension spike
-- **Use:** Fade in at nemesis/boss critical moments
-- **Prompt:** "high tension boss layer, pulsing synth + percussion, loopable"
+### 8) Missile cooldown ready cue — `client/src/ui.ts` (`updateMissileCooldown`)
+- Trigger: transitions from cooling down -> ready
+- Sound:
+  - subtle ready ping
+- Priority: **[OPTIONAL]**
+- AI prompt: `"ability ready ping, clean synth pluck, 120ms"`
 
-## Track 4 — Victory/Result Jingle
-- **Mood:** Reward payoff
-- **Length:** 2-4s one-shot
-- **Prompt:** "short victory jingle, bright sci-fi arcade"
+### 9) Player hurt (local ship damaged) — `client/src/game.ts` + VFX hit flash path
+- Trigger: local player HP decrease
+- Sound:
+  - shield/hull impact tone
+- Priority: **[MANDATORY]**
+- AI prompt: `"player hit shield crack, short 150ms, sci-fi impact"`
 
----
+### 10) Player death + respawn — server-sim death/respawn reflected in client entity lifecycle
+- Trigger: local player entity removed / re-added
+- Sound:
+  - death burst
+  - respawn shimmer cue
+- Priority: **[MANDATORY]**
+- AI prompt:
+  - Death: `"player ship death burst, dramatic short 400ms"`
+  - Respawn: `"sci-fi respawn shimmer, bright 300ms"`
 
-## 3) Implementation order (recommended)
-1. UI hover/click + player shot + orb pickup + level up
-2. Enemy shot/hit/death + tower destroy
-3. Boss shield/vulnerable/death + nemesis spawn
-4. Music (menu + match), then optional boss layer
-
-This gives immediate feel improvements early without deep refactors.
-
----
-
-## 4) Simple technical guardrails
-- Use one centralized audio manager (`client/src/audio.ts`) with named keys.
-- Keep SFX under ~0.6s where possible.
-- Normalize volume per category:
-  - UI: 0.25-0.4
-  - Combat: 0.35-0.55
-  - Boss/Events: 0.45-0.7
-  - Music: 0.12-0.28
-- Add master toggles in settings:
-  - `SFX On/Off`
-  - `Music On/Off`
-  - Optional sliders
+### 11) Leave button click — `client/src/game.ts`
+- Trigger: leaveBtn pointerdown
+- Sound:
+  - UI back/leave click
+- Priority: **[OPTIONAL]**
 
 ---
 
-## 5) Suggested `CLAUDE.md` additions (to enforce sound discipline)
+## C) Enemy Weapons + Threat Audio
 
-Add a small checklist like this in root `CLAUDE.md`:
+### 12) Enemy bullet fire (minion/tower/phantom/nemesis bullets) — server AI events, rendered client-side
+- Trigger: enemy projectile appears / local threat cadence
+- Sound:
+  - enemy plasma shot (different timbre from player)
+- Priority: **[MANDATORY]**
+- AI prompt: `"enemy plasma shot, medium pitch, gritty, 120ms"`
+
+### 13) Missile tower burst / enemy missile launch
+- Trigger: missile entities from enemy team appear
+- Sound:
+  - burst launch pattern cue
+- Priority: **[MANDATORY]**
+- AI prompt: `"triple missile pod burst, rapid launch pops, 300ms"`
+
+### 14) Incoming missile warning (proximity alert)
+- Trigger: hostile missile within threshold distance of local player
+- Sound:
+  - pulse warning beep (rate increases with proximity)
+- Priority: **[OPTIONAL high-value]**
+- AI prompt: `"danger lock-on beep, repeating, sharp but short"`
+
+### 15) Phantom ship presence cue
+- Trigger: phantom enters aggro/chase near local player
+- Sound:
+  - stealthy flutter/phase hum
+- Priority: **[OPTIONAL]**
+- AI prompt: `"spectral scout hum, airy sci-fi texture, short looping cue"`
+
+---
+
+## D) Kills / Explosions / VFX Coupling
+
+### 16) Generic enemy death pop (minion/phantom)
+- Trigger: entity removed + was alive
+- Sound:
+  - small pop explosion
+- Priority: **[MANDATORY]**
+
+### 17) Tower / missile tower destruction
+- Trigger: tower entities die
+- Sound:
+  - medium structure explosion
+- Priority: **[MANDATORY]**
+
+### 18) Sub-base destruction
+- Trigger: `sub_base` dies
+- Sound:
+  - heavy structure collapse cue
+- Priority: **[MANDATORY]**
+- AI prompt: `"large sci-fi structure collapse, metallic debris, 800ms"`
+
+### 19) Mothership death sequence start
+- Trigger: mothership death sequence begins
+- Sound:
+  - critical alarm + escalating detonation bed
+- Priority: **[MANDATORY]**
+
+### 20) Nemesis spawn / teleport blink
+- Trigger: nemesis spawn and each teleport event
+- Sound:
+  - warp snap / distortion pop
+- Priority: **[MANDATORY]**
+
+### 21) Hit confirm (player dealt damage)
+- Trigger: local bullets dealing damage
+- Sound:
+  - tiny hit tick
+- Priority: **[OPTIONAL]**
+
+---
+
+## E) Progression / Economy / Rewards
+
+### 22) Orb pickup (player)
+- Trigger: local orb pickup
+- Sound:
+  - bright pickup chime
+- Priority: **[MANDATORY]**
+
+### 23) Level up
+- Trigger: level increase / `LEVEL UP!` display
+- Sound:
+  - ascending level-up stinger
+- Priority: **[MANDATORY]**
+
+### 24) Upgrade point spent
+- Trigger: upgrade button click accepted
+- Sound:
+  - powerup confirm tick
+- Priority: **[MANDATORY]**
+
+### 25) Cannon milestone unlocked
+- Trigger: cannon count increase (UI notify)
+- Sound:
+  - stronger weapon-upgrade stinger
+- Priority: **[MANDATORY]**
+
+### 26) Enemy economy growth cue (bot resources) — optional
+- Trigger: thresholds in `botResources` (e.g., 500/1000/1500)
+- Sound:
+  - subtle enemy-power pulse
+- Priority: **[OPTIONAL]**
+
+---
+
+## F) Match State + Music
+
+### 27) Match start music transition
+- Trigger: `match_start`
+- Sound:
+  - fade from lobby music -> combat loop
+- Priority: **[MANDATORY]**
+
+### 28) Boss phase transition cues
+- Trigger: phase changes in HUD (`updatePhase`)
+- Sound:
+  - short phase up/down cues
+- Priority: **[MANDATORY]**
+
+### 29) Shield state transitions
+- Trigger: mothership/sub-base shielded -> vulnerable and vice versa
+- Sound:
+  - shield up hum pulse / shield down release
+- Priority: **[MANDATORY]**
+
+### 30) Nemesis phase music layer
+- Trigger: Nemesis spawned
+- Sound:
+  - add high-tension layer over combat music
+- Priority: **[OPTIONAL high-value]**
+
+### 31) Victory / end-match result
+- Trigger: victory panel shown (`showVictory`) / match_end
+- Sound:
+  - victory fanfare one-shot
+- Priority: **[MANDATORY]**
+
+### 32) Return to lobby button
+- Trigger: victory return click
+- Sound:
+  - confirm/back UI click
+- Priority: **[OPTIONAL]**
+
+---
+
+## 1st-pass implementation order (minimum viable audio)
+1. UI hover/click/error + menu music
+2. Player shot + enemy shot + missile launch
+3. Orb pickup + level up + upgrade + cannon milestone
+4. Enemy/tower/sub-base death cues
+5. Mothership death + nemesis spawn/teleport
+6. Phase/shield transition cues + victory stinger
+
+---
+
+## Naming key suggestions
+
+Use stable keys like:
+- `ui_hover`, `ui_click`, `ui_error`, `ui_toggle_on`, `ui_toggle_off`
+- `weapon_player_shot`, `weapon_player_missile`, `weapon_enemy_shot`, `weapon_enemy_missile_burst`
+- `player_hit`, `player_death`, `player_respawn`
+- `enemy_death_small`, `enemy_tower_destroy`, `enemy_subbase_destroy`
+- `pickup_orb`, `progress_level_up`, `progress_upgrade_apply`, `progress_cannon_unlock`
+- `boss_shield_up`, `boss_shield_down`, `boss_mothership_critical`, `boss_nemesis_spawn`, `boss_nemesis_teleport`
+- `state_match_start`, `state_phase_change`, `state_victory`
+- `music_lobby_loop`, `music_match_loop`, `music_nemesis_layer`
+
+---
+
+## CLAUDE.md policy additions (recommended)
+
+Add to root `CLAUDE.md`:
 
 ```md
-## Audio Checklist (Required for New Features)
-When adding any new gameplay event, ask:
-- Does this event need an SFX cue?
-- Does it need a unique cue or reuse existing category audio?
-- Is there a UI feedback sound needed?
-- Should music intensity change at this event?
+## Audio Completeness Rule
+For any player-visible feature/event, include an audio decision before done:
+- Reuse existing sound key
+- Add new sound key with intent
+- Explicitly mark "no sound" with reason
 
-If yes, update:
-- docs/SOUND_AND_MUSIC_PLAN.md (map event -> sound intent)
-- client/src/audio.ts (sound key + preload + playback hook)
+Update docs/SOUND_AND_MUSIC_PLAN.md when adding new events.
 ```
 
-And for package-level `client/CLAUDE.md`:
+Add to `client/CLAUDE.md`:
 
 ```md
-### Audio Rule
-Any new player-visible action/event should either:
-1) map to an existing sound key, or
-2) add a new sound key with a one-line intent description.
-No silent major gameplay events.
+### Audio Hook Requirement
+Any new UI action, combat action, phase transition, or progression event must hook into AudioManager.
+No silent major events.
+```
+
+Add to PR/commit checklist:
+
+```md
+- [ ] Audio mapped for new player-facing events
+- [ ] Sound keys documented and volume category set
+- [ ] New event not silently shipped unless justified
 ```
 
 ---
 
-## 6) Optional extra quick wins
-- Add tiny pitch randomization (+/- 3%) to repeated shots to reduce ear fatigue.
-- Add distance/priority ducking later (not required for phase 1).
-- Add "low HP heartbeat" cue for player awareness.
+## Notes on AI-generated sound quality
+
+For consistent outputs:
+- SFX length target: 50ms–700ms
+- Keep tails short for rapid-repeat events
+- Generate multiple variants for frequently repeated cues (`shot_01`, `shot_02`, `shot_03`)
+- Normalize loudness and remove low-end rumble from UI sounds
 
 ---
 
-If you want, next step is I can create a ready-to-drop `client/src/audio.ts` skeleton with key names matching this doc.
+If needed, next step is a concrete `audio.ts` stub + hook map per file (`game.ts`, `ui.ts`, `lobby.ts`, `name-entry.ts`, `net.ts`) so implementation is copy/paste ready.
