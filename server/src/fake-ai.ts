@@ -1,13 +1,15 @@
-import { UNIT_COSTS } from "shared";
+import { UNIT_COSTS, SUB_BASE_TOWER_RANGE } from "shared";
 import { Simulation } from "./sim.js";
 import { Economy } from "./economy.js";
 import { AgentAPI } from "./agent.js";
+import { BossManager } from "./boss.js";
 
 const FAKE_AI_DECISION_INTERVAL_TICKS = 20; // ~0.67s at 30 TPS
 const FAKE_AI_TOWER_COOLDOWN_TICKS = 120; // 4s
 const FAKE_AI_SPAWN_COOLDOWN_TICKS = 30; // 1s
 
 const FAKE_AI_PHANTOM_COOLDOWN_TICKS = 300; // 10 s between phantom spawns
+const FAKE_AI_SUB_BASE_TOWER_COOLDOWN_TICKS = 150; // 5s between sub-base tower rebuilds
 
 export class FakeAI {
   private nextDecisionTick = 0;
@@ -15,8 +17,9 @@ export class FakeAI {
   private nextMissileTowerTick = 0;
   private nextSpawnTick = 0;
   private nextPhantomTick = 0;
+  private nextSubBaseTowerTick = 0;
 
-  update(sim: Simulation, economy: Economy, agent: AgentAPI, mothershipPos?: { x: number; y: number }): void {
+  update(sim: Simulation, economy: Economy, agent: AgentAPI, mothershipPos?: { x: number; y: number }, boss?: BossManager): void {
     if (sim.tick < this.nextDecisionTick) return;
     this.nextDecisionTick = sim.tick + FAKE_AI_DECISION_INTERVAL_TICKS;
 
@@ -28,6 +31,33 @@ export class FakeAI {
         command: "set_strategy",
         params: { mode: "balanced" },
       }, sim, economy, mothershipPos);
+    }
+
+    // Priority 0: rebuild towers around sub-bases that need them
+    if (boss && sim.tick >= this.nextSubBaseTowerTick) {
+      const needingTowers = boss.getSubBasesNeedingTowers(sim);
+      if (needingTowers.length > 0) {
+        const towerCost = Math.min(UNIT_COSTS.tower, UNIT_COSTS.missile_tower);
+        if (economy.balance >= towerCost) {
+          const sb = needingTowers[Math.floor(Math.random() * needingTowers.length)];
+          // Randomly pick regular tower or missile tower
+          const kind: "tower" | "missile_tower" = Math.random() < 0.5 ? "tower" : "missile_tower";
+          const angle = Math.random() * Math.PI * 2;
+          const dist = 80 + Math.random() * (SUB_BASE_TOWER_RANGE - 80);
+          const tx = sb.pos.x + Math.cos(angle) * dist;
+          const ty = sb.pos.y + Math.sin(angle) * dist;
+
+          const result = economy.requestBuild(
+            { unitKind: kind, x: tx, y: ty },
+            sim,
+            mothershipPos
+          );
+          if (result.ok) {
+            this.nextSubBaseTowerTick = sim.tick + FAKE_AI_SUB_BASE_TOWER_COOLDOWN_TICKS;
+            return;
+          }
+        }
+      }
     }
 
     // Priority 1: defense near mothership if low tower count.

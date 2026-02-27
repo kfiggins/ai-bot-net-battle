@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { BossManager } from "./boss.js";
 import { Simulation } from "./sim.js";
-import { MOTHERSHIP_HP, NEMESIS_HP, NEMESIS_RADIUS, ENEMY_TEAM, WORLD_WIDTH, WORLD_HEIGHT } from "shared";
+import { AIManager } from "./ai.js";
+import { MOTHERSHIP_HP, NEMESIS_HP, NEMESIS_RADIUS, ENEMY_TEAM, WORLD_WIDTH, WORLD_HEIGHT, SUB_BASE_HP, SUB_BASE_POP_MINIONS, SUB_BASE_POP_PHANTOMS } from "shared";
 
 describe("BossManager", () => {
   let boss: BossManager;
@@ -201,7 +202,7 @@ describe("BossManager", () => {
 
       const info = boss.getPhaseInfo(sim);
       expect(info.current).toBe(1);
-      expect(info.objectives).toContain("Destroy all towers");
+      expect(info.objectives).toContain("Destroy all towers and sub-bases");
       expect(info.remaining.tower).toBe(2);
       expect(info.mothershipShielded).toBe(true);
     });
@@ -374,5 +375,261 @@ describe("combat integration with boss", () => {
 
     // Shield should have restored HP each tick
     expect(mothership.hp).toBe(MOTHERSHIP_HP);
+  });
+});
+
+describe("Sub-bases", () => {
+  let boss: BossManager;
+  let sim: Simulation;
+  let ai: AIManager;
+
+  beforeEach(() => {
+    boss = new BossManager();
+    sim = new Simulation();
+    ai = new AIManager();
+    boss.spawnMothership(sim);
+  });
+
+  describe("spawnSubBases", () => {
+    it("spawns 4 sub-bases", () => {
+      boss.spawnSubBases(sim, ai);
+      const subBases = sim.getEntitiesByKind("sub_base");
+      expect(subBases).toHaveLength(4);
+    });
+
+    it("spawns 2 towers per sub-base (8 total)", () => {
+      boss.spawnSubBases(sim, ai);
+      expect(boss.subBases.size).toBe(4);
+      for (const [, sb] of boss.subBases) {
+        expect(sb.towerIds.size).toBe(2);
+      }
+    });
+
+    it("sub-bases are team 2 enemy entities", () => {
+      boss.spawnSubBases(sim, ai);
+      const subBases = sim.getEntitiesByKind("sub_base");
+      for (const sb of subBases) {
+        expect(sb.team).toBe(ENEMY_TEAM);
+        expect(sb.hp).toBe(SUB_BASE_HP);
+      }
+    });
+
+    it("spawns 1 regular tower and 1 missile tower per sub-base", () => {
+      boss.spawnSubBases(sim, ai);
+      for (const [, sb] of boss.subBases) {
+        const kinds = new Set<string>();
+        for (const towerId of sb.towerIds) {
+          const tower = sim.entities.get(towerId);
+          expect(tower).toBeDefined();
+          kinds.add(tower!.kind);
+        }
+        expect(kinds.has("tower")).toBe(true);
+        expect(kinds.has("missile_tower")).toBe(true);
+      }
+    });
+  });
+
+  describe("shield mechanic", () => {
+    it("sub-base is shielded while its towers are alive", () => {
+      boss.spawnSubBases(sim, ai);
+      const firstSbId = Array.from(boss.subBases.keys())[0];
+      expect(boss.isSubBaseShielded(firstSbId, sim)).toBe(true);
+    });
+
+    it("sub-base shield restores HP each tick", () => {
+      boss.spawnSubBases(sim, ai);
+      const firstSbId = Array.from(boss.subBases.keys())[0];
+      const sbEntity = sim.entities.get(firstSbId)!;
+
+      sbEntity.hp -= 100;
+      boss.update(sim);
+
+      expect(sbEntity.hp).toBe(SUB_BASE_HP);
+    });
+
+    it("sub-base becomes vulnerable when both towers are destroyed", () => {
+      boss.spawnSubBases(sim, ai);
+      const firstSbId = Array.from(boss.subBases.keys())[0];
+      const sb = boss.subBases.get(firstSbId)!;
+
+      // Destroy both towers
+      for (const towerId of sb.towerIds) {
+        sim.entities.delete(towerId);
+      }
+
+      boss.update(sim);
+      expect(boss.isSubBaseShielded(firstSbId, sim)).toBe(false);
+    });
+
+    it("sub-base takes damage when unshielded", () => {
+      boss.spawnSubBases(sim, ai);
+      const firstSbId = Array.from(boss.subBases.keys())[0];
+      const sb = boss.subBases.get(firstSbId)!;
+      const sbEntity = sim.entities.get(firstSbId)!;
+
+      // Destroy both towers
+      for (const towerId of sb.towerIds) {
+        sim.entities.delete(towerId);
+      }
+      boss.update(sim); // cleans up dead tower refs
+
+      sbEntity.hp -= 100;
+      boss.update(sim);
+
+      // Should NOT be restored since no towers
+      expect(sbEntity.hp).toBe(SUB_BASE_HP - 100);
+    });
+
+    it("sub-base is still shielded with one tower alive", () => {
+      boss.spawnSubBases(sim, ai);
+      const firstSbId = Array.from(boss.subBases.keys())[0];
+      const sb = boss.subBases.get(firstSbId)!;
+
+      // Destroy only the first tower
+      const firstTowerId = Array.from(sb.towerIds)[0];
+      sim.entities.delete(firstTowerId);
+
+      boss.update(sim);
+      expect(boss.isSubBaseShielded(firstSbId, sim)).toBe(true);
+    });
+  });
+
+  describe("destruction and cleanup", () => {
+    it("destroyed sub-base is removed from tracking", () => {
+      boss.spawnSubBases(sim, ai);
+      const firstSbId = Array.from(boss.subBases.keys())[0];
+
+      sim.entities.delete(firstSbId);
+      boss.update(sim);
+
+      expect(boss.subBases.has(firstSbId)).toBe(false);
+    });
+
+    it("orphaned towers from dead sub-base still block phase 1", () => {
+      boss.spawnSubBases(sim, ai);
+      // Remove all mothership-area towers (only keep sub-base towers)
+      // Sub-base towers are regular "tower" and "missile_tower" entities
+      const firstSbId = Array.from(boss.subBases.keys())[0];
+      const sb = boss.subBases.get(firstSbId)!;
+      const towerIds = Array.from(sb.towerIds);
+
+      // Kill the sub-base but leave its towers alive
+      sim.entities.delete(firstSbId);
+      boss.update(sim);
+
+      // Towers should still exist
+      for (const tid of towerIds) {
+        expect(sim.entities.has(tid)).toBe(true);
+      }
+
+      // Phase should still be 1 (towers block it)
+      expect(boss.phaseState.current).toBe(1);
+    });
+  });
+
+  describe("population cap bonuses", () => {
+    it("returns correct bonus with all 4 sub-bases alive", () => {
+      boss.spawnSubBases(sim, ai);
+      expect(boss.getMinionCapBonus(sim)).toBe(4 * SUB_BASE_POP_MINIONS);
+      expect(boss.getPhantomCapBonus(sim)).toBe(4 * SUB_BASE_POP_PHANTOMS);
+    });
+
+    it("bonus decreases when sub-bases are destroyed", () => {
+      boss.spawnSubBases(sim, ai);
+
+      // Destroy one sub-base
+      const firstSbId = Array.from(boss.subBases.keys())[0];
+      sim.entities.delete(firstSbId);
+      boss.update(sim);
+
+      expect(boss.getMinionCapBonus(sim)).toBe(3 * SUB_BASE_POP_MINIONS);
+      expect(boss.getPhantomCapBonus(sim)).toBe(3 * SUB_BASE_POP_PHANTOMS);
+    });
+
+    it("bonus is 0 when all sub-bases are destroyed", () => {
+      boss.spawnSubBases(sim, ai);
+
+      for (const sbId of Array.from(boss.subBases.keys())) {
+        sim.entities.delete(sbId);
+      }
+      boss.update(sim);
+
+      expect(boss.getMinionCapBonus(sim)).toBe(0);
+      expect(boss.getPhantomCapBonus(sim)).toBe(0);
+    });
+  });
+
+  describe("tower association", () => {
+    it("getSubBasesNeedingTowers returns sub-bases with fewer than 2 towers", () => {
+      boss.spawnSubBases(sim, ai);
+
+      // All sub-bases start with 2 towers — none should need towers
+      expect(boss.getSubBasesNeedingTowers(sim)).toHaveLength(0);
+
+      // Destroy one tower from first sub-base
+      const firstSbId = Array.from(boss.subBases.keys())[0];
+      const sb = boss.subBases.get(firstSbId)!;
+      const firstTowerId = Array.from(sb.towerIds)[0];
+      sim.entities.delete(firstTowerId);
+      boss.update(sim);
+
+      const needing = boss.getSubBasesNeedingTowers(sim);
+      expect(needing).toHaveLength(1);
+      expect(needing[0].entityId).toBe(firstSbId);
+    });
+
+    it("tryRegisterTowerToNearestSubBase registers a tower to a nearby sub-base", () => {
+      boss.spawnSubBases(sim, ai);
+
+      // Destroy one tower from first sub-base to make room
+      const firstSbId = Array.from(boss.subBases.keys())[0];
+      const sb = boss.subBases.get(firstSbId)!;
+      const firstTowerId = Array.from(sb.towerIds)[0];
+      sim.entities.delete(firstTowerId);
+      boss.update(sim);
+
+      // Build a new tower near the sub-base
+      const newTower = sim.spawnEnemy("tower", sb.pos.x + 50, sb.pos.y + 50);
+      const registered = boss.tryRegisterTowerToNearestSubBase(newTower.id, newTower.pos.x, newTower.pos.y, sim);
+
+      expect(registered).toBe(true);
+      expect(sb.towerIds.has(newTower.id)).toBe(true);
+    });
+
+    it("dead sub-bases cannot accept new towers", () => {
+      boss.spawnSubBases(sim, ai);
+
+      const firstSbId = Array.from(boss.subBases.keys())[0];
+      const sb = boss.subBases.get(firstSbId)!;
+      const pos = { ...sb.pos };
+
+      // Kill the sub-base
+      sim.entities.delete(firstSbId);
+      boss.update(sim);
+
+      // Try to register a tower near the dead sub-base's position
+      const newTower = sim.spawnEnemy("tower", pos.x + 50, pos.y + 50);
+      const registered = boss.tryRegisterTowerToNearestSubBase(newTower.id, newTower.pos.x, newTower.pos.y, sim);
+
+      expect(registered).toBe(false);
+    });
+  });
+
+  describe("phase info", () => {
+    it("includes sub-base count in phase 1 remaining", () => {
+      boss.spawnSubBases(sim, ai);
+      const info = boss.getPhaseInfo(sim);
+      expect(info.remaining.sub_base).toBe(4);
+    });
+
+    it("sub-base count updates when sub-bases are destroyed", () => {
+      boss.spawnSubBases(sim, ai);
+      const firstSbId = Array.from(boss.subBases.keys())[0];
+      sim.entities.delete(firstSbId);
+      boss.update(sim);
+
+      const info = boss.getPhaseInfo(sim);
+      expect(info.remaining.sub_base).toBe(3);
+    });
   });
 });

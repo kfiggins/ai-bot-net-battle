@@ -67,6 +67,9 @@ import {
   CANNON_OFFSET_LATERAL,
   PLAYER_MISSILE_COOLDOWN_TICKS,
   PLAYER_MISSILE_DAMAGE_MULT,
+  SUB_BASE_HP,
+  SUB_BASE_RADIUS,
+  SUB_BASE_KILL_XP,
 } from "shared";
 
 export interface PlayerState {
@@ -169,12 +172,13 @@ export class Simulation {
     }
   }
 
-  spawnEnemy(kind: "minion_ship" | "tower" | "missile_tower" | "phantom_ship", x: number, y: number): Entity {
+  spawnEnemy(kind: "minion_ship" | "tower" | "missile_tower" | "phantom_ship" | "sub_base", x: number, y: number): Entity {
     const entityId = uuid();
     const hp =
       kind === "minion_ship" ? MINION_HP :
       kind === "phantom_ship" ? PHANTOM_HP :
       kind === "missile_tower" ? MISSILE_TOWER_HP :
+      kind === "sub_base" ? SUB_BASE_HP :
       TOWER_HP;
     const entity: Entity = {
       id: entityId,
@@ -663,6 +667,7 @@ export class Simulation {
       killedKind === "minion_ship" ? MINION_KILL_XP :
       killedKind === "phantom_ship" ? PHANTOM_KILL_XP :
       killedKind === "tower" || killedKind === "missile_tower" ? TOWER_KILL_XP :
+      killedKind === "sub_base" ? SUB_BASE_KILL_XP :
       0;
     if (xp === 0) return;
     for (const player of this.players.values()) {
@@ -689,7 +694,7 @@ export class Simulation {
   }
 
   private checkBodyCollisions(): void {
-    const solidKinds = new Set(["mothership", "tower", "missile_tower", "minion_ship", "nemesis", "phantom_ship"]);
+    const solidKinds = new Set(["mothership", "tower", "missile_tower", "minion_ship", "nemesis", "phantom_ship", "sub_base"]);
 
     for (const [playerId, player] of this.players) {
       const playerEntity = this.entities.get(player.entityId);
@@ -805,6 +810,8 @@ export function entityRadius(kind: string): number {
       return PHANTOM_RADIUS;
     case "energy_orb":
       return ORB_RADIUS;
+    case "sub_base":
+      return SUB_BASE_RADIUS;
     default:
       return PLAYER_RADIUS;
   }

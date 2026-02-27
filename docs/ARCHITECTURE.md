@@ -20,16 +20,25 @@ Multiplayer browser game: 1-8 players cooperate to destroy enemy towers, minions
 | `mothership` | 2 | 500 | 40 | no | Center of map, shielded until towers/minions cleared |
 | `nemesis` | 2 | 1200 | 38 | yes | Spawns after mothership dies, chases players, spiral bullets + homing missiles |
 | `phantom_ship` | 2 | 20 | 10 | yes | Fast flanker — orbits mothership, approaches from far side, predictive burst fire, dodges player aim |
+| `sub_base` | 2 | 300 | 30 | no | 4 diagonal structures ~700px from mothership, shielded while its towers live, provides population bonuses |
 | `energy_orb` | 0 | 1 | 8 | no | Neutral, gives 5 XP to players or 10 resources to enemy |
 
 ## Game Flow (Boss Phases)
 
-1. **Phase 1**: Destroy all towers (regular + missile) — mothership shielded
+1. **Phase 1**: Destroy all towers and sub-bases — mothership shielded while ANY tower exists (including sub-base towers). Sub-bases are shielded while their own towers are alive. AI rebuilds towers around living sub-bases, so players must destroy sub-bases to stop tower rebuilding.
 2. **Phase 2**: Destroy all minions — mothership shielded while minions alive
 3. **Phase 3**: Destroy the mothership — now vulnerable
 4. **Mothership Death Sequence**: 2-second bullet ring barrage (6 rings of 12 bullets)
 5. **Phase 4 (Nemesis)**: Defeat the Nemesis boss — chases players, spiral fire + missiles
 6. **Victory**: Nemesis destroyed → `matchOver = true`
+
+### Sub-Base System
+- 4 sub-bases at diagonal positions (~700px from mothership center)
+- Each starts with 1 regular tower + 1 missile tower (shielded while towers alive)
+- Each alive sub-base adds +5 minion cap and +1 phantom cap
+- AI can rebuild towers around living sub-bases (up to 2 per sub-base, any tower type mix)
+- Destroying a sub-base permanently removes its population bonus and tower slots
+- Strategic choice: players must decide which sub-bases to attack first
 
 ## Player Progression
 
@@ -56,9 +65,9 @@ Snapshots broadcast every `SNAPSHOT_INTERVAL` ticks (~20 Hz).
 
 - Starting balance: 200, income: 10/s, plus minion orb collection (10 per orb)
 - **Unit costs**: minion 50, tower 100, missile_tower 125, phantom 65
-- **Unit caps**: minion 20, tower 10, missile_tower 5, phantom 5
+- **Unit caps**: minion 20 (+5 per alive sub-base), tower 10, missile_tower 5, phantom 5 (+1 per alive sub-base)
 - **Build cooldown**: 0.5s queue delay
-- **Tower placement**: Must be within 500px of mothership
+- **Tower placement**: Must be within 500px of mothership OR 250px of an alive sub-base
 
 ## Agent API
 

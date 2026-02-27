@@ -30,10 +30,22 @@ export interface QueuedBuild {
   y: number;
 }
 
+export interface RecentBuild {
+  unitKind: string;
+  entityId: string;
+  x: number;
+  y: number;
+}
+
 export class Economy {
   balance = STARTING_BALANCE;
   incomePerTick = INCOME_PER_TICK;
   buildQueue: QueuedBuild[] = [];
+  recentlyBuilt: RecentBuild[] = [];
+
+  // Dynamic state set each tick by room (sub-base bonuses)
+  dynamicCapBonuses: Record<string, number> = {};
+  towerAnchors: Array<{ x: number; y: number; maxDist: number }> = [];
 
   update(sim: Simulation, ai: AIManager): void {
     // Accrue income
@@ -59,9 +71,16 @@ export class Economy {
 
     this.buildQueue = remaining;
 
+    this.recentlyBuilt = [];
     for (const build of ready) {
       const entity = sim.spawnEnemy(build.unitKind, build.x, build.y);
       ai.registerEntity(entity.id);
+      this.recentlyBuilt.push({
+        unitKind: build.unitKind,
+        entityId: entity.id,
+        x: build.x,
+        y: build.y,
+      });
     }
   }
 
@@ -87,9 +106,11 @@ export class Economy {
       };
     }
 
-    // Check cap
-    const cap = UNIT_CAPS[unitKind];
-    if (cap !== undefined) {
+    // Check cap (with dynamic sub-base bonuses)
+    const baseCap = UNIT_CAPS[unitKind];
+    if (baseCap !== undefined) {
+      const bonus = this.dynamicCapBonuses[unitKind] ?? 0;
+      const cap = baseCap + bonus;
       const currentCount = sim.getEntitiesByKind(unitKind as any).length;
       const queuedCount = this.buildQueue.filter((b) => b.unitKind === unitKind).length;
       if (currentCount + queuedCount >= cap) {
@@ -122,16 +143,30 @@ export class Economy {
       y = basePos.y + Math.sin(angle) * dist;
     }
 
-    // Validate tower distance from mothership (phantom_ship is not a tower, skip)
+    // Validate tower distance from mothership OR a sub-base anchor
     if (unitKind === "tower" || unitKind === "missile_tower") {
       const dx = x - basePos.x;
       const dy = y - basePos.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist > TOWER_MAX_SPAWN_DISTANCE) {
+      let withinRange = dist <= TOWER_MAX_SPAWN_DISTANCE;
+
+      if (!withinRange) {
+        for (const anchor of this.towerAnchors) {
+          const adx = x - anchor.x;
+          const ady = y - anchor.y;
+          const adist = Math.sqrt(adx * adx + ady * ady);
+          if (adist <= anchor.maxDist) {
+            withinRange = true;
+            break;
+          }
+        }
+      }
+
+      if (!withinRange) {
         return {
           ok: false,
           error: "too_far",
-          detail: `Tower must be within ${TOWER_MAX_SPAWN_DISTANCE}px of mothership (distance: ${Math.round(dist)})`,
+          detail: `Tower must be within range of mothership or a sub-base`,
         };
       }
     }

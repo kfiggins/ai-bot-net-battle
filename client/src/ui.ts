@@ -365,6 +365,7 @@ export class HUD {
       tower: 0,
       missile_tower: 0,
       mothership: 0,
+      sub_base: 0,
       bullet: 0,
       missile: 0,
       energy_orb: 0,
@@ -382,6 +383,7 @@ export class HUD {
       `minions: ${counts.minion_ship}`,
       `towers: ${counts.tower}`,
       `missile towers: ${counts.missile_tower}`,
+      `sub-bases: ${counts.sub_base}`,
       `boss: ${counts.mothership}`,
       `bullets: ${counts.bullet}`,
       `missiles: ${counts.missile}`,
@@ -469,6 +471,7 @@ function getMaxHp(entity: Entity): number {
     case "tower": return 100;
     case "missile_tower": return 150;
     case "mothership": return 500;
+    case "sub_base": return 300;
     default: return 0;
   }
 }
@@ -481,6 +484,7 @@ function getBarOffset(kind: string): number {
     case "tower": return 26;
     case "missile_tower": return 30;
     case "mothership": return 48;
+    case "sub_base": return 36;
     default: return 16;
   }
 }

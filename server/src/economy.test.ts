@@ -12,6 +12,7 @@ import {
   WORLD_HEIGHT,
   TOWER_MAX_SPAWN_DISTANCE,
   MINION_ORB_RESOURCE,
+  SUB_BASE_TOWER_RANGE,
 } from "shared";
 
 describe("Economy", () => {
@@ -232,6 +233,79 @@ describe("Economy", () => {
       const summary = economy.getSummary(sim);
       expect(summary.buildQueue).toHaveLength(1);
       expect(summary.buildQueue[0].kind).toBe("tower");
+    });
+  });
+
+  describe("dynamic caps from sub-bases", () => {
+    it("allows more minions when dynamicCapBonuses is set", () => {
+      economy.dynamicCapBonuses = { minion_ship: 10 };
+      economy.balance = 50000; // plenty of funds
+
+      // Spawn base cap (20) minions
+      for (let i = 0; i < UNIT_CAPS.minion_ship; i++) {
+        sim.spawnEnemy("minion_ship", 100 + i * 10, 100);
+      }
+
+      // Should still allow building because cap is now 30
+      const cx = WORLD_WIDTH / 2;
+      const result = economy.requestBuild({ unitKind: "minion_ship" }, sim, { x: cx, y: cx });
+      expect(result.ok).toBe(true);
+    });
+
+    it("respects base cap when dynamicCapBonuses is empty", () => {
+      economy.balance = 50000;
+
+      // Spawn base cap minions
+      for (let i = 0; i < UNIT_CAPS.minion_ship; i++) {
+        sim.spawnEnemy("minion_ship", 100 + i * 10, 100);
+      }
+
+      const cx = WORLD_WIDTH / 2;
+      const result = economy.requestBuild({ unitKind: "minion_ship" }, sim, { x: cx, y: cx });
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe("cap_reached");
+    });
+  });
+
+  describe("tower anchors (sub-base tower placement)", () => {
+    it("allows tower placement near a sub-base anchor", () => {
+      economy.balance = 50000;
+      // Sub-base at (2700, 1300), tower placed 100px away
+      economy.towerAnchors = [{ x: 2700, y: 1300, maxDist: SUB_BASE_TOWER_RANGE }];
+
+      const result = economy.requestBuild(
+        { unitKind: "tower", x: 2750, y: 1350 },
+        sim,
+        { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 }
+      );
+      expect(result.ok).toBe(true);
+    });
+
+    it("rejects tower far from both mothership and sub-base anchors", () => {
+      economy.balance = 50000;
+      economy.towerAnchors = [{ x: 2700, y: 1300, maxDist: SUB_BASE_TOWER_RANGE }];
+
+      // Tower at (100, 100) — far from everything
+      const result = economy.requestBuild(
+        { unitKind: "tower", x: 100, y: 100 },
+        sim,
+        { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 }
+      );
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe("too_far");
+    });
+
+    it("tracks recently built entities", () => {
+      economy.balance = 50000;
+      const cx = WORLD_WIDTH / 2;
+      economy.requestBuild({ unitKind: "tower", x: cx, y: cx }, sim, { x: cx, y: cx });
+
+      // Process the build queue
+      sim.tick = BUILD_COOLDOWN_TICKS + 1;
+      economy.update(sim, ai);
+
+      expect(economy.recentlyBuilt).toHaveLength(1);
+      expect(economy.recentlyBuilt[0].unitKind).toBe("tower");
     });
   });
 });

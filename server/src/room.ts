@@ -10,6 +10,7 @@ import {
   WORLD_HEIGHT,
   LobbyPlayer,
   AgentControlMode,
+  SUB_BASE_TOWER_RANGE,
 } from "shared";
 import { Simulation } from "./sim.js";
 import { AIManager } from "./ai.js";
@@ -284,6 +285,9 @@ export class Room {
     const mothership = this.boss.spawnMothership(this.sim);
     this.ai.setPatrolCenter({ x: mothership.pos.x, y: mothership.pos.y });
 
+    // Spawn sub-bases with their towers
+    this.boss.spawnSubBases(this.sim, this.ai);
+
     const cx = WORLD_WIDTH / 2;
     const cy = WORLD_HEIGHT / 2;
     const m1 = this.sim.spawnEnemy("minion_ship", cx - 200, cy - 150);
@@ -315,11 +319,29 @@ export class Room {
 
       this.sim.update();
       this.ai.update(this.sim);
+
+      // Set dynamic economy state from sub-base bonuses before build processing
+      this.economy.dynamicCapBonuses = {
+        minion_ship: this.boss.getMinionCapBonus(this.sim),
+        phantom_ship: this.boss.getPhantomCapBonus(this.sim),
+      };
+      this.economy.towerAnchors = Array.from(this.boss.subBases.values())
+        .filter(sb => this.sim.entities.has(sb.entityId))
+        .map(sb => ({ x: sb.pos.x, y: sb.pos.y, maxDist: SUB_BASE_TOWER_RANGE }));
+
       this.economy.update(this.sim, this.ai);
+
+      // Register newly built towers with nearby sub-bases
+      for (const build of this.economy.recentlyBuilt) {
+        if (build.unitKind === "tower" || build.unitKind === "missile_tower") {
+          this.boss.tryRegisterTowerToNearestSubBase(build.entityId, build.x, build.y, this.sim);
+        }
+      }
+
       this.agent.update(this.sim);
       if (this.agentControlMode === "builtin_fake_ai") {
         const mothershipPos = this.boss.getMothershipPos(this.sim);
-        this.fakeAI.update(this.sim, this.economy, this.agent, mothershipPos);
+        this.fakeAI.update(this.sim, this.economy, this.agent, mothershipPos, this.boss);
       }
       this.boss.update(this.sim);
 

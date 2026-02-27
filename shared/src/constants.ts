@@ -193,6 +193,16 @@ export const PHANTOM_KILL_XP = 20;                  // XP awarded to the shooter
 // Boost particles
 export const BOOST_PARTICLE_THRESHOLD = 30; // px/s — min speed to emit boost particles on AI/remote entities
 
+// Sub-Base — secondary defensive structures around mothership
+export const SUB_BASE_HP = 300;
+export const SUB_BASE_RADIUS = 30;
+export const SUB_BASE_DISTANCE = 700;               // px from mothership center (diagonal placement)
+export const SUB_BASE_TOWER_RANGE = 250;             // max tower placement distance from sub-base
+export const SUB_BASE_MAX_TOWERS = 2;                // per sub-base (any mix of tower/missile_tower)
+export const SUB_BASE_POP_MINIONS = 5;               // +5 minion cap per alive sub-base
+export const SUB_BASE_POP_PHANTOMS = 1;              // +1 phantom cap per alive sub-base
+export const SUB_BASE_KILL_XP = 50;                  // XP award for destroying
+
 // Body collision damage (player rams into solid enemy — not player vs player)
 export const BODY_COLLISION_DAMAGE = 8;           // for mothership, towers, minions
 export const NEMESIS_BODY_COLLISION_DAMAGE = 15;  // Nemesis does more on contact

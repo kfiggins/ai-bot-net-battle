@@ -399,6 +399,19 @@ export class GameScene extends Phaser.Scene {
               : getColorByKind(this.previousEntityKinds.get(id) ?? "");
             this.vfx.explosion(sprite.x, sprite.y, explosionColor, 10);
 
+            // Sub-base death: smaller chain explosions
+            if (this.previousEntityKinds.get(id) === "sub_base") {
+              const pos = { x: sprite.x, y: sprite.y };
+              const timings = [100, 250, 450, 650];
+              for (const delay of timings) {
+                this.time.delayedCall(delay, () => {
+                  const ox = (Math.random() - 0.5) * 80;
+                  const oy = (Math.random() - 0.5) * 80;
+                  this.vfx.explosion(pos.x + ox, pos.y + oy, 0xcc4400, 40);
+                });
+              }
+            }
+
             // Mothership death: chain explosions over ~2 s before Nemesis arrives
             if (this.previousEntityKinds.get(id) === "mothership") {
               const pos = { x: sprite.x, y: sprite.y };
@@ -599,6 +612,13 @@ export class GameScene extends Phaser.Scene {
       return img;
     }
 
+    if (entity.kind === "sub_base") {
+      const r = getRadius("sub_base");
+      const circle = this.add.circle(entity.pos.x, entity.pos.y, r, 0xcc4400);
+      circle.setStrokeStyle(3, 0xff6600);
+      return circle;
+    }
+
     if (entity.kind === "phantom_ship") {
       // Use the custom sprite if the asset was loaded, otherwise fall back to a tinted circle.
       if (this.textures.exists("phantom") && !this.textures.get("phantom").key.startsWith("__")) {
@@ -735,6 +755,7 @@ function getColorByKind(kind: string): number {
     case "mothership": return 0xff00ff;
     case "nemesis": return 0xaa00ff;
     case "phantom_ship": return 0x8844ff;
+    case "sub_base": return 0xcc4400;
     case "energy_orb": return 0x00ffcc;
     default: return 0xffffff;
   }
@@ -754,6 +775,7 @@ function getColor(entity: Entity): number {
     case "mothership": return 0xff00ff;
     case "nemesis": return 0xaa00ff;
     case "phantom_ship": return 0x8844ff;
+    case "sub_base": return 0xcc4400;
     case "energy_orb": return 0x00ffcc;
     default: return 0xffffff;
   }
@@ -770,6 +792,7 @@ function getRadius(kind: string): number {
     case "mothership": return 40;
     case "nemesis": return 38;
     case "phantom_ship": return 10;
+    case "sub_base": return 30;
     case "energy_orb": return ORB_RADIUS;
     default: return 8;
   }
