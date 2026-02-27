@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { AgentControlMode, LobbyPlayer, VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from "shared";
 import { NetClient } from "./net.js";
+import { Starfield } from "./starfield.js";
 
 const PLAYER_COLORS = [0x88ff00, 0x00ddcc, 0xff8800, 0xff44aa, 0xffee00, 0xffffff, 0x003399, 0x222222];
 const CLIENT_VERSION = "v0.0.1+jitterfix2";
@@ -10,6 +11,7 @@ function colorToHex(color: number): string {
 }
 
 export class LobbyScene extends Phaser.Scene {
+  private starfield!: Starfield;
   private net!: NetClient;
   private playerListTexts: Phaser.GameObjects.Text[] = [];
   private playerDots: Phaser.GameObjects.Arc[] = [];
@@ -39,6 +41,7 @@ export class LobbyScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBackgroundColor("#111122");
+    this.starfield = new Starfield(this, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
 
     // Title
     this.add
@@ -220,6 +223,10 @@ export class LobbyScene extends Phaser.Scene {
       this.statusText.setText("Waiting for players...");
       this.startButton.setVisible(true);
     }
+  }
+
+  update(_time: number, delta: number): void {
+    this.starfield.update(delta);
   }
 
   private refreshModeUI(): void {

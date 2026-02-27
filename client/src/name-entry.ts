@@ -1,10 +1,12 @@
 import Phaser from "phaser";
 import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from "shared";
+import { Starfield } from "./starfield.js";
 
 const CLIENT_VERSION = "v0.0.1+jitterfix2";
 const MAX_NAME_LENGTH = 20;
 
 export class NameEntryScene extends Phaser.Scene {
+  private starfield!: Starfield;
   private nameInput = "";
   private inputText!: Phaser.GameObjects.Text;
   private cursorText!: Phaser.GameObjects.Text;
@@ -18,6 +20,7 @@ export class NameEntryScene extends Phaser.Scene {
   create(): void {
     const cx = VIEWPORT_WIDTH / 2;
     this.cameras.main.setBackgroundColor("#111122");
+    this.starfield = new Starfield(this, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
 
     // Title
     this.add
@@ -143,6 +146,10 @@ export class NameEntryScene extends Phaser.Scene {
   private updateDisplay(): void {
     this.inputText.setText(this.nameInput);
     this.cursorText.setX(this.inputText.x + this.inputText.width + 2);
+  }
+
+  update(_time: number, delta: number): void {
+    this.starfield.update(delta);
   }
 
   private submitName(): void {
