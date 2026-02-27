@@ -154,7 +154,7 @@ export const CANNON_OFFSET_LATERAL = 6;  // px lateral spacing between cannon ba
 
 // Rooms
 export const MAX_ROOMS = 10;
-export const MAX_PLAYERS_PER_ROOM = 4;
+export const MAX_PLAYERS_PER_ROOM = 8;
 export const RECONNECT_TIMEOUT_MS = 30_000; // 30 seconds to reconnect
 
 // Nemesis Boss (Phase 15)

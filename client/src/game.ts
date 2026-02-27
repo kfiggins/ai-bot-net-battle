@@ -714,8 +714,11 @@ export class GameScene extends Phaser.Scene {
   }
 }
 
-const PLAYER_COLORS = [0x00ff88, 0x44aaff, 0xffaa00, 0xff44ff];
-const PLAYER_SHIP_TEXTURES = ["spaceship_green", "spaceship_blue", "spaceship_red", "spaceship_purple"] as const;
+const PLAYER_COLORS = [0x00ff88, 0x44aaff, 0xffaa00, 0xff44ff, 0xff6666, 0x66ffff, 0xffff66, 0xaa88ff];
+const PLAYER_SHIP_TEXTURES = [
+  "spaceship_green", "spaceship_blue", "spaceship_red", "spaceship_purple",
+  "spaceship_red", "spaceship_blue", "spaceship_green", "spaceship_purple",
+] as const;
 
 function getColorByKind(kind: string): number {
   switch (kind) {

@@ -185,7 +185,7 @@ pm2 save
 | Limit | Value | Configurable |
 |-------|-------|-------------|
 | Max rooms | 10 | `MAX_ROOMS` in constants |
-| Max players per room | 4 | `MAX_PLAYERS_PER_ROOM` in constants |
+| Max players per room | 8 | `MAX_PLAYERS_PER_ROOM` in constants |
 | Reconnect timeout | 30s | `RECONNECT_TIMEOUT_MS` in constants |
 | WS messages/sec/connection | 60 | `WS_RATE_LIMIT` env var |
 | Join attempts/min/connection | 5 | `JOIN_RATE_LIMIT` env var |

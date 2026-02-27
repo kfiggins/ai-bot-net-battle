@@ -70,10 +70,10 @@ describe("Room", () => {
   });
 
   it("rejects players when room is full", () => {
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 8; i++) {
       room.addPlayer(mockWs(), `Player${i}`);
     }
-    expect(room.playerCount).toBe(4);
+    expect(room.playerCount).toBe(8);
 
     const rejected = room.addPlayer(mockWs(), "Extra");
     expect(rejected).toBeNull();
@@ -159,22 +159,22 @@ describe("Room", () => {
   });
 
   it("removePlayer mid-game frees the slot so a new player can join", () => {
-    // Fill to the 4-player cap
-    const players = Array.from({ length: 4 }, (_, i) =>
+    // Fill to the 8-player cap
+    const players = Array.from({ length: 8 }, (_, i) =>
       room.addPlayer(mockWs(), `Player ${i + 1}`)!
     );
     room.startMatch();
 
-    // Room full — 5th player rejected
+    // Room full — 9th player rejected
     expect(room.addPlayer(mockWs(), "Newcomer")).toBeNull();
 
     room.removePlayer(players[0].playerId);
-    expect(room.playerCount).toBe(3);
+    expect(room.playerCount).toBe(7);
 
     // Slot freed — newcomer can now join
     const newcomer = room.addPlayer(mockWs(), "Newcomer");
     expect(newcomer).not.toBeNull();
-    expect(room.playerCount).toBe(4);
+    expect(room.playerCount).toBe(8);
   });
 
   it("rejoining player gets a new entity in the running simulation", () => {
@@ -232,7 +232,7 @@ describe("Room", () => {
     const lobby = room.getLobbyState();
     expect(lobby.state).toBe("waiting");
     expect(lobby.players).toBe(2);
-    expect(lobby.maxPlayers).toBe(4);
+    expect(lobby.maxPlayers).toBe(8);
     expect(lobby.mode).toBe("builtin_fake_ai");
   });
 

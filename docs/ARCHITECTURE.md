@@ -5,7 +5,7 @@
 
 ## Game Overview
 
-Multiplayer browser game: 1-4 players cooperate to destroy enemy towers, minions, a mothership boss, and a final Nemesis boss. An AI agent (external HTTP or built-in fake AI) manages the enemy economy — spawning minions and building towers.
+Multiplayer browser game: 1-8 players cooperate to destroy enemy towers, minions, a mothership boss, and a final Nemesis boss. An AI agent (external HTTP or built-in fake AI) manages the enemy economy — spawning minions and building towers.
 
 ## Entity Kinds
 
@@ -97,7 +97,7 @@ All messages: `{ v: 1, type: "...", ... }` validated with Zod schemas.
 - Room-based: join via `join_room` with roomId (from URL hash, default "default")
 - Reconnect: 30s window with token
 - Rate limits: 60 msg/s WS, 5 joins/min, 30 HTTP commands/min/IP
-- Max 10 rooms, 4 players per room
+- Max 10 rooms, 8 players per room
 
 ## World
 
