@@ -6,8 +6,16 @@ import { GameScene } from "./game.js";
 
 new Phaser.Game({
   type: Phaser.AUTO,
-  width: VIEWPORT_WIDTH,
-  height: VIEWPORT_HEIGHT,
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+    width: VIEWPORT_WIDTH,
+    height: VIEWPORT_HEIGHT,
+    max: {
+      width: VIEWPORT_WIDTH * 1.2,
+      height: VIEWPORT_HEIGHT * 1.2,
+    },
+  },
   scene: [NameEntryScene, LobbyScene, GameScene],
   parent: document.body,
 });
