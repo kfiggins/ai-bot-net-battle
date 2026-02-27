@@ -10,11 +10,10 @@ interface Star {
 }
 
 interface Planet {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  radius: number;
+  sx: number; // 3D X offset from center
+  sy: number; // 3D Y offset from center
+  z: number; // depth
+  radius: number; // base radius (projected size scales with depth)
   coreColor: number;
   ringColor: number;
   pulseSpeed: number;
@@ -82,25 +81,30 @@ export class Starfield {
       this.stars.push(this.spawnStar(true));
     }
 
-    // Generate planets (3–5)
+    // Generate planets in 3D space (same warp projection as stars)
     this.planets = [];
     const planetCount = 3 + Math.floor(Math.random() * 3);
     for (let i = 0; i < planetCount; i++) {
-      const palette = PLANET_PALETTES[i % PLANET_PALETTES.length];
-      const angle = Math.random() * Math.PI * 2;
-      const drift = rand(8, 20); // pixels per second
-      this.planets.push({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        vx: Math.cos(angle) * drift,
-        vy: Math.sin(angle) * drift,
-        radius: rand(4, 8),
-        coreColor: palette.core,
-        ringColor: palette.ring,
-        pulseSpeed: rand(0.8, 2.3),
-        pulsePhase: Math.random() * Math.PI * 2,
-      });
+      this.planets.push(this.spawnPlanet(true));
     }
+  }
+
+  private spawnPlanet(randomDepth: boolean): Planet {
+    const spread = this.width * 0.6;
+    const sx = rand(-spread, spread);
+    const sy = rand(-spread, spread);
+    const z = randomDepth ? rand(MAX_Z * 0.3, MAX_Z) : MAX_Z;
+    const palette = PLANET_PALETTES[Math.floor(Math.random() * PLANET_PALETTES.length)];
+    return {
+      sx,
+      sy,
+      z,
+      radius: rand(4, 8),
+      coreColor: palette.core,
+      ringColor: palette.ring,
+      pulseSpeed: rand(0.8, 2.3),
+      pulsePhase: Math.random() * Math.PI * 2,
+    };
   }
 
   private spawnStar(randomDepth: boolean): Star {
@@ -181,36 +185,56 @@ export class Starfield {
       this.gfx.fillCircle(screenX, screenY, radius);
     }
 
-    // Update and draw planets
-    const dtSec = dt * 0.001;
-    for (const p of this.planets) {
-      // Drift across screen
-      p.x += p.vx * dtSec;
-      p.y += p.vy * dtSec;
+    // Update and draw planets (same warp projection as stars)
+    for (let i = 0; i < this.planets.length; i++) {
+      const p = this.planets[i];
 
-      // Wrap around edges
-      if (p.x < -p.radius * 2) p.x = this.width + p.radius;
-      if (p.x > this.width + p.radius * 2) p.x = -p.radius;
-      if (p.y < -p.radius * 2) p.y = this.height + p.radius;
-      if (p.y > this.height + p.radius * 2) p.y = -p.radius;
+      // Move planet toward camera (same speed as stars)
+      p.z -= SPEED * dt;
+
+      // Respawn if past camera
+      if (p.z < MIN_Z) {
+        this.planets[i] = this.spawnPlanet(false);
+        continue;
+      }
+
+      // Project to screen
+      const screenX = this.cx + (p.sx / p.z) * FOCAL_LENGTH;
+      const screenY = this.cy + (p.sy / p.z) * FOCAL_LENGTH;
+
+      // Off-screen? Respawn
+      if (
+        screenX < -100 ||
+        screenX > this.width + 100 ||
+        screenY < -100 ||
+        screenY > this.height + 100
+      ) {
+        this.planets[i] = this.spawnPlanet(false);
+        continue;
+      }
+
+      // Scale radius based on depth (closer = bigger)
+      const depthRatio = 1 - p.z / MAX_Z;
+      const r = p.radius * (0.3 + depthRatio * 2);
+      const alpha = Math.max(0.1, Math.min(1, 0.2 + depthRatio * 0.8));
 
       const glowAlpha =
-        0.1 + 0.1 * Math.sin(t * p.pulseSpeed + p.pulsePhase);
+        alpha * (0.15 + 0.1 * Math.sin(t * p.pulseSpeed + p.pulsePhase));
 
       // Outer glow ring
       this.gfx.fillStyle(p.ringColor, glowAlpha);
-      this.gfx.fillCircle(p.x, p.y, p.radius + 2);
+      this.gfx.fillCircle(screenX, screenY, r + 2);
 
       // Body
-      this.gfx.fillStyle(p.coreColor, 0.8);
-      this.gfx.fillCircle(p.x, p.y, p.radius);
+      this.gfx.fillStyle(p.coreColor, alpha);
+      this.gfx.fillCircle(screenX, screenY, r);
 
       // Highlight dot
-      this.gfx.fillStyle(0xffffff, 0.25);
+      this.gfx.fillStyle(0xffffff, 0.25 * alpha);
       this.gfx.fillCircle(
-        p.x - p.radius * 0.25,
-        p.y - p.radius * 0.25,
-        p.radius * 0.4,
+        screenX - r * 0.25,
+        screenY - r * 0.25,
+        r * 0.4,
       );
     }
   }
