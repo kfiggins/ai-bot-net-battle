@@ -4,7 +4,7 @@ import { NetClient } from "./net.js";
 import { Starfield } from "./starfield.js";
 
 const PLAYER_COLORS = [0x88ff00, 0x00ddcc, 0xff8800, 0xff44aa, 0xffee00, 0xffffff, 0x003399, 0x222222];
-const CLIENT_VERSION = "v0.0.1+jitterfix2";
+const CLIENT_VERSION = "v0.0.2";
 
 function colorToHex(color: number): string {
   return "#" + color.toString(16).padStart(6, "0");

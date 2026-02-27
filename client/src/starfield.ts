@@ -1,19 +1,19 @@
 import Phaser from "phaser";
 
 interface Star {
-  x: number;
-  y: number;
-  radius: number;
+  sx: number; // 3D X offset from center
+  sy: number; // 3D Y offset from center
+  z: number; // depth (MAX_Z = far, MIN_Z = near)
   color: number;
-  baseAlpha: number;
-  twinkleSpeed: number;
-  twinklePhase: number;
-  twinkleDepth: number;
+  prevScreenX: number;
+  prevScreenY: number;
 }
 
 interface Planet {
   x: number;
   y: number;
+  vx: number;
+  vy: number;
   radius: number;
   coreColor: number;
   ringColor: number;
@@ -31,13 +31,6 @@ const STAR_COLORS = [
 ];
 const TOTAL_WEIGHT = STAR_COLORS.reduce((s, c) => s + c.weight, 0);
 
-const STAR_TIERS = [
-  { count: 60, minR: 0.5, maxR: 1.0, minAlpha: 0.3, maxAlpha: 0.6 },
-  { count: 35, minR: 1.0, maxR: 1.5, minAlpha: 0.4, maxAlpha: 0.7 },
-  { count: 20, minR: 1.5, maxR: 2.0, minAlpha: 0.6, maxAlpha: 0.9 },
-  { count: 5, minR: 2.0, maxR: 2.5, minAlpha: 0.7, maxAlpha: 1.0 },
-];
-
 const PLANET_PALETTES = [
   { core: 0xcc4422, ring: 0xff6633 },
   { core: 0x3366aa, ring: 0x66aadd },
@@ -45,6 +38,12 @@ const PLANET_PALETTES = [
   { core: 0x6633aa, ring: 0x9966cc },
   { core: 0x228844, ring: 0x44cc77 },
 ];
+
+const STAR_COUNT = 200;
+const MAX_Z = 1000;
+const MIN_Z = 1;
+const SPEED = 0.3; // z units per ms
+const FOCAL_LENGTH = 300;
 
 function pickStarColor(): number {
   let roll = Math.random() * TOTAL_WEIGHT;
@@ -64,50 +63,37 @@ export class Starfield {
   private stars: Star[];
   private planets: Planet[];
   private elapsed = 0;
+  private width: number;
+  private height: number;
+  private cx: number;
+  private cy: number;
 
   constructor(scene: Phaser.Scene, width: number, height: number) {
+    this.width = width;
+    this.height = height;
+    this.cx = width / 2;
+    this.cy = height / 2;
     this.gfx = scene.add.graphics();
     this.gfx.setDepth(-10);
 
-    // Generate stars
+    // Generate stars spread in 3D space
     this.stars = [];
-    for (const tier of STAR_TIERS) {
-      for (let i = 0; i < tier.count; i++) {
-        this.stars.push({
-          x: Math.random() * width,
-          y: Math.random() * height,
-          radius: rand(tier.minR, tier.maxR),
-          color: pickStarColor(),
-          baseAlpha: rand(tier.minAlpha, tier.maxAlpha),
-          twinkleSpeed: rand(0.5, 3.5),
-          twinklePhase: Math.random() * Math.PI * 2,
-          twinkleDepth: rand(0.2, 0.4),
-        });
-      }
+    for (let i = 0; i < STAR_COUNT; i++) {
+      this.stars.push(this.spawnStar(true));
     }
 
     // Generate planets (3–5)
     this.planets = [];
     const planetCount = 3 + Math.floor(Math.random() * 3);
-    const margin = 100;
-    const minDist = 150;
-
     for (let i = 0; i < planetCount; i++) {
-      let x: number, y: number;
-      let attempts = 0;
-      do {
-        x = rand(margin, width - margin);
-        y = rand(margin, height - margin);
-        attempts++;
-      } while (
-        attempts < 50 &&
-        this.planets.some((p) => Math.hypot(p.x - x, p.y - y) < minDist)
-      );
-
       const palette = PLANET_PALETTES[i % PLANET_PALETTES.length];
+      const angle = Math.random() * Math.PI * 2;
+      const drift = rand(8, 20); // pixels per second
       this.planets.push({
-        x,
-        y,
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: Math.cos(angle) * drift,
+        vy: Math.sin(angle) * drift,
         radius: rand(4, 8),
         coreColor: palette.core,
         ringColor: palette.ring,
@@ -117,28 +103,97 @@ export class Starfield {
     }
   }
 
+  private spawnStar(randomDepth: boolean): Star {
+    const spread = this.width;
+    const sx = rand(-spread, spread);
+    const sy = rand(-spread, spread);
+    const z = randomDepth ? rand(MIN_Z, MAX_Z) : MAX_Z;
+    const screenX = this.cx + (sx / z) * FOCAL_LENGTH;
+    const screenY = this.cy + (sy / z) * FOCAL_LENGTH;
+    return {
+      sx,
+      sy,
+      z,
+      color: pickStarColor(),
+      prevScreenX: screenX,
+      prevScreenY: screenY,
+    };
+  }
+
   update(dt: number): void {
     this.elapsed += dt;
-    const t = this.elapsed * 0.001; // seconds
+    const t = this.elapsed * 0.001;
 
     this.gfx.clear();
 
-    // Draw stars
-    for (const s of this.stars) {
-      const alpha = Math.max(
-        0.05,
-        Math.min(
-          1,
-          s.baseAlpha +
-            s.twinkleDepth * Math.sin(t * s.twinkleSpeed + s.twinklePhase),
-        ),
-      );
+    // Update and draw stars
+    for (let i = 0; i < this.stars.length; i++) {
+      const s = this.stars[i];
+
+      // Store previous screen position
+      s.prevScreenX = this.cx + (s.sx / s.z) * FOCAL_LENGTH;
+      s.prevScreenY = this.cy + (s.sy / s.z) * FOCAL_LENGTH;
+
+      // Move star toward camera
+      s.z -= SPEED * dt;
+
+      // Respawn if past camera
+      if (s.z < MIN_Z) {
+        this.stars[i] = this.spawnStar(false);
+        continue;
+      }
+
+      // Project to screen
+      const screenX = this.cx + (s.sx / s.z) * FOCAL_LENGTH;
+      const screenY = this.cy + (s.sy / s.z) * FOCAL_LENGTH;
+
+      // Off-screen? Respawn
+      if (
+        screenX < -50 ||
+        screenX > this.width + 50 ||
+        screenY < -50 ||
+        screenY > this.height + 50
+      ) {
+        this.stars[i] = this.spawnStar(false);
+        continue;
+      }
+
+      // Size and brightness based on depth
+      const depthRatio = 1 - s.z / MAX_Z; // 0 = far, 1 = near
+      const radius = 0.5 + depthRatio * 2.5;
+      const alpha = Math.max(0.05, Math.min(1, 0.1 + depthRatio * 0.9));
+
+      // Draw streak line (motion trail) for close/fast stars
+      const dx = screenX - s.prevScreenX;
+      const dy = screenY - s.prevScreenY;
+      const streakLen = Math.hypot(dx, dy);
+
+      if (streakLen > 2) {
+        this.gfx.lineStyle(Math.max(0.5, radius * 0.6), s.color, alpha * 0.6);
+        this.gfx.beginPath();
+        this.gfx.moveTo(s.prevScreenX, s.prevScreenY);
+        this.gfx.lineTo(screenX, screenY);
+        this.gfx.strokePath();
+      }
+
+      // Draw star dot
       this.gfx.fillStyle(s.color, alpha);
-      this.gfx.fillCircle(s.x, s.y, s.radius);
+      this.gfx.fillCircle(screenX, screenY, radius);
     }
 
-    // Draw planets
+    // Update and draw planets
+    const dtSec = dt * 0.001;
     for (const p of this.planets) {
+      // Drift across screen
+      p.x += p.vx * dtSec;
+      p.y += p.vy * dtSec;
+
+      // Wrap around edges
+      if (p.x < -p.radius * 2) p.x = this.width + p.radius;
+      if (p.x > this.width + p.radius * 2) p.x = -p.radius;
+      if (p.y < -p.radius * 2) p.y = this.height + p.radius;
+      if (p.y > this.height + p.radius * 2) p.y = -p.radius;
+
       const glowAlpha =
         0.1 + 0.1 * Math.sin(t * p.pulseSpeed + p.pulsePhase);
 
@@ -150,7 +205,7 @@ export class Starfield {
       this.gfx.fillStyle(p.coreColor, 0.8);
       this.gfx.fillCircle(p.x, p.y, p.radius);
 
-      // Highlight dot (top-left for light source feel)
+      // Highlight dot
       this.gfx.fillStyle(0xffffff, 0.25);
       this.gfx.fillCircle(
         p.x - p.radius * 0.25,
