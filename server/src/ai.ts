@@ -19,7 +19,7 @@ import {
   ENEMY_DEAGGRO_RANGE,
   ENEMY_PATROL_RADIUS,
   ENEMY_PATROL_SPEED,
-  MINION_ORB_PICKUP_RANGE,
+  ORB_RADIUS,
   PHANTOM_SPEED,
   PHANTOM_ACCEL,
   PHANTOM_BRAKE_FRICTION,
@@ -37,7 +37,7 @@ import {
   PHANTOM_CHASE_ORBIT_SPEED,
   BULLET_SPEED,
 } from "shared";
-import { Simulation, entityRadius } from "./sim.js";
+import { Simulation, circlesOverlap } from "./sim.js";
 
 export type AIMode = "patrol" | "chase" | "return_to_base" | "flank";
 
@@ -241,9 +241,7 @@ export class AIManager {
     // Collect any orb we're touching
     for (const [orbId, orb] of sim.entities) {
       if (orb.kind !== "energy_orb" || orb.hp <= 0) continue;
-      const dx = orb.pos.x - entity.pos.x;
-      const dy = orb.pos.y - entity.pos.y;
-      if (dx * dx + dy * dy <= MINION_ORB_PICKUP_RANGE * MINION_ORB_PICKUP_RANGE) {
+      if (circlesOverlap(entity.pos, MINION_RADIUS, orb.pos, ORB_RADIUS)) {
         sim.collectOrbForEnemy(orbId);
         if (aiState.targetOrbId === orbId) aiState.targetOrbId = null;
       }

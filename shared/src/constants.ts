@@ -112,7 +112,6 @@ export const ORB_INITIAL_COUNT = 100;        // orbs pre-seeded at game start
 
 // Minion orb collection
 export const MINION_ORB_RESOURCE = 10;       // mothership resources per orb collected
-export const MINION_ORB_PICKUP_RANGE = 20;   // pixels (minion radius + orb radius)
 
 // XP & Leveling
 export const MAX_LEVEL = 15;
