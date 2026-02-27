@@ -65,6 +65,8 @@ import {
   RECOIL_REDUCTION_PER_SPEED_UPGRADE,
   ACCEL_PER_SPEED_UPGRADE,
   CANNON_OFFSET_LATERAL,
+  PLAYER_MISSILE_COOLDOWN_TICKS,
+  PLAYER_MISSILE_DAMAGE_MULT,
 } from "shared";
 
 export interface PlayerState {
@@ -72,6 +74,7 @@ export interface PlayerState {
   entityId: string;
   input: PlayerInputData;
   fireCooldown: number;
+  missileCooldown: number;
   label?: string;
   playerIndex?: number;
   // XP & leveling
@@ -96,6 +99,7 @@ export interface MissileState {
   entityId: string;
   ownerId: string;
   ttl: number;
+  damage: number;
 }
 
 export class Simulation {
@@ -133,9 +137,11 @@ export class Simulation {
         left: false,
         right: false,
         fire: false,
+        fireMissile: false,
         aimAngle: 0,
       },
       fireCooldown: 0,
+      missileCooldown: 0,
       label,
       playerIndex,
       xp: 0,
@@ -350,6 +356,7 @@ export class Simulation {
       player.level = 1;
       player.xpToNext = xpForLevel(1);
       player.fireCooldown = 0;
+      player.missileCooldown = 0;
       player.upgrades = { damage: 0, speed: 0, health: 0, fire_rate: 0 };
       player.cannons = 1;
       player.pendingUpgrades = 0;
@@ -415,6 +422,16 @@ export class Simulation {
         this.fireMultiCannon(entity, player.id, input.aimAngle, player.cannons, effectiveDamage, player.upgrades.speed);
         player.fireCooldown = effectiveCooldown;
       }
+
+      // Handle right-click missile
+      if (player.missileCooldown > 0) {
+        player.missileCooldown--;
+      }
+      if (input.fireMissile && player.missileCooldown <= 0) {
+        const missileDamage = effectiveDamage * PLAYER_MISSILE_DAMAGE_MULT;
+        this.spawnMissile(entity, player.id, input.aimAngle, missileDamage);
+        player.missileCooldown = PLAYER_MISSILE_COOLDOWN_TICKS;
+      }
     }
   }
 
@@ -473,7 +490,7 @@ export class Simulation {
     return entity;
   }
 
-  spawnMissile(owner: Entity, ownerId: string, aimAngle: number): Entity {
+  spawnMissile(owner: Entity, ownerId: string, aimAngle: number, damage: number = MISSILE_DAMAGE): Entity {
     const entityId = uuid();
     const vx = Math.cos(aimAngle) * MISSILE_SPEED;
     const vy = Math.sin(aimAngle) * MISSILE_SPEED;
@@ -490,7 +507,7 @@ export class Simulation {
       team: owner.team,
     };
     this.entities.set(entityId, entity);
-    this.missiles.set(entityId, { entityId, ownerId, ttl: MISSILE_TTL_TICKS });
+    this.missiles.set(entityId, { entityId, ownerId, ttl: MISSILE_TTL_TICKS, damage });
     return entity;
   }
 
@@ -625,7 +642,7 @@ export class Simulation {
         const targetRadius = entityRadius(target.kind);
 
         if (circlesOverlap(missileEntity.pos, MISSILE_RADIUS, target.pos, targetRadius)) {
-          target.hp -= MISSILE_DAMAGE;
+          target.hp -= missileState.damage;
           if (target.hp <= 0) this.awardKillXP(missileState.ownerId, target.kind);
           missileEntity.hp = 0;
           break;
@@ -738,6 +755,7 @@ export class Simulation {
             cannons: ps.cannons,
             pendingUpgrades: ps.pendingUpgrades,
             aimAngle: ps.input.aimAngle,
+            missileCooldown: ps.missileCooldown,
           };
         }
       }

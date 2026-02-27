@@ -662,7 +662,7 @@ describe("combat integration", () => {
         : 0;
       sim.setInput("p1", {
         up: false, down: false, left: false, right: false,
-        fire: true, aimAngle,
+        fire: true, fireMissile: false, aimAngle,
       });
       sim.update();
       ai.update(sim);
@@ -684,7 +684,7 @@ describe("combat integration", () => {
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: true, aimAngle: 0,
+      fire: true, fireMissile: false, aimAngle: 0,
     });
 
     // Run until tower is destroyed (tower has more HP)

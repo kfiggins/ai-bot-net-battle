@@ -137,7 +137,7 @@ describe("Simulation", () => {
       sim.addPlayer("p1");
       const input = {
         up: true, down: false, left: false, right: false,
-        fire: false, aimAngle: 0,
+        fire: false, fireMissile: false, aimAngle: 0,
       };
       sim.setInput("p1", input);
       const player = sim.players.get("p1");
@@ -147,7 +147,7 @@ describe("Simulation", () => {
     it("does nothing for non-existent player", () => {
       const input = {
         up: true, down: false, left: false, right: false,
-        fire: false, aimAngle: 0,
+        fire: false, fireMissile: false, aimAngle: 0,
       };
       sim.setInput("nonexistent", input);
     });
@@ -160,7 +160,7 @@ describe("Simulation", () => {
 
       sim.setInput("p1", {
         up: false, down: false, left: false, right: true,
-        fire: false, aimAngle: 0,
+        fire: false, fireMissile: false, aimAngle: 0,
       });
       sim.update();
 
@@ -178,7 +178,7 @@ describe("Simulation", () => {
 
       sim.setInput("p1", {
         up: false, down: false, left: false, right: true,
-        fire: false, aimAngle: 0,
+        fire: false, fireMissile: false, aimAngle: 0,
       });
       // Need ceil(PLAYER_MAX_SPEED / (PLAYER_ACCEL / TICK_RATE)) ticks to reach max speed
       for (let i = 0; i < 20; i++) sim.update();
@@ -205,7 +205,7 @@ describe("Simulation", () => {
       // Accelerate to near max speed
       sim.setInput("p1", {
         up: false, down: false, left: false, right: true,
-        fire: false, aimAngle: 0,
+        fire: false, fireMissile: false, aimAngle: 0,
       });
       for (let i = 0; i < 20; i++) sim.update();
       expect(entity.vel.x).toBeGreaterThan(0);
@@ -213,7 +213,7 @@ describe("Simulation", () => {
       // Release input — brake applies
       sim.setInput("p1", {
         up: false, down: false, left: false, right: false,
-        fire: false, aimAngle: 0,
+        fire: false, fireMissile: false, aimAngle: 0,
       });
       for (let i = 0; i < 60; i++) sim.update();
 
@@ -227,7 +227,7 @@ describe("Simulation", () => {
 
       sim.setInput("p1", {
         up: true, down: false, left: false, right: true,
-        fire: false, aimAngle: 0,
+        fire: false, fireMissile: false, aimAngle: 0,
       });
       // Run enough ticks to reach max speed diagonally
       for (let i = 0; i < 20; i++) sim.update();
@@ -245,7 +245,7 @@ describe("Simulation", () => {
 
       sim.setInput("p1", {
         up: true, down: false, left: true, right: false,
-        fire: false, aimAngle: 0,
+        fire: false, fireMissile: false, aimAngle: 0,
       });
 
       for (let i = 0; i < 100; i++) sim.update();
@@ -263,7 +263,7 @@ describe("Simulation", () => {
 
       sim.setInput("p1", {
         up: false, down: false, left: false, right: false,
-        fire: true, aimAngle: 0,
+        fire: true, fireMissile: false, aimAngle: 0,
       });
       sim.update();
 
@@ -283,7 +283,7 @@ describe("Simulation", () => {
       // Aim right (angle = 0)
       sim.setInput("p1", {
         up: false, down: false, left: false, right: false,
-        fire: true, aimAngle: 0,
+        fire: true, fireMissile: false, aimAngle: 0,
       });
       sim.update();
 
@@ -302,7 +302,7 @@ describe("Simulation", () => {
 
       sim.setInput("p1", {
         up: false, down: false, left: false, right: false,
-        fire: true, aimAngle: 0,
+        fire: true, fireMissile: false, aimAngle: 0,
       });
 
       // First tick: bullet spawns
@@ -324,7 +324,7 @@ describe("Simulation", () => {
 
       sim.setInput("p1", {
         up: false, down: false, left: false, right: false,
-        fire: false, aimAngle: 0,
+        fire: false, fireMissile: false, aimAngle: 0,
       });
       sim.update();
 
@@ -340,7 +340,7 @@ describe("Simulation", () => {
 
       sim.setInput("p1", {
         up: false, down: false, left: false, right: false,
-        fire: true, aimAngle: 0,
+        fire: true, fireMissile: false, aimAngle: 0,
       });
       sim.update();
 
@@ -352,7 +352,7 @@ describe("Simulation", () => {
       // Stop firing, advance a tick
       sim.setInput("p1", {
         up: false, down: false, left: false, right: false,
-        fire: false, aimAngle: 0,
+        fire: false, fireMissile: false, aimAngle: 0,
       });
       sim.update();
 
@@ -367,7 +367,7 @@ describe("Simulation", () => {
 
       sim.setInput("p1", {
         up: false, down: false, left: false, right: false,
-        fire: true, aimAngle: Math.PI / 2, // aim down to stay in bounds longer
+        fire: true, fireMissile: false, aimAngle: Math.PI / 2, // aim down to stay in bounds longer
       });
       sim.update();
       expect(sim.bullets.size).toBe(1);
@@ -375,7 +375,7 @@ describe("Simulation", () => {
       // Stop firing
       sim.setInput("p1", {
         up: false, down: false, left: false, right: false,
-        fire: false, aimAngle: 0,
+        fire: false, fireMissile: false, aimAngle: 0,
       });
 
       // Advance past TTL (bullet may also go OOB, which is also removal)
@@ -391,13 +391,13 @@ describe("Simulation", () => {
 
       sim.setInput("p1", {
         up: false, down: false, left: false, right: false,
-        fire: true, aimAngle: 0, // aim right, toward edge
+        fire: true, fireMissile: false, aimAngle: 0, // aim right, toward edge
       });
       sim.update();
 
       sim.setInput("p1", {
         up: false, down: false, left: false, right: false,
-        fire: false, aimAngle: 0,
+        fire: false, fireMissile: false, aimAngle: 0,
       });
 
       // Advance until bullet exits
@@ -413,14 +413,14 @@ describe("Simulation", () => {
 
       sim.setInput("p1", {
         up: false, down: false, left: false, right: false,
-        fire: true, aimAngle: 0, // aim right
+        fire: true, fireMissile: false, aimAngle: 0, // aim right
       });
       sim.update();
       expect(sim.bullets.size).toBe(1);
 
       sim.setInput("p1", {
         up: false, down: false, left: false, right: false,
-        fire: false, aimAngle: 0,
+        fire: false, fireMissile: false, aimAngle: 0,
       });
 
       // Calculate ticks needed to exceed max range
@@ -437,7 +437,7 @@ describe("Simulation", () => {
 
       sim.setInput("p1", {
         up: false, down: false, left: false, right: false,
-        fire: true, aimAngle: 0,
+        fire: true, fireMissile: false, aimAngle: 0,
       });
       sim.update();
 
@@ -466,12 +466,12 @@ describe("Simulation", () => {
       // Fire once then stop
       sim.setInput("p1", {
         up: false, down: false, left: false, right: false,
-        fire: true, aimAngle: 0, // aim right toward p2
+        fire: true, fireMissile: false, aimAngle: 0, // aim right toward p2
       });
       sim.update();
       sim.setInput("p1", {
         up: false, down: false, left: false, right: false,
-        fire: false, aimAngle: 0,
+        fire: false, fireMissile: false, aimAngle: 0,
       });
 
       // Run ticks until collision
@@ -495,7 +495,7 @@ describe("Simulation", () => {
 
       sim.setInput("p1", {
         up: false, down: false, left: false, right: false,
-        fire: true, aimAngle: 0,
+        fire: true, fireMissile: false, aimAngle: 0,
       });
 
       for (let i = 0; i < 10; i++) sim.update();
@@ -516,7 +516,7 @@ describe("Simulation", () => {
 
       sim.setInput("p1", {
         up: false, down: false, left: false, right: false,
-        fire: true, aimAngle: 0,
+        fire: true, fireMissile: false, aimAngle: 0,
       });
 
       // Run until collision
@@ -540,7 +540,7 @@ describe("Simulation", () => {
 
       sim.setInput("p1", {
         up: false, down: false, left: false, right: false,
-        fire: true, aimAngle: 0,
+        fire: true, fireMissile: false, aimAngle: 0,
       });
 
       for (let i = 0; i < 10; i++) sim.update();
@@ -561,7 +561,7 @@ describe("Simulation", () => {
 
       sim.setInput("p1", {
         up: false, down: false, left: false, right: false,
-        fire: true, aimAngle: 0,
+        fire: true, fireMissile: false, aimAngle: 0,
       });
 
       for (let i = 0; i < 10; i++) sim.update();
@@ -587,7 +587,7 @@ describe("Simulation", () => {
 
       sim.setInput("p1", {
         up: false, down: false, left: false, right: false,
-        fire: true, aimAngle: 0,
+        fire: true, fireMissile: false, aimAngle: 0,
       });
       sim.update();
 
@@ -748,7 +748,7 @@ describe("missile physics", () => {
     // Fire player bullet right at the missile
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: true, aimAngle: 0,
+      fire: true, fireMissile: false, aimAngle: 0,
     });
 
     for (let i = 0; i < 30; i++) sim.update();
@@ -876,7 +876,7 @@ describe("energy orbs", () => {
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: true, aimAngle: 0,
+      fire: true, fireMissile: false, aimAngle: 0,
     });
     sim.update();
 
@@ -1236,7 +1236,7 @@ describe("stat upgrades", () => {
     // Run enough ticks to reach base max speed
     sim.setInput("p1", {
       up: false, down: false, left: false, right: true,
-      fire: false, aimAngle: 0,
+      fire: false, fireMissile: false, aimAngle: 0,
     });
     for (let i = 0; i < 20; i++) sim.update();
     expect(entity.vel.x).toBeCloseTo(PLAYER_MAX_SPEED, 1);
@@ -1260,7 +1260,7 @@ describe("stat upgrades", () => {
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: true,
-      fire: false, aimAngle: 0,
+      fire: false, fireMissile: false, aimAngle: 0,
     });
 
     // One tick from rest with no upgrades
@@ -1288,7 +1288,7 @@ describe("stat upgrades", () => {
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: true, aimAngle: 0,
+      fire: true, fireMissile: false, aimAngle: 0,
     });
 
     // First tick fires
@@ -1315,12 +1315,12 @@ describe("stat upgrades", () => {
     // Fire once, then stop
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: true, aimAngle: 0,
+      fire: true, fireMissile: false, aimAngle: 0,
     });
     sim.update();
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: false, aimAngle: 0,
+      fire: false, fireMissile: false, aimAngle: 0,
     });
 
     for (let i = 0; i < 10; i++) sim.update();
@@ -1338,7 +1338,7 @@ describe("stat upgrades", () => {
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: true, aimAngle: 0,
+      fire: true, fireMissile: false, aimAngle: 0,
     });
 
     // Should fire every tick
@@ -1363,7 +1363,7 @@ describe("multi-cannon firing", () => {
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: true, aimAngle: 0,
+      fire: true, fireMissile: false, aimAngle: 0,
     });
     sim.update();
     expect(sim.bullets.size).toBe(1);
@@ -1378,7 +1378,7 @@ describe("multi-cannon firing", () => {
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: true, aimAngle: 0,
+      fire: true, fireMissile: false, aimAngle: 0,
     });
     sim.update();
     expect(sim.bullets.size).toBe(2);
@@ -1400,7 +1400,7 @@ describe("multi-cannon firing", () => {
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: true, aimAngle: 0,
+      fire: true, fireMissile: false, aimAngle: 0,
     });
     sim.update();
     expect(sim.bullets.size).toBe(3);
@@ -1415,7 +1415,7 @@ describe("multi-cannon firing", () => {
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: true, aimAngle: 0,
+      fire: true, fireMissile: false, aimAngle: 0,
     });
     sim.update();
     expect(sim.bullets.size).toBe(4);
@@ -1452,7 +1452,7 @@ describe("multi-cannon firing", () => {
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: true, aimAngle: 0,
+      fire: true, fireMissile: false, aimAngle: 0,
     });
     sim.update();
 
@@ -1574,7 +1574,7 @@ describe("bullet recoil physics", () => {
     // Aim right (angle = 0) with no movement — recoil should push vel leftward
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: true, aimAngle: 0,
+      fire: true, fireMissile: false, aimAngle: 0,
     });
     sim.update();
 
@@ -1591,7 +1591,7 @@ describe("bullet recoil physics", () => {
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: true, aimAngle: 0,
+      fire: true, fireMissile: false, aimAngle: 0,
     });
     sim.update();
 
@@ -1609,7 +1609,7 @@ describe("bullet recoil physics", () => {
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: true, aimAngle: 0,
+      fire: true, fireMissile: false, aimAngle: 0,
     });
     sim.update();
 
@@ -1627,7 +1627,7 @@ describe("bullet recoil physics", () => {
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: false, aimAngle: 0,
+      fire: false, fireMissile: false, aimAngle: 0,
     });
     sim.update();
 
@@ -1642,13 +1642,13 @@ describe("bullet recoil physics", () => {
     // Saturate velocity rightward first (many ticks pressing right)
     sim.setInput("p1", {
       up: false, down: false, left: false, right: true,
-      fire: false, aimAngle: 0,
+      fire: false, fireMissile: false, aimAngle: 0,
     });
     for (let i = 0; i < 30; i++) sim.update();
     // Now fire leftward — recoil pushes right, past max speed
     sim.setInput("p1", {
       up: false, down: false, left: false, right: true,
-      fire: true, aimAngle: Math.PI,
+      fire: true, fireMissile: false, aimAngle: Math.PI,
     });
     sim.update();
 
@@ -1666,7 +1666,7 @@ describe("bullet recoil physics", () => {
     // Establish baseline: coast at max speed for one tick with no thrust
     entity.vel.x = PLAYER_MAX_SPEED;
     entity.vel.y = 0;
-    sim.setInput("p1", { up: false, down: false, left: false, right: false, fire: false, aimAngle: 0 });
+    sim.setInput("p1", { up: false, down: false, left: false, right: false, fire: false, fireMissile: false, aimAngle: 0 });
     const baselineStart = entity.pos.x;
     sim.update();
     const distWithout = entity.pos.x - baselineStart; // = PLAYER_MAX_SPEED * BRAKE_FRICTION / TICK_RATE
@@ -1676,11 +1676,11 @@ describe("bullet recoil physics", () => {
     entity.vel.y = 0;
     entity.pos.x = baselineStart;
     // Fire tick (pos still moves at PLAYER_MAX_SPEED this tick; recoil enters vel)
-    sim.setInput("p1", { up: false, down: false, left: false, right: false, fire: true, aimAngle: Math.PI });
+    sim.setInput("p1", { up: false, down: false, left: false, right: false, fire: true, fireMissile: false, aimAngle: Math.PI });
     sim.update();
     // Coast tick: no thrust — vel.x = (PLAYER_MAX_SPEED + BULLET_RECOIL_FORCE) * BRAKE_FRICTION
     const afterFireX = entity.pos.x;
-    sim.setInput("p1", { up: false, down: false, left: false, right: false, fire: false, aimAngle: 0 });
+    sim.setInput("p1", { up: false, down: false, left: false, right: false, fire: false, fireMissile: false, aimAngle: 0 });
     sim.update();
     const distWithRecoil = entity.pos.x - afterFireX;
 
@@ -1696,7 +1696,7 @@ describe("bullet recoil physics", () => {
     // Establish baseline: coast at max speed for one tick with no thrust
     entity.vel.x = PLAYER_MAX_SPEED;
     entity.vel.y = 0;
-    sim.setInput("p1", { up: false, down: false, left: false, right: false, fire: false, aimAngle: 0 });
+    sim.setInput("p1", { up: false, down: false, left: false, right: false, fire: false, fireMissile: false, aimAngle: 0 });
     const baselineStart = entity.pos.x;
     sim.update();
     const distWithout = entity.pos.x - baselineStart;
@@ -1705,11 +1705,11 @@ describe("bullet recoil physics", () => {
     entity.vel.x = PLAYER_MAX_SPEED;
     entity.vel.y = 0;
     entity.pos.x = baselineStart;
-    sim.setInput("p1", { up: false, down: false, left: false, right: false, fire: true, aimAngle: 0 });
+    sim.setInput("p1", { up: false, down: false, left: false, right: false, fire: true, fireMissile: false, aimAngle: 0 });
     sim.update();
     // Coast tick: vel.x = (PLAYER_MAX_SPEED - BULLET_RECOIL_FORCE) * BRAKE_FRICTION
     const afterFireX = entity.pos.x;
-    sim.setInput("p1", { up: false, down: false, left: false, right: false, fire: false, aimAngle: 0 });
+    sim.setInput("p1", { up: false, down: false, left: false, right: false, fire: false, fireMissile: false, aimAngle: 0 });
     sim.update();
     const distWithRecoil = entity.pos.x - afterFireX;
 
@@ -1740,7 +1740,7 @@ describe("bullet recoil physics", () => {
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: false, aimAngle: 0,
+      fire: false, fireMissile: false, aimAngle: 0,
     });
     sim.update();
 
@@ -1765,7 +1765,7 @@ describe("bullet origin offset", () => {
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: true, aimAngle: 0, // aim right
+      fire: true, fireMissile: false, aimAngle: 0, // aim right
     });
     sim.update();
 
@@ -1791,7 +1791,7 @@ describe("bullet origin offset", () => {
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: true, aimAngle: 0,
+      fire: true, fireMissile: false, aimAngle: 0,
     });
     sim.update();
 
@@ -1817,7 +1817,7 @@ describe("bullet origin offset", () => {
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: true, aimAngle: 0,
+      fire: true, fireMissile: false, aimAngle: 0,
     });
     sim.update();
 
@@ -1837,7 +1837,7 @@ describe("snapshot aimAngle", () => {
     sim.addPlayer("p1");
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: false, aimAngle: 1.23,
+      fire: false, fireMissile: false, aimAngle: 1.23,
     });
 
     const snapshot = sim.getSnapshot();
@@ -1852,14 +1852,14 @@ describe("snapshot aimAngle", () => {
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: false, aimAngle: 0.5,
+      fire: false, fireMissile: false, aimAngle: 0.5,
     });
     let snapshot = sim.getSnapshot();
     expect(snapshot.entities.find(e => e.kind === "player_ship")!.aimAngle).toBeCloseTo(0.5, 5);
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: false, aimAngle: -2.1,
+      fire: false, fireMissile: false, aimAngle: -2.1,
     });
     snapshot = sim.getSnapshot();
     expect(snapshot.entities.find(e => e.kind === "player_ship")!.aimAngle).toBeCloseTo(-2.1, 5);
@@ -1870,7 +1870,7 @@ describe("snapshot aimAngle", () => {
     sim.addPlayer("p1");
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: false, aimAngle: 0.75,
+      fire: false, fireMissile: false, aimAngle: 0.75,
     });
 
     const snapshot = sim.getSnapshot();
@@ -1892,7 +1892,7 @@ describe("ownerKind on bullets", () => {
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: true, aimAngle: 0,
+      fire: true, fireMissile: false, aimAngle: 0,
     });
     sim.update();
 
@@ -1915,7 +1915,7 @@ describe("ownerKind on bullets", () => {
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: true, aimAngle: 0,
+      fire: true, fireMissile: false, aimAngle: 0,
     });
     sim.update();
 
@@ -1923,5 +1923,158 @@ describe("ownerKind on bullets", () => {
     const bullet = snapshot.entities.find(e => e.kind === "bullet");
     expect(bullet).toBeDefined();
     expect(bullet!.ownerKind).toBe("player_ship");
+  });
+});
+
+describe("player right-click missile", () => {
+  let sim: Simulation;
+
+  beforeEach(() => {
+    sim = new Simulation();
+  });
+
+  it("fires a homing missile on right-click", () => {
+    const player = sim.addPlayer("p1");
+    player.pos = { x: 500, y: 500 };
+    player.vel = { x: 0, y: 0 };
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, fireMissile: true, aimAngle: 0,
+    });
+    sim.update();
+
+    const missiles = Array.from(sim.entities.values()).filter(e => e.kind === "missile");
+    expect(missiles.length).toBe(1);
+    expect(missiles[0].team).toBe(1);
+  });
+
+  it("respects 30-second cooldown", () => {
+    const player = sim.addPlayer("p1");
+    player.pos = { x: 500, y: 500 };
+    player.vel = { x: 0, y: 0 };
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, fireMissile: true, aimAngle: 0,
+    });
+    sim.update();
+
+    // First missile should fire
+    let missiles = Array.from(sim.entities.values()).filter(e => e.kind === "missile");
+    expect(missiles.length).toBe(1);
+
+    // Second attempt immediately should not fire a new missile
+    sim.update();
+    missiles = Array.from(sim.entities.values()).filter(e => e.kind === "missile");
+    expect(missiles.length).toBe(1);
+  });
+
+  it("missile deals 5x effective bullet damage", () => {
+    const player = sim.addPlayer("p1");
+    player.pos = { x: 500, y: 500 };
+    player.vel = { x: 0, y: 0 };
+
+    // Spawn an enemy directly to the right
+    const enemy = sim.spawnEnemy("tower", 530, 500);
+    const initialHp = enemy.hp;
+
+    // Fire missile on first tick
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, fireMissile: true, aimAngle: 0,
+    });
+    sim.update();
+
+    // Run remaining ticks for missile to reach and hit the enemy
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, fireMissile: false, aimAngle: 0,
+    });
+    for (let i = 0; i < 30; i++) {
+      sim.update();
+    }
+
+    // Expected damage = BULLET_DAMAGE * 5 = 50
+    expect(enemy.hp).toBe(initialHp - BULLET_DAMAGE * 5);
+  });
+
+  it("missile damage scales with damage upgrades", () => {
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    const entity = sim.entities.get(ps.entityId)!;
+    entity.pos = { x: 500, y: 500 };
+    entity.vel = { x: 0, y: 0 };
+
+    // Apply max damage upgrades
+    ps.pendingUpgrades = MAX_UPGRADE_PER_STAT;
+    for (let i = 0; i < MAX_UPGRADE_PER_STAT; i++) {
+      sim.applyUpgrade("p1", "damage");
+    }
+
+    const enemy = sim.spawnEnemy("tower", 530, 500);
+    const initialHp = enemy.hp;
+
+    // Fire missile on first tick
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, fireMissile: true, aimAngle: 0,
+    });
+    sim.update();
+
+    // Run remaining ticks for missile to reach and hit the enemy
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, fireMissile: false, aimAngle: 0,
+    });
+    for (let i = 0; i < 30; i++) {
+      sim.update();
+    }
+
+    // effectiveDamage = BULLET_DAMAGE + MAX_UPGRADE_PER_STAT * DAMAGE_PER_UPGRADE = 10 + 15 = 25
+    // missileDamage = 25 * 5 = 125
+    const expectedDamage = (BULLET_DAMAGE + MAX_UPGRADE_PER_STAT * DAMAGE_PER_UPGRADE) * 5;
+    expect(enemy.hp).toBe(initialHp - expectedDamage);
+  });
+
+  it("includes missileCooldown in snapshot", () => {
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    const entity = sim.entities.get(ps.entityId)!;
+    entity.pos = { x: 500, y: 500 };
+    entity.vel = { x: 0, y: 0 };
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, fireMissile: true, aimAngle: 0,
+    });
+    sim.update();
+
+    const snapshot = sim.getSnapshot();
+    const playerEntity = snapshot.entities.find(e => e.kind === "player_ship");
+    expect(playerEntity).toBeDefined();
+    expect(playerEntity!.missileCooldown).toBeGreaterThan(0);
+  });
+
+  it("resets missileCooldown on death/respawn", () => {
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    const entity = sim.entities.get(ps.entityId)!;
+    entity.pos = { x: 500, y: 500 };
+    entity.vel = { x: 0, y: 0 };
+
+    // Fire missile to start cooldown
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, fireMissile: true, aimAngle: 0,
+    });
+    sim.update();
+    expect(ps.missileCooldown).toBeGreaterThan(0);
+
+    // Kill the player
+    entity.hp = 0;
+    sim.update(); // removes dead, respawns
+
+    expect(ps.missileCooldown).toBe(0);
   });
 });

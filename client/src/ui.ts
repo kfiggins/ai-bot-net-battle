@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { Entity, PhaseInfo, Upgrades, MAX_LEVEL, MAX_UPGRADE_PER_STAT, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, MILESTONE_LEVELS } from "shared";
+import { Entity, PhaseInfo, Upgrades, MAX_LEVEL, MAX_UPGRADE_PER_STAT, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, MILESTONE_LEVELS, TICK_RATE } from "shared";
 
 export class HUD {
   private scene: Phaser.Scene;
@@ -28,6 +28,7 @@ export class HUD {
   private cannonCountText: Phaser.GameObjects.Text;
   private lastCannons = 1;
   private onUpgradeChoice: ((stat: string) => void) | null = null;
+  private missileCooldownText: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -194,6 +195,14 @@ export class HUD {
       fontFamily: "monospace",
       fontStyle: "bold",
     }).setOrigin(0.5, 0).setDepth(101).setScrollFactor(0);
+
+    // Missile cooldown display (bottom-left area)
+    this.missileCooldownText = scene.add.text(VIEWPORT_WIDTH / 2 - 160, VIEWPORT_HEIGHT - 28, "MISSILE: READY", {
+      fontSize: "12px",
+      color: "#ff8800",
+      fontFamily: "monospace",
+      fontStyle: "bold",
+    }).setOrigin(0.5, 0).setDepth(101).setScrollFactor(0);
   }
 
   updatePhase(phase: PhaseInfo | undefined): void {
@@ -310,6 +319,17 @@ export class HUD {
       this.cannonCountText.setText(`x${cannons}`);
     } else {
       this.cannonCountText.setText("");
+    }
+  }
+
+  updateMissileCooldown(cooldownTicks: number): void {
+    if (cooldownTicks <= 0) {
+      this.missileCooldownText.setText("MISSILE: READY");
+      this.missileCooldownText.setColor("#ff8800");
+    } else {
+      const seconds = Math.ceil(cooldownTicks / TICK_RATE);
+      this.missileCooldownText.setText(`MISSILE: ${seconds}s`);
+      this.missileCooldownText.setColor("#888888");
     }
   }
 
@@ -432,6 +452,7 @@ export class HUD {
     this.upgradeButtons = [];
     this.cannonNotifyText.destroy();
     this.cannonCountText.destroy();
+    this.missileCooldownText.destroy();
     for (const gfx of this.healthBars.values()) gfx.destroy();
     this.healthBars.clear();
   }

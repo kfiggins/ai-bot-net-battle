@@ -38,6 +38,7 @@ export const EntitySchema = z.object({
   pendingUpgrades: z.number().int().optional(),
   aimAngle: z.number().optional(),
   ownerKind: z.string().optional(),
+  missileCooldown: z.number().int().optional(),
 });
 export type Entity = z.infer<typeof EntitySchema>;
 
@@ -49,6 +50,7 @@ export const PlayerInputDataSchema = z.object({
   left: z.boolean(),
   right: z.boolean(),
   fire: z.boolean(),
+  fireMissile: z.boolean(),
   aimAngle: z.number(),
 });
 export type PlayerInputData = z.infer<typeof PlayerInputDataSchema>;

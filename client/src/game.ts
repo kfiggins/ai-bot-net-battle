@@ -80,6 +80,10 @@ export class GameScene extends Phaser.Scene {
     this.net = this.registry.get("net") as NetClient;
     this.interpolator = new SnapshotInterpolator();
 
+    // Crosshair cursor and disable right-click context menu
+    this.input.setDefaultCursor("crosshair");
+    this.input.mouse?.disableContextMenu();
+
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasd = {
       w: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
@@ -169,7 +173,8 @@ export class GameScene extends Phaser.Scene {
       down: this.cursors.down.isDown || this.wasd.s.isDown,
       left: this.cursors.left.isDown || this.wasd.a.isDown,
       right: this.cursors.right.isDown || this.wasd.d.isDown,
-      fire: this.fireKey.isDown || this.input.activePointer.isDown,
+      fire: this.fireKey.isDown || this.input.activePointer.leftButtonDown(),
+      fireMissile: this.input.activePointer.rightButtonDown(),
       aimAngle: 0, // set below after prediction
     };
 
@@ -313,6 +318,7 @@ export class GameScene extends Phaser.Scene {
             // Update predicted max speed cap for client-side prediction
             this.predictedMaxSpeed = PLAYER_MAX_SPEED + (selfEntity.upgrades.speed ?? 0) * SPEED_PER_UPGRADE;
           }
+          this.hud.updateMissileCooldown(selfEntity.missileCooldown ?? 0);
         }
       }
     }

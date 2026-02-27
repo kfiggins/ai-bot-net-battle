@@ -339,7 +339,7 @@ describe("combat integration with boss", () => {
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: true, aimAngle: 0,
+      fire: true, fireMissile: false, aimAngle: 0,
     });
 
     for (let i = 0; i < 30; i++) {
@@ -364,7 +364,7 @@ describe("combat integration with boss", () => {
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
-      fire: true, aimAngle: 0,
+      fire: true, fireMissile: false, aimAngle: 0,
     });
 
     for (let i = 0; i < 30; i++) {

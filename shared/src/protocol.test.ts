@@ -106,6 +106,7 @@ describe("PlayerInputMessageSchema", () => {
         left: false,
         right: true,
         fire: false,
+        fireMissile: false,
         aimAngle: 1.57,
       },
     };
@@ -118,7 +119,7 @@ describe("PlayerInputMessageSchema", () => {
       type: "player_input",
       input: {
         up: false, down: false, left: false, right: false,
-        fire: false, aimAngle: 0,
+        fire: false, fireMissile: false, aimAngle: 0,
       },
     };
     expect(() => PlayerInputMessageSchema.parse(msg)).toThrow();
@@ -130,7 +131,7 @@ describe("PlayerInputMessageSchema", () => {
       type: "wrong_type",
       input: {
         up: false, down: false, left: false, right: false,
-        fire: false, aimAngle: 0,
+        fire: false, fireMissile: false, aimAngle: 0,
       },
     };
     expect(() => PlayerInputMessageSchema.parse(msg)).toThrow();
@@ -205,7 +206,7 @@ describe("ClientMessageSchema", () => {
       type: "player_input",
       input: {
         up: false, down: false, left: false, right: false,
-        fire: false, aimAngle: 0,
+        fire: false, fireMissile: false, aimAngle: 0,
       },
     };
     expect(ClientMessageSchema.parse(msg)).toEqual(msg);
