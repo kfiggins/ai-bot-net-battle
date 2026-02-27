@@ -19,6 +19,7 @@ Multiplayer browser game: 1-4 players cooperate to destroy enemy towers, minions
 | `missile_tower` | 2 | 150 | 24 | no | Fires 3-missile bursts at players in 700px range |
 | `mothership` | 2 | 500 | 40 | no | Center of map, shielded until towers/minions cleared |
 | `nemesis` | 2 | 1200 | 38 | yes | Spawns after mothership dies, chases players, spiral bullets + homing missiles |
+| `phantom_ship` | 2 | 20 | 10 | yes | Fast flanker — orbits mothership, approaches from far side, predictive burst fire, dodges player aim |
 | `energy_orb` | 0 | 1 | 8 | no | Neutral, gives 5 XP to players or 10 resources to enemy |
 
 ## Game Flow (Boss Phases)
@@ -54,8 +55,8 @@ Snapshots broadcast every `SNAPSHOT_INTERVAL` ticks (~20 Hz).
 ## Economy (Enemy Side)
 
 - Starting balance: 200, income: 10/s, plus minion orb collection (10 per orb)
-- **Unit costs**: minion 50, tower 100, missile_tower 125
-- **Unit caps**: minion 20, tower 10, missile_tower 5
+- **Unit costs**: minion 50, tower 100, missile_tower 125, phantom 65
+- **Unit caps**: minion 20, tower 10, missile_tower 5, phantom 5
 - **Build cooldown**: 0.5s queue delay
 - **Tower placement**: Must be within 500px of mothership
 

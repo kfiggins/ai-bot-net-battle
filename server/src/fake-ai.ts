@@ -1,3 +1,4 @@
+import { UNIT_COSTS } from "shared";
 import { Simulation } from "./sim.js";
 import { Economy } from "./economy.js";
 import { AgentAPI } from "./agent.js";
@@ -6,11 +7,14 @@ const FAKE_AI_DECISION_INTERVAL_TICKS = 20; // ~0.67s at 30 TPS
 const FAKE_AI_TOWER_COOLDOWN_TICKS = 120; // 4s
 const FAKE_AI_SPAWN_COOLDOWN_TICKS = 30; // 1s
 
+const FAKE_AI_PHANTOM_COOLDOWN_TICKS = 300; // 10 s between phantom spawns
+
 export class FakeAI {
   private nextDecisionTick = 0;
   private nextTowerTick = 0;
   private nextMissileTowerTick = 0;
   private nextSpawnTick = 0;
+  private nextPhantomTick = 0;
 
   update(sim: Simulation, economy: Economy, agent: AgentAPI, mothershipPos?: { x: number; y: number }): void {
     if (sim.tick < this.nextDecisionTick) return;
@@ -45,7 +49,7 @@ export class FakeAI {
 
     // Priority 2: build a missile tower if we can afford one and don't have one yet.
     const missileTowers = sim.getEntitiesByKind("missile_tower").length;
-    if (missileTowers < 2 && economy.balance >= 200 && sim.tick >= this.nextMissileTowerTick) {
+    if (missileTowers < 2 && economy.balance >= UNIT_COSTS.missile_tower && sim.tick >= this.nextMissileTowerTick) {
       const p = this.pickTowerPos(mothershipPos);
       const result = economy.requestBuild(
         { unitKind: "missile_tower", x: p.x, y: p.y },
@@ -71,6 +75,19 @@ export class FakeAI {
 
       if (spawnResult.ok) {
         this.nextSpawnTick = sim.tick + FAKE_AI_SPAWN_COOLDOWN_TICKS;
+      }
+    }
+
+    // Priority 4: deploy a phantom if the mothership is alive and we can afford one.
+    const phantoms = sim.getEntitiesByKind("phantom_ship").length;
+    if (phantoms < 5 && economy.balance >= UNIT_COSTS.phantom_ship && sim.tick >= this.nextPhantomTick) {
+      const result = economy.requestBuild(
+        { unitKind: "phantom_ship" },
+        sim,
+        mothershipPos
+      );
+      if (result.ok) {
+        this.nextPhantomTick = sim.tick + FAKE_AI_PHANTOM_COOLDOWN_TICKS;
       }
     }
   }

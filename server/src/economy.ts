@@ -12,7 +12,7 @@ import { Simulation } from "./sim.js";
 import { AIManager } from "./ai.js";
 
 export interface BuildRequest {
-  unitKind: "minion_ship" | "tower" | "missile_tower";
+  unitKind: "minion_ship" | "tower" | "missile_tower" | "phantom_ship";
   x?: number;
   y?: number;
 }
@@ -24,7 +24,7 @@ export interface BuildResult {
 }
 
 export interface QueuedBuild {
-  unitKind: "minion_ship" | "tower" | "missile_tower";
+  unitKind: "minion_ship" | "tower" | "missile_tower" | "phantom_ship";
   readyAtTick: number;
   x: number;
   y: number;
@@ -108,8 +108,8 @@ export class Economy {
     if (request.x !== undefined && request.y !== undefined) {
       x = request.x;
       y = request.y;
-    } else if (unitKind === "minion_ship") {
-      // Spawn minions near mothership with some spread
+    } else if (unitKind === "minion_ship" || unitKind === "phantom_ship") {
+      // Spawn near mothership with some spread
       const angle = Math.random() * Math.PI * 2;
       const dist = 100 + Math.random() * 300;
       x = basePos.x + Math.cos(angle) * dist;
@@ -122,7 +122,7 @@ export class Economy {
       y = basePos.y + Math.sin(angle) * dist;
     }
 
-    // Validate tower distance from mothership
+    // Validate tower distance from mothership (phantom_ship is not a tower, skip)
     if (unitKind === "tower" || unitKind === "missile_tower") {
       const dx = x - basePos.x;
       const dy = y - basePos.y;

@@ -58,12 +58,14 @@ export const UNIT_COSTS: Record<string, number> = {
   minion_ship: 50,
   tower: 100,
   missile_tower: 125,
+  phantom_ship: 65,
 };
 
 export const UNIT_CAPS: Record<string, number> = {
   minion_ship: 20,
   tower: 10,
   missile_tower: 5,
+  phantom_ship: 5,
 };
 
 export const BUILD_COOLDOWN_TICKS = 15; // 0.5 seconds between builds
@@ -163,6 +165,26 @@ export const NEMESIS_SPIRAL_FIRE_COOLDOWN_TICKS = 3;
 export const NEMESIS_SPIRAL_ROTATE_PER_SHOT = 0.12;   // radians per volley (~6.9°) for spiral arms
 export const NEMESIS_MISSILE_COOLDOWN_TICKS = 30;     // one missile per player every 2 seconds
 export const NEMESIS_KILL_XP = 500;                   // awarded to all players on Nemesis death
+
+// Phantom Ship — fast flanker that attacks from behind the mothership
+export const PHANTOM_HP = 20;                      // very fragile (2 base bullets to kill)
+export const PHANTOM_RADIUS = 10;                   // small target — hard to hit
+export const PHANTOM_SPEED = 600;                   // faster than player (200 base)
+export const PHANTOM_ACCEL = 800;                   // snappy, reactive thrust
+export const PHANTOM_BRAKE_FRICTION = 0.82;
+export const PHANTOM_FIRE_RANGE = 800;              // switches from pursuit to orbit-and-fire
+export const PHANTOM_FIRE_COOLDOWN_TICKS = 90;      // 3 s between bursts
+export const PHANTOM_BURST_SIZE = 5;                // bullets per burst
+export const PHANTOM_BURST_DELAY_TICKS = 4;         // ~133 ms between shots in a burst
+export const PHANTOM_GUARD_RADIUS = 800;            // px from mothership — activates when player enters
+export const PHANTOM_ORBIT_RADIUS = 200;            // orbit radius around mothership while guarding
+export const PHANTOM_ORBIT_ANGULAR_SPEED = 0.5;     // rad/s orbit speed (~12.6 s period)
+export const PHANTOM_FLANK_DIST = 180;              // px past mothership center to park on far side
+export const PHANTOM_FLANK_LOOK_AHEAD_S = 1.5;     // seconds to predict player pos when computing flank direction
+export const PHANTOM_AIM_RANDOM_SPREAD = 0.20;      // max half-angle random offset on aim (radians)
+export const PHANTOM_CHASE_ORBIT_RADIUS = 280;      // px — preferred circle radius when attacking player
+export const PHANTOM_CHASE_ORBIT_SPEED = 1.6;       // rad/s — how fast the phantom circles the player
+export const PHANTOM_KILL_XP = 20;                  // XP awarded to the shooter
 
 // Boost particles
 export const BOOST_PARTICLE_THRESHOLD = 30; // px/s — min speed to emit boost particles on AI/remote entities

@@ -20,10 +20,26 @@ import {
   ENEMY_PATROL_RADIUS,
   ENEMY_PATROL_SPEED,
   MINION_ORB_PICKUP_RANGE,
+  PHANTOM_SPEED,
+  PHANTOM_ACCEL,
+  PHANTOM_BRAKE_FRICTION,
+  PHANTOM_FIRE_RANGE,
+  PHANTOM_FIRE_COOLDOWN_TICKS,
+  PHANTOM_BURST_SIZE,
+  PHANTOM_BURST_DELAY_TICKS,
+  PHANTOM_GUARD_RADIUS,
+  PHANTOM_ORBIT_RADIUS,
+  PHANTOM_ORBIT_ANGULAR_SPEED,
+  PHANTOM_FLANK_DIST,
+  PHANTOM_FLANK_LOOK_AHEAD_S,
+  PHANTOM_AIM_RANDOM_SPREAD,
+  PHANTOM_CHASE_ORBIT_RADIUS,
+  PHANTOM_CHASE_ORBIT_SPEED,
+  BULLET_SPEED,
 } from "shared";
 import { Simulation, entityRadius } from "./sim.js";
 
-export type AIMode = "patrol" | "chase" | "return_to_base";
+export type AIMode = "patrol" | "chase" | "return_to_base" | "flank";
 
 export interface AIState {
   entityId: string;
@@ -41,6 +57,10 @@ export interface AIState {
   burstAimAngle: number;
   // Orb targeting — persists across ticks so minions don't swap targets every frame
   targetOrbId: string | null;
+  // Phantom burst — store target so each shot recalculates predictive aim
+  burstTargetId: string | null;
+  // Phantom chase orbit — angle around the target player, advances each tick
+  phantomOrbitAngle: number;
 }
 
 export class AIManager {
@@ -72,6 +92,8 @@ export class AIManager {
       burstCooldown: 0,
       burstAimAngle: 0,
       targetOrbId: null,
+      burstTargetId: null,
+      phantomOrbitAngle: Math.random() * Math.PI * 2,
     });
   }
 
@@ -94,6 +116,8 @@ export class AIManager {
         this.updateTower(entity, aiState, sim);
       } else if (entity.kind === "missile_tower") {
         this.updateMissileTower(entity, aiState, sim);
+      } else if (entity.kind === "phantom_ship") {
+        this.updatePhantom(entity, aiState, sim);
       }
     }
   }
@@ -422,5 +446,207 @@ export class AIManager {
     }
 
     return nearest;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Phantom Ship AI — fast flanker that guards the mothership
+  // ---------------------------------------------------------------------------
+
+  private updatePhantom(entity: Entity, aiState: AIState, sim: Simulation): void {
+    const msPos = this.patrolCenter; // mothership position (updated by boss manager)
+
+    // --- Burst fire tick (non-blocking — phantom keeps moving during burst) ---
+    // Each shot recalculates predictive aim so bullets track a moving player.
+    if (aiState.burstRemaining > 0) {
+      if (aiState.burstCooldown <= 0) {
+        const burstTarget = aiState.burstTargetId ? sim.entities.get(aiState.burstTargetId) : null;
+        let angle = aiState.burstAimAngle; // fallback if target despawned
+        if (burstTarget && burstTarget.hp > 0) {
+          const btDx = burstTarget.pos.x - entity.pos.x;
+          const btDy = burstTarget.pos.y - entity.pos.y;
+          const btDist = Math.sqrt(btDx * btDx + btDy * btDy) || 1;
+          const btTravel = btDist / BULLET_SPEED;
+          const btPredX = burstTarget.pos.x + burstTarget.vel.x * btTravel;
+          const btPredY = burstTarget.pos.y + burstTarget.vel.y * btTravel;
+          angle = Math.atan2(btPredY - entity.pos.y, btPredX - entity.pos.x)
+            + (Math.random() - 0.5) * 2 * PHANTOM_AIM_RANDOM_SPREAD;
+        }
+        sim.spawnBullet(entity, entity.id, angle);
+        aiState.burstRemaining--;
+        aiState.burstCooldown = PHANTOM_BURST_DELAY_TICKS;
+      } else {
+        aiState.burstCooldown--;
+      }
+    }
+
+    const target = this.findNearestEnemy(entity, sim);
+
+    if (!target) {
+      // No players — orbit mothership quietly
+      aiState.aiMode = "patrol";
+      this.phantomOrbit(entity, aiState, msPos);
+      entity.pos.x = Math.max(0, Math.min(WORLD_WIDTH, entity.pos.x));
+      entity.pos.y = Math.max(0, Math.min(WORLD_HEIGHT, entity.pos.y));
+      return;
+    }
+
+    // Is the player close enough to the mothership to activate the phantom?
+    const dxPlayerMs = target.pos.x - msPos.x;
+    const dyPlayerMs = target.pos.y - msPos.y;
+    const distPlayerToMs = Math.sqrt(dxPlayerMs * dxPlayerMs + dyPlayerMs * dyPlayerMs);
+
+    if (distPlayerToMs > PHANTOM_GUARD_RADIUS) {
+      // Player left the guard zone — return to orbit
+      if (aiState.aiMode !== "return_to_base" && aiState.aiMode !== "patrol") {
+        aiState.aiMode = "return_to_base";
+      }
+      this.phantomOrbit(entity, aiState, msPos);
+      entity.pos.x = Math.max(0, Math.min(WORLD_WIDTH, entity.pos.x));
+      entity.pos.y = Math.max(0, Math.min(WORLD_HEIGHT, entity.pos.y));
+      return;
+    }
+
+    // Player is in guard zone — compute flank position (far side of mothership)
+    // Predict where the player is heading so the Phantom leads their movement
+    const predictedPlayerX = target.pos.x + target.vel.x * PHANTOM_FLANK_LOOK_AHEAD_S;
+    const predictedPlayerY = target.pos.y + target.vel.y * PHANTOM_FLANK_LOOK_AHEAD_S;
+    const dxPredMs = predictedPlayerX - msPos.x;
+    const dyPredMs = predictedPlayerY - msPos.y;
+    const predToMsLen = Math.sqrt(dxPredMs * dxPredMs + dyPredMs * dyPredMs) || 1;
+    const nx = -dxPredMs / predToMsLen; // unit vector: predicted-player → mothership
+    const ny = -dyPredMs / predToMsLen;
+    const flankX = msPos.x + nx * PHANTOM_FLANK_DIST;
+    const flankY = msPos.y + ny * PHANTOM_FLANK_DIST;
+
+    // Distances relevant for state transitions
+    const dxToTarget = target.pos.x - entity.pos.x;
+    const dyToTarget = target.pos.y - entity.pos.y;
+    const distToTarget = Math.sqrt(dxToTarget * dxToTarget + dyToTarget * dyToTarget);
+
+    // State machine
+    const prevMode = aiState.aiMode;
+    if (distToTarget <= PHANTOM_FIRE_RANGE) {
+      if (prevMode !== "chase") {
+        // Sync orbit angle to current position so we don't fly through the player
+        aiState.phantomOrbitAngle = Math.atan2(entity.pos.y - target.pos.y, entity.pos.x - target.pos.x);
+      }
+      aiState.aiMode = "chase"; // close enough — attack!
+    } else {
+      aiState.aiMode = "flank"; // move to flanking position first
+    }
+
+    // Movement: intercept player (flank) or circle orbit (chase)
+    if (aiState.aiMode === "flank") {
+      // Lead the player's movement to intercept rather than chasing their current position
+      const interceptX = target.pos.x + target.vel.x * 0.5;
+      const interceptY = target.pos.y + target.vel.y * 0.5;
+      this.phantomThrustTo(entity, aiState, interceptX, interceptY, PHANTOM_SPEED);
+      this.phantomThrustTo(entity, aiState, flankX, flankY, PHANTOM_SPEED);
+    } else {
+      // Advance the orbit angle each tick to strafe around the player
+      aiState.phantomOrbitAngle += PHANTOM_CHASE_ORBIT_SPEED * this.dt;
+      const orbitX = target.pos.x + Math.cos(aiState.phantomOrbitAngle) * PHANTOM_CHASE_ORBIT_RADIUS;
+      const orbitY = target.pos.y + Math.sin(aiState.phantomOrbitAngle) * PHANTOM_CHASE_ORBIT_RADIUS;
+      this.phantomThrustTo(entity, aiState, orbitX, orbitY, PHANTOM_SPEED);
+    }
+
+    // Re-clamp speed after evasion impulse (allow small overspeed for snappy dodge feel)
+    const spd = Math.sqrt(entity.vel.x * entity.vel.x + entity.vel.y * entity.vel.y);
+    const cap = PHANTOM_SPEED * aiState.moveSpeedScale * 1.25;
+    if (spd > cap) {
+      entity.vel.x = (entity.vel.x / spd) * cap;
+      entity.vel.y = (entity.vel.y / spd) * cap;
+    }
+
+    // Integrate position
+    entity.pos.x += entity.vel.x * this.dt;
+    entity.pos.y += entity.vel.y * this.dt;
+    entity.pos.x = Math.max(0, Math.min(WORLD_WIDTH, entity.pos.x));
+    entity.pos.y = Math.max(0, Math.min(WORLD_HEIGHT, entity.pos.y));
+
+    // Fire burst at target if in range and cooldown is ready
+    if (distToTarget <= PHANTOM_FIRE_RANGE && aiState.fireCooldown <= 0 && aiState.burstRemaining === 0) {
+      this.phantomStartBurst(entity, aiState, target, sim);
+      aiState.fireCooldown = PHANTOM_FIRE_COOLDOWN_TICKS;
+    }
+  }
+
+  /** Orbit the mothership slowly (patrol) or sprint back to it (return_to_base). */
+  private phantomOrbit(entity: Entity, aiState: AIState, msPos: { x: number; y: number }): void {
+    const dxToMs = entity.pos.x - msPos.x;
+    const dyToMs = entity.pos.y - msPos.y;
+    const distToMs = Math.sqrt(dxToMs * dxToMs + dyToMs * dyToMs);
+
+    if (aiState.aiMode === "return_to_base") {
+      if (distToMs <= PHANTOM_ORBIT_RADIUS * 1.3) {
+        aiState.aiMode = "patrol";
+      } else {
+        // Sprint directly toward mothership center, then transition to orbit
+        this.phantomThrustTo(entity, aiState, msPos.x, msPos.y, PHANTOM_SPEED);
+        entity.pos.x += entity.vel.x * this.dt;
+        entity.pos.y += entity.vel.y * this.dt;
+        return;
+      }
+    }
+
+    // Patrol: advance the orbit angle each tick to create circular motion
+    const currentAngle = Math.atan2(dxToMs === 0 && dyToMs === 0 ? 1 : dyToMs, dxToMs);
+    const nextAngle = currentAngle + PHANTOM_ORBIT_ANGULAR_SPEED * this.dt;
+    const targetX = msPos.x + Math.cos(nextAngle) * PHANTOM_ORBIT_RADIUS;
+    const targetY = msPos.y + Math.sin(nextAngle) * PHANTOM_ORBIT_RADIUS;
+    this.phantomThrustTo(entity, aiState, targetX, targetY, PHANTOM_SPEED * 0.5);
+    entity.pos.x += entity.vel.x * this.dt;
+    entity.pos.y += entity.vel.y * this.dt;
+  }
+
+  /** Apply velocity toward a target point, capped at maxSpeed * moveSpeedScale.
+   *  Does NOT update entity.pos — caller handles position integration. */
+  private phantomThrustTo(
+    entity: Entity,
+    aiState: AIState,
+    targetX: number,
+    targetY: number,
+    maxSpeed: number,
+  ): void {
+    const dx = targetX - entity.pos.x;
+    const dy = targetY - entity.pos.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < 5) {
+      entity.vel.x *= PHANTOM_BRAKE_FRICTION;
+      entity.vel.y *= PHANTOM_BRAKE_FRICTION;
+      return;
+    }
+
+    const nx = dx / dist;
+    const ny = dy / dist;
+    entity.vel.x += nx * PHANTOM_ACCEL * this.dt;
+    entity.vel.y += ny * PHANTOM_ACCEL * this.dt;
+
+    const spd = Math.sqrt(entity.vel.x * entity.vel.x + entity.vel.y * entity.vel.y);
+    const cap = maxSpeed * aiState.moveSpeedScale;
+    if (spd > cap) {
+      entity.vel.x = (entity.vel.x / spd) * cap;
+      entity.vel.y = (entity.vel.y / spd) * cap;
+    }
+  }
+
+  /** Start a burst — stores target so each shot recalculates predictive aim. Fires the first bullet now. */
+  private phantomStartBurst(entity: Entity, aiState: AIState, target: Entity, sim: Simulation): void {
+    aiState.burstTargetId = target.id;
+    aiState.burstRemaining = PHANTOM_BURST_SIZE - 1; // remaining shots after this one
+    aiState.burstCooldown = PHANTOM_BURST_DELAY_TICKS;
+
+    // Fire first bullet with fresh predictive aim
+    const dx = target.pos.x - entity.pos.x;
+    const dy = target.pos.y - entity.pos.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const travelTime = dist / BULLET_SPEED;
+    const predictedX = target.pos.x + target.vel.x * travelTime;
+    const predictedY = target.pos.y + target.vel.y * travelTime;
+    const angle = Math.atan2(predictedY - entity.pos.y, predictedX - entity.pos.x)
+      + (Math.random() - 0.5) * 2 * PHANTOM_AIM_RANDOM_SPREAD;
+
+    sim.spawnBullet(entity, entity.id, angle);
   }
 }

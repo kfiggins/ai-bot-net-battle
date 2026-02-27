@@ -444,6 +444,7 @@ function getMaxHp(entity: Entity): number {
       return 100 + healthUpgrades * 20; // PLAYER_HP + HEALTH_PER_UPGRADE * upgrades
     }
     case "minion_ship": return 30;
+    case "phantom_ship": return 20;
     case "tower": return 100;
     case "missile_tower": return 150;
     case "mothership": return 500;
@@ -455,6 +456,7 @@ function getBarOffset(kind: string): number {
   switch (kind) {
     case "player_ship": return 22;
     case "minion_ship": return 18;
+    case "phantom_ship": return 16;
     case "tower": return 26;
     case "missile_tower": return 30;
     case "mothership": return 48;

@@ -8,7 +8,7 @@ export const Vec2Schema = z.object({
 });
 export type Vec2 = z.infer<typeof Vec2Schema>;
 
-export const EntityKind = z.enum(["player_ship", "bullet", "missile", "minion_ship", "tower", "missile_tower", "mothership", "energy_orb", "nemesis"]);
+export const EntityKind = z.enum(["player_ship", "bullet", "missile", "minion_ship", "tower", "missile_tower", "mothership", "energy_orb", "nemesis", "phantom_ship"]);
 export type EntityKind = z.infer<typeof EntityKind>;
 
 export const UpgradesSchema = z.object({
@@ -127,7 +127,7 @@ export const SpawnShipCommandSchema = z.object({
   type: z.literal("agent_command"),
   command: z.literal("spawn_ship"),
   params: z.object({
-    kind: z.enum(["minion_ship"]),
+    kind: z.enum(["minion_ship", "phantom_ship"]),
     count: z.number().int().min(1).max(5),
     lane: z.enum(["top", "mid", "bottom"]).optional(),
   }),

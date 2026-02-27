@@ -55,6 +55,9 @@ import {
   MILESTONE_LEVELS,
   NEMESIS_RADIUS,
   NEMESIS_KILL_XP,
+  PHANTOM_HP,
+  PHANTOM_RADIUS,
+  PHANTOM_KILL_XP,
   BODY_COLLISION_DAMAGE,
   NEMESIS_BODY_COLLISION_DAMAGE,
   BODY_COLLISION_COOLDOWN_TICKS,
@@ -160,10 +163,11 @@ export class Simulation {
     }
   }
 
-  spawnEnemy(kind: "minion_ship" | "tower" | "missile_tower", x: number, y: number): Entity {
+  spawnEnemy(kind: "minion_ship" | "tower" | "missile_tower" | "phantom_ship", x: number, y: number): Entity {
     const entityId = uuid();
     const hp =
       kind === "minion_ship" ? MINION_HP :
+      kind === "phantom_ship" ? PHANTOM_HP :
       kind === "missile_tower" ? MISSILE_TOWER_HP :
       TOWER_HP;
     const entity: Entity = {
@@ -640,6 +644,7 @@ export class Simulation {
     }
     const xp =
       killedKind === "minion_ship" ? MINION_KILL_XP :
+      killedKind === "phantom_ship" ? PHANTOM_KILL_XP :
       killedKind === "tower" || killedKind === "missile_tower" ? TOWER_KILL_XP :
       0;
     if (xp === 0) return;
@@ -667,7 +672,7 @@ export class Simulation {
   }
 
   private checkBodyCollisions(): void {
-    const solidKinds = new Set(["mothership", "tower", "missile_tower", "minion_ship", "nemesis"]);
+    const solidKinds = new Set(["mothership", "tower", "missile_tower", "minion_ship", "nemesis", "phantom_ship"]);
 
     for (const [playerId, player] of this.players) {
       const playerEntity = this.entities.get(player.entityId);
@@ -778,6 +783,8 @@ export function entityRadius(kind: string): number {
       return MOTHERSHIP_RADIUS;
     case "nemesis":
       return NEMESIS_RADIUS;
+    case "phantom_ship":
+      return PHANTOM_RADIUS;
     case "energy_orb":
       return ORB_RADIUS;
     default:

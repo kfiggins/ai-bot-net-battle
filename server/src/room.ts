@@ -296,6 +296,12 @@ export class Room {
     this.ai.registerEntity(t2.id);
     const mt1 = this.sim.spawnEnemy("missile_tower", cx + 100, cy - 300);
     this.ai.registerEntity(mt1.id);
+
+    const angles = [0, (2 * Math.PI) / 3, (4 * Math.PI) / 3];
+    for (const angle of angles) {
+      const p = this.sim.spawnEnemy("phantom_ship", cx + Math.cos(angle) * 220, cy + Math.sin(angle) * 220);
+      this.ai.registerEntity(p.id);
+    }
   }
 
   private startTickLoop(): void {

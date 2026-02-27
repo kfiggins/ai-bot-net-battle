@@ -47,6 +47,8 @@ export class GameScene extends Phaser.Scene {
     this.load.image("spaceship_blue", "assets/spaceship_blue.png");
     this.load.image("spaceship_red", "assets/spaceship_red.png");
     this.load.image("spaceship_purple", "assets/spaceship_purple.png");
+    // Phantom ship — place your sprite at client/public/assets/phantom.png
+    this.load.image("phantom", "assets/phantom.png");
   }
 
   create(): void {
@@ -436,7 +438,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       // Boost particles for moving AI entities and remote players
-      if (entity.kind === "minion_ship" || entity.kind === "nemesis" ||
+      if (entity.kind === "minion_ship" || entity.kind === "nemesis" || entity.kind === "phantom_ship" ||
           (entity.kind === "player_ship" && entity.id !== selfId)) {
         const spd = Math.sqrt(entity.vel.x * entity.vel.x + entity.vel.y * entity.vel.y);
         if (spd > BOOST_PARTICLE_THRESHOLD) {
@@ -469,8 +471,8 @@ export class GameScene extends Phaser.Scene {
         sprite.setRotation((entity.aimAngle ?? 0) + Math.PI / 2);
       }
 
-      // Plasma bullet / missile / minion rotation — image points up, rotate to match travel direction
-      if ((entity.kind === "bullet" || entity.kind === "missile" || entity.kind === "minion_ship") && sprite instanceof Phaser.GameObjects.Image) {
+      // Plasma bullet / missile / minion / phantom rotation — image points up, rotate to match travel direction
+      if ((entity.kind === "bullet" || entity.kind === "missile" || entity.kind === "minion_ship" || entity.kind === "phantom_ship") && sprite instanceof Phaser.GameObjects.Image) {
         const travelAngle = Math.atan2(entity.vel.y, entity.vel.x);
         sprite.setRotation(travelAngle + Math.PI / 2);
       }
@@ -585,6 +587,18 @@ export class GameScene extends Phaser.Scene {
       const img = this.add.image(entity.pos.x, entity.pos.y, "minion");
       img.setDisplaySize(36, 36);
       return img;
+    }
+
+    if (entity.kind === "phantom_ship") {
+      // Use the custom sprite if the asset was loaded, otherwise fall back to a tinted circle.
+      if (this.textures.exists("phantom") && !this.textures.get("phantom").key.startsWith("__")) {
+        const img = this.add.image(entity.pos.x, entity.pos.y, "phantom");
+        img.setDisplaySize(32, 32);
+        return img;
+      }
+      // Fallback: small purple circle until the asset is added
+      const r = getRadius("phantom_ship");
+      return this.add.circle(entity.pos.x, entity.pos.y, r, 0x8844ff);
     }
 
     if (entity.kind === "missile") {
@@ -707,6 +721,7 @@ function getColorByKind(kind: string): number {
     case "missile_tower": return 0xff8800;
     case "mothership": return 0xff00ff;
     case "nemesis": return 0xaa00ff;
+    case "phantom_ship": return 0x8844ff;
     case "energy_orb": return 0x00ffcc;
     default: return 0xffffff;
   }
@@ -725,6 +740,7 @@ function getColor(entity: Entity): number {
     case "missile_tower": return 0xff8800;
     case "mothership": return 0xff00ff;
     case "nemesis": return 0xaa00ff;
+    case "phantom_ship": return 0x8844ff;
     case "energy_orb": return 0x00ffcc;
     default: return 0xffffff;
   }
@@ -740,6 +756,7 @@ function getRadius(kind: string): number {
     case "missile_tower": return 24;
     case "mothership": return 40;
     case "nemesis": return 38;
+    case "phantom_ship": return 10;
     case "energy_orb": return ORB_RADIUS;
     default: return 8;
   }
