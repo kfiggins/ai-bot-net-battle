@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { AgentControlMode, LobbyPlayer, VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from "shared";
 import { NetClient } from "./net.js";
 import { Starfield } from "./starfield.js";
+import { AudioManager } from "./audio.js";
 
 const PLAYER_COLORS = [0x88ff00, 0x00ddcc, 0xff8800, 0xff44aa, 0xffee00, 0xffffff, 0x003399, 0x222222];
 const CLIENT_VERSION = "v0.0.2";
@@ -12,6 +13,7 @@ function colorToHex(color: number): string {
 
 export class LobbyScene extends Phaser.Scene {
   private starfield!: Starfield;
+  private audio!: AudioManager;
   private net!: NetClient;
   private playerListTexts: Phaser.GameObjects.Text[] = [];
   private playerDots: Phaser.GameObjects.Arc[] = [];
@@ -29,6 +31,10 @@ export class LobbyScene extends Phaser.Scene {
     super({ key: "LobbyScene" });
   }
 
+  preload(): void {
+    AudioManager.preload(this);
+  }
+
   init(data: { displayName?: string }): void {
     if (data?.displayName) {
       this.displayName = data.displayName;
@@ -42,6 +48,13 @@ export class LobbyScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.setBackgroundColor("#111122");
     this.starfield = new Starfield(this, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
+    // Reuse AudioManager from registry — music started in NameEntryScene keeps playing
+    this.audio = this.registry.get("audio") as AudioManager;
+    if (!this.audio) {
+      this.audio = new AudioManager(this);
+      this.registry.set("audio", this.audio);
+      this.audio.playMusic("music_lobby_loop");
+    }
 
     // Title
     this.add
@@ -193,6 +206,7 @@ export class LobbyScene extends Phaser.Scene {
       this.refreshModeUI();
       if (lobby.state === "in_progress") {
         // Game already started — skip lobby
+        this.audio.stopMusic();
         this.scene.start("GameScene");
         return;
       }
@@ -212,6 +226,7 @@ export class LobbyScene extends Phaser.Scene {
     });
 
     this.net.setMatchStartHandler(() => {
+      this.audio.stopMusic();
       this.scene.start("GameScene");
     });
 

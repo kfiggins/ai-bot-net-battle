@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from "shared";
 import { Starfield } from "./starfield.js";
+import { AudioManager } from "./audio.js";
 
 const CLIENT_VERSION = "v0.0.2";
 const MAX_NAME_LENGTH = 20;
@@ -15,6 +16,10 @@ export class NameEntryScene extends Phaser.Scene {
 
   constructor() {
     super({ key: "NameEntryScene" });
+  }
+
+  preload(): void {
+    AudioManager.preload(this);
   }
 
   create(): void {
@@ -124,6 +129,14 @@ export class NameEntryScene extends Phaser.Scene {
       this.nameInput = savedName;
       this.updateDisplay();
     }
+
+    // Start lobby music (shared across NameEntry + Lobby scenes via registry)
+    let audio = this.registry.get("audio") as AudioManager | undefined;
+    if (!audio) {
+      audio = new AudioManager(this);
+      this.registry.set("audio", audio);
+    }
+    audio.playMusic("music_lobby_loop");
 
     // Capture keyboard input
     this.input.keyboard!.on("keydown", this.handleKeyDown, this);
