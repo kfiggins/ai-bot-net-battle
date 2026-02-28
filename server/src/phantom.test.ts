@@ -358,9 +358,9 @@ describe("Phantom Ship — flank geometry", () => {
     // Player approaches from the left (600 px west of mothership — inside guard zone)
     spawnPlayer(sim, msX - 600, msY);
     // Phantom starts above the mothership, outside fire range of the player
-    // (dist phantom→player = sqrt(600² + 250²) ≈ 651 px > PHANTOM_FIRE_RANGE=450)
+    // (dist phantom→player = sqrt(600² + 850²) ≈ 1040 px > PHANTOM_FIRE_RANGE=800)
     // so it will be in "flank" mode, not "chase" mode
-    const phantom = spawnPhantom(sim, ai, msX, msY - 250);
+    const phantom = spawnPhantom(sim, ai, msX, msY - 850);
 
     // Run 60 ticks (~2 s) — long enough to reach the flank position
     for (let i = 0; i < 60; i++) {
@@ -372,5 +372,32 @@ describe("Phantom Ship — flank geometry", () => {
     // = (2000,2000) + (1,0)*180 = (2180, 2000)
     // Phantom should have moved to the right of center (x > msX - 50)
     expect(phantom.pos.x).toBeGreaterThan(msX - 50);
+  });
+
+  it("leads the player's movement — flank target shifts with predicted position", () => {
+    const { sim, ai } = makeSimWithMothership();
+    const msX = WORLD_WIDTH / 2;
+    const msY = WORLD_HEIGHT / 2;
+
+    // Player is left of mothership but moving right fast enough that their
+    // predicted position (1.5 s ahead via PHANTOM_FLANK_LOOK_AHEAD_S) crosses
+    // to the right side: msX - 600 + 600*1.5 = msX + 300 (right of mothership)
+    // → flank point flips to the LEFT side (x ≈ msX - PHANTOM_FLANK_DIST)
+    const { entity: playerEntity } = spawnPlayer(sim, msX - 600, msY);
+    playerEntity.vel.x = 600; // px/s rightward
+
+    // Phantom outside fire range: dist = sqrt(600² + 850²) ≈ 1040 > PHANTOM_FIRE_RANGE=800
+    const phantom = spawnPhantom(sim, ai, msX, msY - 850);
+
+    // Only ai.update() is called (not sim.update()), so the player doesn't physically
+    // move — but the AI reads target.vel each tick to recompute the predicted position.
+    for (let i = 0; i < 60; i++) {
+      ai.update(sim);
+      sim.tick++;
+    }
+
+    // Phantom should have moved toward the left-side flank (x < msX)
+    // rather than the right-side flank it would target if ignoring player velocity
+    expect(phantom.pos.x).toBeLessThan(msX);
   });
 });

@@ -533,12 +533,9 @@ export class AIManager {
       aiState.aiMode = "flank"; // move to flanking position first
     }
 
-    // Movement: intercept player (flank) or circle orbit (chase)
+    // Movement: go to flank position (far side of mothership) or circle orbit (chase)
     if (aiState.aiMode === "flank") {
-      // Lead the player's movement to intercept rather than chasing their current position
-      const interceptX = target.pos.x + target.vel.x * 0.5;
-      const interceptY = target.pos.y + target.vel.y * 0.5;
-      this.phantomThrustTo(entity, aiState, interceptX, interceptY, PHANTOM_SPEED);
+      // flankX/flankY already leads the player's movement via PHANTOM_FLANK_LOOK_AHEAD_S
       this.phantomThrustTo(entity, aiState, flankX, flankY, PHANTOM_SPEED);
     } else {
       // Advance the orbit angle each tick to strafe around the player

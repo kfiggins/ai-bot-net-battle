@@ -40,9 +40,9 @@ export const MISSILE_BURST_DELAY_TICKS = 5;    // ~167ms between burst shots
 export const MISSILE_SPEED = 250; // pixels per second (fast, homing)
 export const MISSILE_HP = 1;
 export const MISSILE_RADIUS = 6;
-export const MISSILE_TTL_TICKS = 480; // 816 seconds at 30Hz
+export const MISSILE_TTL_TICKS = 300; // 10 seconds at 30Hz
 export const MISSILE_DAMAGE = 15;
-export const MISSILE_TURN_RATE = 2.5; // radians per second
+export const MISSILE_TURN_RATE = 1; // radians per second
 
 // Player right-click missile
 export const PLAYER_MISSILE_COOLDOWN_TICKS = 900; // 30 seconds at 30Hz

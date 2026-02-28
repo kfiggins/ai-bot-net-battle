@@ -1334,7 +1334,7 @@ describe("stat upgrades", () => {
     const ps = sim.players.get("p1")!;
     entity.pos.x = WORLD_WIDTH / 2;
     entity.pos.y = WORLD_HEIGHT / 2;
-    ps.upgrades.fire_rate = MAX_UPGRADE_PER_STAT; // 5 → cooldown = max(1, 6-5) = 1
+    ps.upgrades.fire_rate = 10; // cooldown = max(1, 12 - 10*1.2) = max(1, 0) = 1 tick
 
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
