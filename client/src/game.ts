@@ -4,6 +4,7 @@ import { NetClient } from "./net.js";
 import { SnapshotInterpolator, InterpolatedEntity } from "./interpolation.js";
 import { VFXManager } from "./vfx.js";
 import { HUD } from "./ui.js";
+import { AudioManager } from "./audio.js";
 import { computeTeammateArrow } from "./teammate-arrows.js";
 
 export class GameScene extends Phaser.Scene {
@@ -17,6 +18,7 @@ export class GameScene extends Phaser.Scene {
   private mouseWorldPos = { x: 0, y: 0 };
   private vfx!: VFXManager;
   private hud!: HUD;
+  private audio!: AudioManager;
   private previousEntityIds: Set<string> = new Set();
   private previousEntityHp: Map<string, number> = new Map();
   private previousEntityKinds: Map<string, string> = new Map();
@@ -32,6 +34,8 @@ export class GameScene extends Phaser.Scene {
   private latestBotResources: number | undefined;
   private cannonSprites: Map<string, Phaser.GameObjects.Rectangle[]> = new Map();
   private localAimAngle = 0;
+  private lastShotSoundMs = 0;
+  private previousLevel = 1;
 
   constructor() {
     super({ key: "GameScene" });
@@ -54,6 +58,8 @@ export class GameScene extends Phaser.Scene {
     this.load.image("spaceship_black", "assets/spaceship_black.png");
     // Phantom ship — place your sprite at client/public/assets/phantom.png
     this.load.image("phantom", "assets/phantom.png");
+
+    AudioManager.preload(this);
   }
 
   create(): void {
@@ -100,6 +106,9 @@ export class GameScene extends Phaser.Scene {
 
     this.vfx = new VFXManager(this);
     this.hud = new HUD(this);
+    this.audio = (this.registry.get("audio") as AudioManager) ?? new AudioManager(this);
+    this.registry.set("audio", this.audio);
+    this.audio.playMusic("music_match_loop");
     this.hud.setDebugEnabled(this.net.debugLogEnabled);
     this.hud.setUpgradeHandler((stat) => {
       this.net.sendUpgrade(stat as "damage" | "speed" | "health" | "fire_rate");
@@ -138,6 +147,7 @@ export class GameScene extends Phaser.Scene {
     leaveBtn.on("pointerover", () => leaveBtn.setColor("#ff8888"));
     leaveBtn.on("pointerout", () => leaveBtn.setColor("#ff4444"));
     leaveBtn.on("pointerdown", () => {
+      this.audio.stopMusic();
       this.net.disconnect();
       this.scene.start("NameEntryScene");
     });
@@ -159,6 +169,7 @@ export class GameScene extends Phaser.Scene {
 
     // Server ended the match — go back to lobby
     this.net.setMatchEndHandler(() => {
+      this.audio.stopMusic();
       this.scene.start("LobbyScene");
     });
   }
@@ -235,6 +246,20 @@ export class GameScene extends Phaser.Scene {
     this.localAimAngle = input.aimAngle;
 
     this.net.sendInput(input);
+
+    // Play shot sound on local fire (throttled to match server fire rate ~400ms)
+    if (input.fire) {
+      const now = performance.now();
+      if (now - this.lastShotSoundMs >= 400) {
+        this.audio.play("weapon_player_shot");
+        this.lastShotSoundMs = now;
+      }
+    }
+
+    // Play missile launch sound on right-click
+    if (input.fireMissile) {
+      this.audio.play("weapon_player_missile");
+    }
 
     const entities = this.interpolator.getInterpolatedEntities();
     if (entities.length > 0) {
@@ -317,7 +342,12 @@ export class GameScene extends Phaser.Scene {
       if (selfId) {
         const selfEntity = entities.find((e) => e.id === selfId);
         if (selfEntity) {
-          this.hud.updateXP(selfEntity.level ?? 1, selfEntity.xp ?? 0, selfEntity.xpToNext ?? 0);
+          const currentLevel = selfEntity.level ?? 1;
+          if (currentLevel > this.previousLevel) {
+            this.audio.play("progress_level_up");
+          }
+          this.previousLevel = currentLevel;
+          this.hud.updateXP(currentLevel, selfEntity.xp ?? 0, selfEntity.xpToNext ?? 0);
           if (selfEntity.upgrades) {
             this.hud.updateUpgrades(selfEntity.upgrades, selfEntity.cannons ?? 1, selfEntity.pendingUpgrades ?? 0);
             // Update predicted max speed cap for client-side prediction
@@ -333,11 +363,13 @@ export class GameScene extends Phaser.Scene {
 
     if (phase?.matchOver && !this.victoryShown) {
       this.victoryShown = true;
+      this.audio.play("state_victory");
       this.hud.showVictory({
         durationSec: (performance.now() - this.matchStartMs) / 1000,
         phase: phase.current,
         remaining: phase.remaining,
       }, () => {
+        this.audio.stopMusic();
         this.net.disconnect();
         this.scene.start("NameEntryScene");
       });
@@ -374,17 +406,31 @@ export class GameScene extends Phaser.Scene {
   private detectEvents(entities: InterpolatedEntity[]): void {
     const currentIds = new Set<string>();
     const currentHp = new Map<string, number>();
+    let enemyMissileBurst = false;
 
     for (const entity of entities) {
       currentIds.add(entity.id);
       currentHp.set(entity.id, entity.hp);
       this.previousEntityKinds.set(entity.id, entity.kind);
 
+      // Detect new enemy missiles appearing (missile tower burst) — flag for single play
+      if (entity.kind === "missile" && !this.previousEntityIds.has(entity.id) && entity.team === 2) {
+        enemyMissileBurst = true;
+      }
+
       // Detect hits (HP decreased)
       const prevHp = this.previousEntityHp.get(entity.id);
       if (prevHp !== undefined && entity.hp < prevHp) {
         this.vfx.hitFlash(entity.id);
+        // Play hit sound for local player
+        if (entity.id === this.net.selfEntityId) {
+          this.audio.play("player_hit");
+        }
       }
+    }
+
+    if (enemyMissileBurst) {
+      this.audio.play("weapon_enemy_missile_burst");
     }
 
     // Detect deaths (entity disappeared)
@@ -399,6 +445,20 @@ export class GameScene extends Phaser.Scene {
               ? sprite.fillColor
               : getColorByKind(this.previousEntityKinds.get(id) ?? "");
             this.vfx.explosion(sprite.x, sprite.y, explosionColor, 10);
+
+            // Play death sound based on entity kind
+            const deadKind = this.previousEntityKinds.get(id);
+            if (id === this.net.selfEntityId) {
+              this.audio.play("player_death");
+            } else if (deadKind === "tower" || deadKind === "missile_tower") {
+              this.audio.play("enemy_tower_destroy");
+            } else if (deadKind === "minion_ship" || deadKind === "phantom_ship") {
+              this.audio.play("enemy_death_small");
+            }
+
+            if (deadKind === "sub_base") {
+              this.audio.play("enemy_subbase_destroy");
+            }
 
             // Sub-base death: smaller chain explosions
             if (this.previousEntityKinds.get(id) === "sub_base") {
