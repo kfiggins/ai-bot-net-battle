@@ -63,7 +63,7 @@ const AUDIO_DEFS: AudioDef[] = [
   { key: "weapon_player_shot", path: "assets/audio/weapon_player_shot.wav", category: "gameplay", baseVolume: 0.12 },
   { key: "weapon_player_missile", path: "assets/audio/weapon_player_missile.wav", category: "gameplay", baseVolume: 0.55 },
   { key: "weapon_enemy_shot", path: "assets/audio/weapon_enemy_shot.wav", category: "gameplay", baseVolume: 0.4 },
-  { key: "weapon_enemy_missile_burst", path: "assets/audio/weapon_enemy_missile_burst.wav", category: "gameplay", baseVolume: 0.5 },
+  { key: "weapon_enemy_missile_burst", path: "assets/audio/weapon_player_missile.wav", category: "gameplay", baseVolume: 0.5 },
   { key: "player_hit", path: "assets/audio/player_hit.wav", category: "gameplay", baseVolume: 0.5 },
   { key: "player_death", path: "assets/audio/player_death.wav", category: "gameplay", baseVolume: 0.6 },
   { key: "player_respawn", path: "assets/audio/player_respawn.wav", category: "gameplay", baseVolume: 0.45 },
