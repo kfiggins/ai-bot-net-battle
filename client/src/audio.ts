@@ -118,6 +118,7 @@ export class AudioManager {
     const categoryVolume = def.category === "music" ? this.settings.musicVolume : this.settings.sfxVolume;
     const volume = (config?.volume ?? 1) * def.baseVolume * categoryVolume;
 
+    if (!this.scene.cache.audio.exists(key)) return;
     this.scene.sound.play(key, { ...config, volume, loop: config?.loop ?? def.loop ?? false });
   }
 
@@ -127,6 +128,7 @@ export class AudioManager {
 
     const def = AUDIO_DEFS.find((d) => d.key === key);
     if (!def) return;
+    if (!this.scene.cache.audio.exists(key)) return;
 
     const snd = this.scene.sound.add(key, {
       loop: true,

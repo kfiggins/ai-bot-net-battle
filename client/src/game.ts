@@ -36,6 +36,7 @@ export class GameScene extends Phaser.Scene {
   private localAimAngle = 0;
   private lastShotSoundMs = 0;
   private previousLevel = 1;
+  private wasFiringMissile = false;
 
   constructor() {
     super({ key: "GameScene" });
@@ -256,10 +257,11 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // Play missile launch sound on right-click
-    if (input.fireMissile) {
+    // Play missile launch sound on right-click (once per press)
+    if (input.fireMissile && !this.wasFiringMissile) {
       this.audio.play("weapon_player_missile");
     }
+    this.wasFiringMissile = input.fireMissile;
 
     const entities = this.interpolator.getInterpolatedEntities();
     if (entities.length > 0) {
