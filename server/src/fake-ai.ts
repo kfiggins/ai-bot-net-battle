@@ -10,6 +10,7 @@ const FAKE_AI_SPAWN_COOLDOWN_TICKS = 30; // 1s
 
 const FAKE_AI_PHANTOM_COOLDOWN_TICKS = 300; // 10 s between phantom spawns
 const FAKE_AI_SUB_BASE_TOWER_COOLDOWN_TICKS = 150; // 5s between sub-base tower rebuilds
+const FAKE_AI_DREADNOUGHT_COOLDOWN_TICKS = 600; // 20s between dreadnought attempts
 
 export class FakeAI {
   private nextDecisionTick = 0;
@@ -18,6 +19,7 @@ export class FakeAI {
   private nextSpawnTick = 0;
   private nextPhantomTick = 0;
   private nextSubBaseTowerTick = 0;
+  private nextDreadnoughtTick = 0;
 
   update(sim: Simulation, economy: Economy, agent: AgentAPI, mothershipPos?: { x: number; y: number }, boss?: BossManager): void {
     if (sim.tick < this.nextDecisionTick) return;
@@ -118,6 +120,19 @@ export class FakeAI {
       );
       if (result.ok) {
         this.nextPhantomTick = sim.tick + FAKE_AI_PHANTOM_COOLDOWN_TICKS;
+      }
+    }
+
+    // Priority 5: deploy a dreadnought if we can afford one (late-game threat).
+    const dreadnoughts = sim.getEntitiesByKind("dreadnought").length;
+    if (dreadnoughts < 1 && economy.balance >= UNIT_COSTS.dreadnought && sim.tick >= this.nextDreadnoughtTick) {
+      const result = economy.requestBuild(
+        { unitKind: "dreadnought" },
+        sim,
+        mothershipPos
+      );
+      if (result.ok) {
+        this.nextDreadnoughtTick = sim.tick + FAKE_AI_DREADNOUGHT_COOLDOWN_TICKS;
       }
     }
   }

@@ -63,6 +63,7 @@ export const UNIT_COSTS: Record<string, number> = {
   tower: 100,
   missile_tower: 125,
   phantom_ship: 65,
+  dreadnought: 1000,
 };
 
 export const UNIT_CAPS: Record<string, number> = {
@@ -70,6 +71,7 @@ export const UNIT_CAPS: Record<string, number> = {
   tower: 10,
   missile_tower: 5,
   phantom_ship: 5,
+  dreadnought: 1,
 };
 
 export const BUILD_COOLDOWN_TICKS = 15; // 0.5 seconds between builds
@@ -201,6 +203,46 @@ export const SUB_BASE_MAX_TOWERS = 2;                // per sub-base (any mix of
 export const SUB_BASE_POP_MINIONS = 5;               // +5 minion cap per alive sub-base
 export const SUB_BASE_POP_PHANTOMS = 1;              // +1 phantom cap per alive sub-base
 export const SUB_BASE_KILL_XP = 50;                  // XP award for destroying
+
+// Dreadnought Capital Ship — slow, heavily armored mobile fortress
+export const DREADNOUGHT_HP = 800;
+export const DREADNOUGHT_RADIUS = 36;
+export const DREADNOUGHT_SPEED = 80;               // px/s — very slow (player base is 200)
+export const DREADNOUGHT_ACCEL = 150;               // px/s² — sluggish acceleration
+export const DREADNOUGHT_BRAKE_FRICTION = 0.85;
+export const DREADNOUGHT_FRONT_ARMOR = 0.25;        // 25% damage from front hits
+export const DREADNOUGHT_FRONT_ARC = Math.PI / 3;   // ±60° from facing = 120° total front arc
+export const DREADNOUGHT_KILL_XP = 100;
+export const DREADNOUGHT_BODY_COLLISION_DAMAGE = 20;
+
+// Dreadnought Auto Turrets — 4 turrets, one per "corner"
+export const DREADNOUGHT_TURRET_COUNT = 4;
+export const DREADNOUGHT_TURRET_FIRE_RANGE = 600;
+export const DREADNOUGHT_TURRET_FIRE_COOLDOWN = 25; // ticks (~0.83s per turret)
+export const DREADNOUGHT_TURRET_ARC = Math.PI * 0.6; // each turret covers ±54° (108° arc)
+export const DREADNOUGHT_TURRET_BASE_ANGLES = [
+  Math.PI * 0.25,   // front-right (45°)
+  Math.PI * 0.75,   // back-right (135°)
+  -Math.PI * 0.75,  // back-left (-135°)
+  -Math.PI * 0.25,  // front-left (-45°)
+];
+export const DREADNOUGHT_TURRET_OFFSET = 28;        // px from center to turret mount point
+
+// Dreadnought Big Cannon — devastating slow projectile
+export const DREADNOUGHT_BIG_CANNON_DAMAGE = 80;
+export const DREADNOUGHT_BIG_CANNON_SPEED = 180;    // px/s — slow, dodgeable
+export const DREADNOUGHT_BIG_CANNON_COOLDOWN = 180;  // 6 seconds between shots
+export const DREADNOUGHT_BIG_CANNON_RANGE = 900;
+export const DREADNOUGHT_BIG_CANNON_RADIUS = 12;    // larger than normal bullet (4)
+export const DREADNOUGHT_BIG_CANNON_TTL = 180;      // 6s — lives long enough to traverse range
+
+// Mines — laid by dreadnought, detonate on player contact
+export const MINE_HP = 1;
+export const MINE_RADIUS = 10;
+export const MINE_DAMAGE = 60;
+export const MINE_TTL_TICKS = 900;                   // 30 seconds at 30Hz
+export const MINE_LAY_INTERVAL_TICKS = 90;           // lay a mine every 3 seconds
+export const MINE_TRIGGER_RADIUS = 20;               // detection radius (slightly larger than visual)
 
 // Body collision damage (player rams into solid enemy — not player vs player)
 export const BODY_COLLISION_DAMAGE = 8;           // for mothership, towers, minions

@@ -12,7 +12,7 @@ import { Simulation } from "./sim.js";
 import { AIManager } from "./ai.js";
 
 export interface BuildRequest {
-  unitKind: "minion_ship" | "tower" | "missile_tower" | "phantom_ship";
+  unitKind: "minion_ship" | "tower" | "missile_tower" | "phantom_ship" | "dreadnought";
   x?: number;
   y?: number;
 }
@@ -24,7 +24,7 @@ export interface BuildResult {
 }
 
 export interface QueuedBuild {
-  unitKind: "minion_ship" | "tower" | "missile_tower" | "phantom_ship";
+  unitKind: "minion_ship" | "tower" | "missile_tower" | "phantom_ship" | "dreadnought";
   readyAtTick: number;
   x: number;
   y: number;
@@ -129,7 +129,7 @@ export class Economy {
     if (request.x !== undefined && request.y !== undefined) {
       x = request.x;
       y = request.y;
-    } else if (unitKind === "minion_ship" || unitKind === "phantom_ship") {
+    } else if (unitKind === "minion_ship" || unitKind === "phantom_ship" || unitKind === "dreadnought") {
       // Spawn near mothership with some spread
       const angle = Math.random() * Math.PI * 2;
       const dist = 100 + Math.random() * 300;

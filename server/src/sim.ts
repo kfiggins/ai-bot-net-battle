@@ -70,6 +70,21 @@ import {
   SUB_BASE_HP,
   SUB_BASE_RADIUS,
   SUB_BASE_KILL_XP,
+  DREADNOUGHT_HP,
+  DREADNOUGHT_RADIUS,
+  DREADNOUGHT_KILL_XP,
+  DREADNOUGHT_BODY_COLLISION_DAMAGE,
+  DREADNOUGHT_FRONT_ARMOR,
+  DREADNOUGHT_FRONT_ARC,
+  DREADNOUGHT_BIG_CANNON_DAMAGE,
+  DREADNOUGHT_BIG_CANNON_SPEED,
+  DREADNOUGHT_BIG_CANNON_RADIUS,
+  DREADNOUGHT_BIG_CANNON_TTL,
+  MINE_HP,
+  MINE_RADIUS,
+  MINE_DAMAGE,
+  MINE_TTL_TICKS,
+  MINE_TRIGGER_RADIUS,
 } from "shared";
 
 export interface PlayerState {
@@ -105,12 +120,20 @@ export interface MissileState {
   damage: number;
 }
 
+export interface MineState {
+  entityId: string;
+  ownerId: string;
+  ttl: number;
+  damage: number;
+}
+
 export class Simulation {
   tick = 0;
   entities: Map<string, Entity> = new Map();
   players: Map<string, PlayerState> = new Map();
   bullets: Map<string, BulletState> = new Map();
   missiles: Map<string, MissileState> = new Map();
+  mines: Map<string, MineState> = new Map();
   private orbSpawnCooldown = ORB_SPAWN_INTERVAL_TICKS;
   pendingEnemyResources = 0;
   // playerId → enemyEntityId → ticksRemaining immunity
@@ -172,13 +195,14 @@ export class Simulation {
     }
   }
 
-  spawnEnemy(kind: "minion_ship" | "tower" | "missile_tower" | "phantom_ship" | "sub_base", x: number, y: number): Entity {
+  spawnEnemy(kind: "minion_ship" | "tower" | "missile_tower" | "phantom_ship" | "sub_base" | "dreadnought", x: number, y: number): Entity {
     const entityId = uuid();
     const hp =
       kind === "minion_ship" ? MINION_HP :
       kind === "phantom_ship" ? PHANTOM_HP :
       kind === "missile_tower" ? MISSILE_TOWER_HP :
       kind === "sub_base" ? SUB_BASE_HP :
+      kind === "dreadnought" ? DREADNOUGHT_HP :
       TOWER_HP;
     const entity: Entity = {
       id: entityId,
@@ -206,7 +230,9 @@ export class Simulation {
     this.updatePlayers();
     this.updateBullets();
     this.updateMissiles();
+    this.updateMines();
     this.checkCollisions();
+    this.checkMineCollisions();
     this.updateBodyCollisionCooldowns();
     this.checkBodyCollisions();
     this.checkOrbPickups();
@@ -515,6 +541,54 @@ export class Simulation {
     return entity;
   }
 
+  spawnMine(owner: Entity, ownerId: string): Entity {
+    const entityId = uuid();
+    const entity: Entity = {
+      id: entityId,
+      kind: "mine",
+      pos: { x: owner.pos.x, y: owner.pos.y },
+      vel: { x: 0, y: 0 },
+      hp: MINE_HP,
+      team: owner.team,
+    };
+    this.entities.set(entityId, entity);
+    this.mines.set(entityId, {
+      entityId,
+      ownerId,
+      ttl: MINE_TTL_TICKS,
+      damage: MINE_DAMAGE,
+    });
+    return entity;
+  }
+
+  spawnBigCannon(owner: Entity, ownerId: string, aimAngle: number): Entity {
+    const entityId = uuid();
+    const vx = Math.cos(aimAngle) * DREADNOUGHT_BIG_CANNON_SPEED;
+    const vy = Math.sin(aimAngle) * DREADNOUGHT_BIG_CANNON_SPEED;
+    const ownerRadius = entityRadius(owner.kind);
+    const entity: Entity = {
+      id: entityId,
+      kind: "bullet",
+      pos: {
+        x: owner.pos.x + Math.cos(aimAngle) * (ownerRadius + DREADNOUGHT_BIG_CANNON_RADIUS + 2),
+        y: owner.pos.y + Math.sin(aimAngle) * (ownerRadius + DREADNOUGHT_BIG_CANNON_RADIUS + 2),
+      },
+      vel: { x: vx, y: vy },
+      hp: BULLET_HP,
+      team: owner.team,
+      ownerKind: "dreadnought",
+    };
+    this.entities.set(entityId, entity);
+    this.bullets.set(entityId, {
+      entityId,
+      ownerId,
+      ttl: DREADNOUGHT_BIG_CANNON_TTL,
+      originPos: { x: entity.pos.x, y: entity.pos.y },
+      damage: DREADNOUGHT_BIG_CANNON_DAMAGE,
+    });
+    return entity;
+  }
+
   private updateBullets(): void {
     for (const [entityId, bullet] of this.bullets) {
       const entity = this.entities.get(entityId);
@@ -609,6 +683,39 @@ export class Simulation {
     }
   }
 
+  private updateMines(): void {
+    for (const [entityId, mine] of this.mines) {
+      const entity = this.entities.get(entityId);
+      if (!entity || entity.hp <= 0) {
+        this.mines.delete(entityId);
+        continue;
+      }
+      mine.ttl--;
+      if (mine.ttl <= 0) {
+        entity.hp = 0;
+      }
+    }
+  }
+
+  private checkMineCollisions(): void {
+    for (const [mineId, mineState] of this.mines) {
+      const mineEntity = this.entities.get(mineId);
+      if (!mineEntity || mineEntity.hp <= 0) continue;
+
+      for (const [, target] of this.entities) {
+        if (target.kind !== "player_ship") continue;
+        if (target.team === mineEntity.team) continue;
+        if (target.hp <= 0) continue;
+
+        if (circlesOverlap(mineEntity.pos, MINE_TRIGGER_RADIUS, target.pos, PLAYER_RADIUS)) {
+          target.hp -= mineState.damage;
+          mineEntity.hp = 0;
+          break;
+        }
+      }
+    }
+  }
+
   checkCollisions(): void {
     // Bullets hit any opposite-team non-bullet, non-orb entity (including missiles)
     for (const [bulletId, bulletState] of this.bullets) {
@@ -624,7 +731,8 @@ export class Simulation {
         const targetRadius = entityRadius(target.kind);
 
         if (circlesOverlap(bulletEntity.pos, BULLET_RADIUS, target.pos, targetRadius)) {
-          target.hp -= bulletState.damage;
+          const damage = applyDirectionalArmor(target, bulletEntity.pos, bulletState.damage);
+          target.hp -= damage;
           if (target.hp <= 0) this.awardKillXP(bulletState.ownerId, target.kind);
           bulletEntity.hp = 0;
           break;
@@ -646,7 +754,8 @@ export class Simulation {
         const targetRadius = entityRadius(target.kind);
 
         if (circlesOverlap(missileEntity.pos, MISSILE_RADIUS, target.pos, targetRadius)) {
-          target.hp -= missileState.damage;
+          const damage = applyDirectionalArmor(target, missileEntity.pos, missileState.damage);
+          target.hp -= damage;
           if (target.hp <= 0) this.awardKillXP(missileState.ownerId, target.kind);
           missileEntity.hp = 0;
           break;
@@ -668,6 +777,7 @@ export class Simulation {
       killedKind === "phantom_ship" ? PHANTOM_KILL_XP :
       killedKind === "tower" || killedKind === "missile_tower" ? TOWER_KILL_XP :
       killedKind === "sub_base" ? SUB_BASE_KILL_XP :
+      killedKind === "dreadnought" ? DREADNOUGHT_KILL_XP :
       0;
     if (xp === 0) return;
     for (const player of this.players.values()) {
@@ -694,7 +804,7 @@ export class Simulation {
   }
 
   private checkBodyCollisions(): void {
-    const solidKinds = new Set(["mothership", "tower", "missile_tower", "minion_ship", "nemesis", "phantom_ship", "sub_base"]);
+    const solidKinds = new Set(["mothership", "tower", "missile_tower", "minion_ship", "nemesis", "phantom_ship", "sub_base", "dreadnought"]);
 
     for (const [playerId, player] of this.players) {
       const playerEntity = this.entities.get(player.entityId);
@@ -717,7 +827,9 @@ export class Simulation {
         const enemyRadius = entityRadius(enemy.kind);
         if (!circlesOverlap(playerEntity.pos, PLAYER_RADIUS, enemy.pos, enemyRadius)) continue;
 
-        const damage = enemy.kind === "nemesis" ? NEMESIS_BODY_COLLISION_DAMAGE : BODY_COLLISION_DAMAGE;
+        const damage = enemy.kind === "nemesis" ? NEMESIS_BODY_COLLISION_DAMAGE :
+          enemy.kind === "dreadnought" ? DREADNOUGHT_BODY_COLLISION_DAMAGE :
+          BODY_COLLISION_DAMAGE;
         playerEntity.hp -= damage;
         cooldowns.set(enemyId, BODY_COLLISION_COOLDOWN_TICKS);
       }
@@ -730,6 +842,7 @@ export class Simulation {
         this.entities.delete(id);
         this.bullets.delete(id);
         this.missiles.delete(id);
+        this.mines.delete(id);
       }
     }
   }
@@ -812,6 +925,10 @@ export function entityRadius(kind: string): number {
       return ORB_RADIUS;
     case "sub_base":
       return SUB_BASE_RADIUS;
+    case "dreadnought":
+      return DREADNOUGHT_RADIUS;
+    case "mine":
+      return MINE_RADIUS;
     default:
       return PLAYER_RADIUS;
   }
@@ -843,4 +960,29 @@ export function circlesOverlap(
   const distSq = dx * dx + dy * dy;
   const radSum = ar + br;
   return distSq <= radSum * radSum;
+}
+
+/** Apply directional armor for dreadnought — front hits take reduced damage */
+export function applyDirectionalArmor(
+  target: Entity,
+  projectilePos: { x: number; y: number },
+  baseDamage: number
+): number {
+  if (target.kind !== "dreadnought" || target.aimAngle === undefined) return baseDamage;
+
+  // Angle from target to projectile — the direction the projectile is approaching from.
+  // If this matches the target's aimAngle, the projectile is hitting the front.
+  const angleToProjectile = Math.atan2(
+    projectilePos.y - target.pos.y,
+    projectilePos.x - target.pos.x
+  );
+  let angleDiff = angleToProjectile - target.aimAngle;
+  // Normalize to [-PI, PI]
+  while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+  while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+  if (Math.abs(angleDiff) <= DREADNOUGHT_FRONT_ARC) {
+    return baseDamage * DREADNOUGHT_FRONT_ARMOR;
+  }
+  return baseDamage;
 }

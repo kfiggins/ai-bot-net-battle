@@ -36,6 +36,20 @@ import {
   PHANTOM_CHASE_ORBIT_RADIUS,
   PHANTOM_CHASE_ORBIT_SPEED,
   BULLET_SPEED,
+  DREADNOUGHT_SPEED,
+  DREADNOUGHT_ACCEL,
+  DREADNOUGHT_BRAKE_FRICTION,
+  DREADNOUGHT_RADIUS,
+  DREADNOUGHT_TURRET_COUNT,
+  DREADNOUGHT_TURRET_FIRE_RANGE,
+  DREADNOUGHT_TURRET_FIRE_COOLDOWN,
+  DREADNOUGHT_TURRET_ARC,
+  DREADNOUGHT_TURRET_BASE_ANGLES,
+  DREADNOUGHT_TURRET_OFFSET,
+  DREADNOUGHT_BIG_CANNON_COOLDOWN,
+  DREADNOUGHT_BIG_CANNON_RANGE,
+  DREADNOUGHT_BIG_CANNON_SPEED,
+  MINE_LAY_INTERVAL_TICKS,
 } from "shared";
 import { Simulation, circlesOverlap } from "./sim.js";
 
@@ -61,6 +75,10 @@ export interface AIState {
   burstTargetId: string | null;
   // Phantom chase orbit — angle around the target player, advances each tick
   phantomOrbitAngle: number;
+  // Dreadnought state
+  turretCooldowns: number[];
+  mineLayCooldown: number;
+  bigCannonCooldown: number;
 }
 
 export class AIManager {
@@ -94,6 +112,9 @@ export class AIManager {
       targetOrbId: null,
       burstTargetId: null,
       phantomOrbitAngle: Math.random() * Math.PI * 2,
+      turretCooldowns: [0, 0, 0, 0],
+      mineLayCooldown: 0,
+      bigCannonCooldown: DREADNOUGHT_BIG_CANNON_COOLDOWN,
     });
   }
 
@@ -118,6 +139,8 @@ export class AIManager {
         this.updateMissileTower(entity, aiState, sim);
       } else if (entity.kind === "phantom_ship") {
         this.updatePhantom(entity, aiState, sim);
+      } else if (entity.kind === "dreadnought") {
+        this.updateDreadnought(entity, aiState, sim);
       }
     }
   }
@@ -647,5 +670,174 @@ export class AIManager {
       + (Math.random() - 0.5) * 2 * PHANTOM_AIM_RANDOM_SPREAD;
 
     sim.spawnBullet(entity, entity.id, angle);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Dreadnought AI — slow capital ship that hunts players, lays mines, has
+  // 4 arc-limited turrets and a devastating big cannon
+  // ---------------------------------------------------------------------------
+
+  private updateDreadnought(entity: Entity, aiState: AIState, sim: Simulation): void {
+    const dt = this.dt;
+    const target = this.findNearestPlayer(entity, sim);
+
+    // --- 1. Chase nearest player ---
+    if (target) {
+      const dx = target.pos.x - entity.pos.x;
+      const dy = target.pos.y - entity.pos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > DREADNOUGHT_RADIUS + 1) {
+        const nx = dx / dist;
+        const ny = dy / dist;
+        entity.vel.x += nx * DREADNOUGHT_ACCEL * dt;
+        entity.vel.y += ny * DREADNOUGHT_ACCEL * dt;
+      }
+    } else {
+      // No target: brake to a stop
+      entity.vel.x *= DREADNOUGHT_BRAKE_FRICTION;
+      entity.vel.y *= DREADNOUGHT_BRAKE_FRICTION;
+    }
+
+    // Clamp to max speed
+    const speed = Math.sqrt(entity.vel.x * entity.vel.x + entity.vel.y * entity.vel.y);
+    if (speed > DREADNOUGHT_SPEED) {
+      entity.vel.x = (entity.vel.x / speed) * DREADNOUGHT_SPEED;
+      entity.vel.y = (entity.vel.y / speed) * DREADNOUGHT_SPEED;
+    }
+
+    // Integrate position
+    entity.pos.x += entity.vel.x * dt;
+    entity.pos.y += entity.vel.y * dt;
+    entity.pos.x = Math.max(DREADNOUGHT_RADIUS, Math.min(WORLD_WIDTH - DREADNOUGHT_RADIUS, entity.pos.x));
+    entity.pos.y = Math.max(DREADNOUGHT_RADIUS, Math.min(WORLD_HEIGHT - DREADNOUGHT_RADIUS, entity.pos.y));
+
+    // --- 2. Set facing angle to travel direction ---
+    if (speed > 5) {
+      entity.aimAngle = Math.atan2(entity.vel.y, entity.vel.x);
+    }
+    const facing = entity.aimAngle ?? 0;
+
+    // --- 3. Auto Turrets ---
+    this.updateDreadnoughtTurrets(entity, aiState, sim, facing);
+
+    // --- 4. Big Cannon ---
+    if (aiState.bigCannonCooldown > 0) {
+      aiState.bigCannonCooldown--;
+    }
+    if (target && aiState.bigCannonCooldown <= 0) {
+      const dx = target.pos.x - entity.pos.x;
+      const dy = target.pos.y - entity.pos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist <= DREADNOUGHT_BIG_CANNON_RANGE) {
+        // Predictive aim for the slow projectile
+        const travelTime = dist / DREADNOUGHT_BIG_CANNON_SPEED;
+        const predX = target.pos.x + target.vel.x * travelTime;
+        const predY = target.pos.y + target.vel.y * travelTime;
+        const aimAngle = Math.atan2(predY - entity.pos.y, predX - entity.pos.x);
+        sim.spawnBigCannon(entity, entity.id, aimAngle);
+        aiState.bigCannonCooldown = DREADNOUGHT_BIG_CANNON_COOLDOWN;
+      }
+    }
+
+    // --- 5. Lay mines while moving ---
+    if (aiState.mineLayCooldown > 0) {
+      aiState.mineLayCooldown--;
+    }
+    if (speed > 10 && aiState.mineLayCooldown <= 0) {
+      sim.spawnMine(entity, entity.id);
+      aiState.mineLayCooldown = MINE_LAY_INTERVAL_TICKS;
+    }
+  }
+
+  private updateDreadnoughtTurrets(entity: Entity, aiState: AIState, sim: Simulation, facing: number): void {
+    const players = this.getPlayersInRange(entity, sim, DREADNOUGHT_TURRET_FIRE_RANGE);
+
+    for (let t = 0; t < DREADNOUGHT_TURRET_COUNT; t++) {
+      if (aiState.turretCooldowns[t] > 0) {
+        aiState.turretCooldowns[t]--;
+        continue;
+      }
+
+      // Turret world angle = ship facing + turret's base offset
+      const turretWorldAngle = facing + DREADNOUGHT_TURRET_BASE_ANGLES[t];
+
+      // Find the closest player within this turret's arc
+      let bestTarget: Entity | null = null;
+      let bestDistSq = Infinity;
+
+      for (const player of players) {
+        const dx = player.pos.x - entity.pos.x;
+        const dy = player.pos.y - entity.pos.y;
+        const distSq = dx * dx + dy * dy;
+        const angleToPlayer = Math.atan2(dy, dx);
+
+        // Check if player is within this turret's arc
+        let angleDiff = angleToPlayer - turretWorldAngle;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+        if (Math.abs(angleDiff) <= DREADNOUGHT_TURRET_ARC / 2 && distSq < bestDistSq) {
+          bestDistSq = distSq;
+          bestTarget = player;
+        }
+      }
+
+      if (bestTarget) {
+        const dx = bestTarget.pos.x - entity.pos.x;
+        const dy = bestTarget.pos.y - entity.pos.y;
+        const aimAngle = Math.atan2(dy, dx);
+
+        // Spawn bullet from turret offset position
+        const turretX = entity.pos.x + Math.cos(turretWorldAngle) * DREADNOUGHT_TURRET_OFFSET;
+        const turretY = entity.pos.y + Math.sin(turretWorldAngle) * DREADNOUGHT_TURRET_OFFSET;
+
+        const turretGhost: Entity = {
+          id: entity.id,
+          kind: "dreadnought",
+          pos: { x: turretX, y: turretY },
+          vel: entity.vel,
+          hp: entity.hp,
+          team: entity.team,
+        };
+        sim.spawnBullet(turretGhost, entity.id, aimAngle);
+        aiState.turretCooldowns[t] = DREADNOUGHT_TURRET_FIRE_COOLDOWN;
+      }
+    }
+  }
+
+  /** Find nearest player_ship specifically (not any enemy — dreadnought hunts humans) */
+  private findNearestPlayer(entity: Entity, sim: Simulation): Entity | null {
+    let nearest: Entity | null = null;
+    let nearestDistSq = Infinity;
+    for (const other of sim.entities.values()) {
+      if (other.kind !== "player_ship") continue;
+      if (other.team === entity.team) continue;
+      if (other.hp <= 0) continue;
+      const dx = other.pos.x - entity.pos.x;
+      const dy = other.pos.y - entity.pos.y;
+      const distSq = dx * dx + dy * dy;
+      if (distSq < nearestDistSq) {
+        nearestDistSq = distSq;
+        nearest = other;
+      }
+    }
+    return nearest;
+  }
+
+  /** Get all alive players within range of an entity */
+  private getPlayersInRange(entity: Entity, sim: Simulation, range: number): Entity[] {
+    const rangeSq = range * range;
+    const result: Entity[] = [];
+    for (const other of sim.entities.values()) {
+      if (other.kind !== "player_ship") continue;
+      if (other.hp <= 0) continue;
+      const dx = other.pos.x - entity.pos.x;
+      const dy = other.pos.y - entity.pos.y;
+      if (dx * dx + dy * dy <= rangeSq) {
+        result.push(other);
+      }
+    }
+    return result;
   }
 }

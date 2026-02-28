@@ -472,6 +472,7 @@ function getMaxHp(entity: Entity): number {
     case "missile_tower": return 150;
     case "mothership": return 500;
     case "sub_base": return 300;
+    case "dreadnought": return 800;
     default: return 0;
   }
 }
@@ -485,6 +486,7 @@ function getBarOffset(kind: string): number {
     case "missile_tower": return 30;
     case "mothership": return 48;
     case "sub_base": return 36;
+    case "dreadnought": return 42;
     default: return 16;
   }
 }

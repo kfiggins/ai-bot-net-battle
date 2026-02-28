@@ -413,6 +413,24 @@ export class GameScene extends Phaser.Scene {
               }
             }
 
+            // Dreadnought death: big chain explosions
+            if (this.previousEntityKinds.get(id) === "dreadnought") {
+              const pos = { x: sprite.x, y: sprite.y };
+              const timings = [80, 200, 380, 560, 750, 950];
+              for (const delay of timings) {
+                this.time.delayedCall(delay, () => {
+                  const ox = (Math.random() - 0.5) * 120;
+                  const oy = (Math.random() - 0.5) * 120;
+                  this.vfx.explosion(pos.x + ox, pos.y + oy, 0xcc0000, 30);
+                });
+              }
+            }
+
+            // Mine detonation: small flash explosion
+            if (this.previousEntityKinds.get(id) === "mine") {
+              this.vfx.explosion(sprite.x, sprite.y, 0xff6600, 12);
+            }
+
             // Mothership death: chain explosions over ~2 s before Nemesis arrives
             if (this.previousEntityKinds.get(id) === "mothership") {
               const pos = { x: sprite.x, y: sprite.y };
@@ -462,7 +480,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       // Boost particles for moving AI entities and remote players
-      if (entity.kind === "minion_ship" || entity.kind === "nemesis" || entity.kind === "phantom_ship" ||
+      if (entity.kind === "minion_ship" || entity.kind === "nemesis" || entity.kind === "phantom_ship" || entity.kind === "dreadnought" ||
           (entity.kind === "player_ship" && entity.id !== selfId)) {
         const spd = Math.sqrt(entity.vel.x * entity.vel.x + entity.vel.y * entity.vel.y);
         if (spd > BOOST_PARTICLE_THRESHOLD) {
@@ -627,6 +645,21 @@ export class GameScene extends Phaser.Scene {
       return circle;
     }
 
+    if (entity.kind === "dreadnought") {
+      const r = getRadius("dreadnought");
+      const circle = this.add.circle(entity.pos.x, entity.pos.y, r, 0xcc0000);
+      circle.setStrokeStyle(3, 0xff2222);
+      return circle;
+    }
+
+    if (entity.kind === "mine") {
+      const r = getRadius("mine");
+      const circle = this.add.circle(entity.pos.x, entity.pos.y, r, 0xff6600);
+      circle.setAlpha(0.6);
+      circle.setStrokeStyle(1, 0xff4400);
+      return circle;
+    }
+
     if (entity.kind === "phantom_ship") {
       // Use the custom sprite if the asset was loaded, otherwise fall back to a tinted circle.
       if (this.textures.exists("phantom") && !this.textures.get("phantom").key.startsWith("__")) {
@@ -644,6 +677,14 @@ export class GameScene extends Phaser.Scene {
       img.setDisplaySize(35, 70);
       img.setDepth(8); // above trail particles (depth 7)
       return img;
+    }
+
+    if (entity.kind === "bullet" && entity.ownerKind === "dreadnought") {
+      const r = 12;
+      const circle = this.add.circle(entity.pos.x, entity.pos.y, r, 0xff2200);
+      circle.setStrokeStyle(2, 0xff8800);
+      circle.setDepth(8);
+      return circle;
     }
 
     if (entity.kind === "bullet" && entity.ownerKind === "tower") {
@@ -764,6 +805,8 @@ function getColorByKind(kind: string): number {
     case "nemesis": return 0xaa00ff;
     case "phantom_ship": return 0x8844ff;
     case "sub_base": return 0xcc4400;
+    case "dreadnought": return 0xcc0000;
+    case "mine": return 0xff6600;
     case "energy_orb": return 0x00ffcc;
     default: return 0xffffff;
   }
@@ -784,6 +827,8 @@ function getColor(entity: Entity): number {
     case "nemesis": return 0xaa00ff;
     case "phantom_ship": return 0x8844ff;
     case "sub_base": return 0xcc4400;
+    case "dreadnought": return 0xcc0000;
+    case "mine": return 0xff6600;
     case "energy_orb": return 0x00ffcc;
     default: return 0xffffff;
   }
@@ -801,6 +846,8 @@ function getRadius(kind: string): number {
     case "nemesis": return 38;
     case "phantom_ship": return 10;
     case "sub_base": return 30;
+    case "dreadnought": return 36;
+    case "mine": return 10;
     case "energy_orb": return ORB_RADIUS;
     default: return 8;
   }
