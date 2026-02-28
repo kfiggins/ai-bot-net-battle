@@ -8,6 +8,7 @@ export class HUD {
   private matchOverText: Phaser.GameObjects.Text;
   private debugText: Phaser.GameObjects.Text;
   private debugEnabled = true;
+  private victoryActive = false;
   private victoryPanel: Phaser.GameObjects.Rectangle;
   private victoryTitle: Phaser.GameObjects.Text;
   private victoryStats: Phaser.GameObjects.Text;
@@ -213,6 +214,10 @@ export class HUD {
       return;
     }
 
+    if (this.victoryActive) {
+      this.matchOverText.setVisible(false);
+    }
+
     const shieldStatus = phase.mothershipShielded ? " [SHIELDED]" : " [VULNERABLE]";
     this.phaseText.setText(`Phase ${phase.current}${shieldStatus}`);
 
@@ -222,7 +227,7 @@ export class HUD {
       .join("\n");
     this.objectiveText.setText(`${objectives}\n${remaining}`);
 
-    if (phase.matchOver) {
+    if (phase.matchOver && !this.victoryActive) {
       this.matchOverText.setText("VICTORY!");
       this.matchOverText.setVisible(true);
     }
@@ -273,6 +278,14 @@ export class HUD {
   }
 
   updateUpgrades(upgrades: Upgrades, cannons: number, pendingUpgrades: number): void {
+    if (this.victoryActive) {
+      this.upgradePanel.setVisible(false);
+      this.upgradePanelTitle.setVisible(false);
+      for (const btn of this.upgradeButtons) btn.setVisible(false);
+      this.cannonNotifyText.setVisible(false);
+      return;
+    }
+
     const show = pendingUpgrades > 0;
     this.upgradePanel.setVisible(show);
     this.upgradePanelTitle.setVisible(show);
@@ -323,6 +336,12 @@ export class HUD {
   }
 
   updateMissileCooldown(cooldownTicks: number): void {
+    if (this.victoryActive) {
+      this.missileCooldownText.setVisible(false);
+      return;
+    }
+
+    this.missileCooldownText.setVisible(true);
     if (cooldownTicks <= 0) {
       this.missileCooldownText.setText("MISSILE: READY");
       this.missileCooldownText.setColor("#ff8800");
@@ -334,6 +353,8 @@ export class HUD {
   }
 
   showVictory(stats: { durationSec: number; phase: number; remaining: Record<string, number> }, onReturn: () => void): void {
+    this.victoryActive = true;
+
     const remainingText = Object.keys(stats.remaining).length > 0
       ? Object.entries(stats.remaining).map(([k, v]) => `${k}: ${v}`).join(" | ")
       : "none";
@@ -343,6 +364,13 @@ export class HUD {
       `final phase: ${stats.phase}`,
       `remaining: ${remainingText}`,
     ].join("\n"));
+
+    this.matchOverText.setVisible(false);
+    this.upgradePanel.setVisible(false);
+    this.upgradePanelTitle.setVisible(false);
+    for (const btn of this.upgradeButtons) btn.setVisible(false);
+    this.cannonNotifyText.setVisible(false);
+    this.missileCooldownText.setVisible(false);
 
     this.victoryPanel.setVisible(true);
     this.victoryTitle.setVisible(true);
