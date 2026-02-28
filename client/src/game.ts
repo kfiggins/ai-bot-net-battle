@@ -39,6 +39,7 @@ export class GameScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image("tower", "assets/tower.png");
+    this.load.image("rocket_tower", "assets/rocketTower.png");
     this.load.image("blue_plasma", "assets/bluePlasma.png");
     this.load.image("nemesis", "assets/nemesis.png");
     this.load.image("rocket", "assets/rocket.png");
@@ -490,7 +491,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       // Tower rotation — image points up (−π/2), offset by +π/2 to align with aimAngle
-      if (entity.kind === "tower") {
+      if (entity.kind === "tower" || entity.kind === "missile_tower") {
         sprite.setRotation((entity.aimAngle ?? 0) + Math.PI / 2);
       }
 
@@ -596,6 +597,13 @@ export class GameScene extends Phaser.Scene {
       const radius = getRadius("tower");
       const img = this.add.image(entity.pos.x, entity.pos.y, "tower");
       img.setDisplaySize(radius * 2, radius * 2);
+      return img;
+    }
+
+    if (entity.kind === "missile_tower") {
+      const radius = getRadius("missile_tower");
+      const img = this.add.image(entity.pos.x, entity.pos.y, "rocket_tower");
+      img.setDisplaySize(radius * 2.5, radius * 2.5);
       return img;
     }
 

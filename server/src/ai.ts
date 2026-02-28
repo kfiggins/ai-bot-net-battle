@@ -394,6 +394,7 @@ export class AIManager {
 
     // Continue an active burst
     if (aiState.burstRemaining > 0) {
+      entity.aimAngle = aiState.burstAimAngle;
       if (aiState.burstCooldown <= 0) {
         sim.spawnMissile(entity, entity.id, aiState.burstAimAngle);
         aiState.burstRemaining--;
@@ -412,8 +413,11 @@ export class AIManager {
     const dy = target.pos.y - entity.pos.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
+    // Always track aim angle toward nearest target (for client rendering)
+    entity.aimAngle = Math.atan2(dy, dx);
+
     if (dist <= MISSILE_TOWER_FIRE_RANGE && aiState.fireCooldown <= 0) {
-      const aimAngle = Math.atan2(dy, dx);
+      const aimAngle = entity.aimAngle;
       sim.spawnMissile(entity, entity.id, aimAngle);
       aiState.burstRemaining = MISSILE_BURST_SIZE - 1;
       aiState.burstCooldown = MISSILE_BURST_DELAY_TICKS;
