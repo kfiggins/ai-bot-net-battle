@@ -734,14 +734,13 @@ export class AIManager {
     entity.pos.x = Math.max(DREADNOUGHT_RADIUS, Math.min(WORLD_WIDTH - DREADNOUGHT_RADIUS, entity.pos.x));
     entity.pos.y = Math.max(DREADNOUGHT_RADIUS, Math.min(WORLD_HEIGHT - DREADNOUGHT_RADIUS, entity.pos.y));
 
-    // --- 2. Set facing angle to travel direction ---
+    // --- 2. Track travel direction (used by big cannon predictive aim) ---
     if (speed > 5) {
       entity.aimAngle = Math.atan2(entity.vel.y, entity.vel.x);
     }
-    const facing = entity.aimAngle ?? 0;
 
     // --- 3. Auto Turrets ---
-    this.updateDreadnoughtTurrets(entity, aiState, sim, facing);
+    this.updateDreadnoughtTurrets(entity, aiState, sim);
 
     // --- 4. Big Cannon ---
     if (aiState.bigCannonCooldown > 0) {
@@ -772,7 +771,7 @@ export class AIManager {
     }
   }
 
-  private updateDreadnoughtTurrets(entity: Entity, aiState: AIState, sim: Simulation, facing: number): void {
+  private updateDreadnoughtTurrets(entity: Entity, aiState: AIState, sim: Simulation): void {
     const players = this.getPlayersInRange(entity, sim, DREADNOUGHT_TURRET_FIRE_RANGE);
 
     for (let t = 0; t < DREADNOUGHT_TURRET_COUNT; t++) {
@@ -781,8 +780,8 @@ export class AIManager {
         continue;
       }
 
-      // Turret world angle = ship facing + turret's base offset
-      const turretWorldAngle = facing + DREADNOUGHT_TURRET_BASE_ANGLES[t];
+      // Turret angle is absolute (ship sprite does not rotate)
+      const turretWorldAngle = DREADNOUGHT_TURRET_BASE_ANGLES[t];
 
       // Find the closest player within this turret's arc
       let bestTarget: Entity | null = null;
@@ -816,11 +815,12 @@ export class AIManager {
 
         const turretGhost: Entity = {
           id: entity.id,
-          kind: "dreadnought",
+          kind: "bullet", // small radius so bullet spawns close to turret mount point
           pos: { x: turretX, y: turretY },
           vel: entity.vel,
           hp: entity.hp,
           team: entity.team,
+          ownerKind: "dreadnought_turret",
         };
         sim.spawnBullet(turretGhost, entity.id, aimAngle);
         aiState.turretCooldowns[t] = DREADNOUGHT_TURRET_FIRE_COOLDOWN;

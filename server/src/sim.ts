@@ -513,7 +513,7 @@ export class Simulation {
       vel: { x: vx, y: vy },
       hp: BULLET_HP,
       team: owner.team,
-      ownerKind: owner.kind,
+      ownerKind: owner.ownerKind ?? owner.kind,
     };
     this.entities.set(entityId, entity);
     this.bullets.set(entityId, {
