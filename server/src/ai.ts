@@ -156,6 +156,12 @@ export class AIManager {
     return Math.max(1, Math.round(baseTicks / this.profile.enemyFireRateMult));
   }
 
+  private missileBurstSize(): number {
+    if (this.profile.key === "beginner") return 1;
+    if (this.profile.key === "normal") return 2;
+    return MISSILE_BURST_SIZE;
+  }
+
   private allTurretsDestroyed(sim: Simulation): boolean {
     return (
       sim.getEntitiesByKind("tower").length === 0 &&
@@ -457,7 +463,7 @@ export class AIManager {
     if (dist <= this.scaleRange(MISSILE_TOWER_FIRE_RANGE) && aiState.fireCooldown <= 0) {
       const aimAngle = entity.aimAngle;
       sim.spawnMissile(entity, entity.id, aimAngle);
-      aiState.burstRemaining = MISSILE_BURST_SIZE - 1;
+      aiState.burstRemaining = this.missileBurstSize() - 1;
       aiState.burstCooldown = MISSILE_BURST_DELAY_TICKS;
       aiState.burstAimAngle = aimAngle;
       aiState.fireCooldown = this.scaleCooldown(MISSILE_TOWER_FIRE_COOLDOWN_TICKS);
