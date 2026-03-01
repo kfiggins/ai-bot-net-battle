@@ -59,6 +59,8 @@ export class GameScene extends Phaser.Scene {
     this.load.image("spaceship_black", "assets/spaceship_black.png");
     // Phantom ship — place your sprite at client/public/assets/phantom.png
     this.load.image("phantom", "assets/phantom.png");
+    this.load.image("sub_base", "assets/Sub_Base.png");
+    this.load.image("mothership", "assets/mothership.png");
 
     AudioManager.preload(this);
   }
@@ -687,6 +689,12 @@ export class GameScene extends Phaser.Scene {
       return img;
     }
 
+    if (entity.kind === "mothership") {
+      const img = this.add.image(entity.pos.x, entity.pos.y, "mothership");
+      img.setDisplaySize(200, 200);
+      return img;
+    }
+
     if (entity.kind === "nemesis") {
       const radius = getRadius("nemesis"); // 38 → 76px display size
       const img = this.add.image(entity.pos.x, entity.pos.y, "nemesis");
@@ -701,10 +709,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (entity.kind === "sub_base") {
-      const r = getRadius("sub_base");
-      const circle = this.add.circle(entity.pos.x, entity.pos.y, r, 0xcc4400);
-      circle.setStrokeStyle(3, 0xff6600);
-      return circle;
+      const img = this.add.image(entity.pos.x, entity.pos.y, "sub_base");
+      img.setDisplaySize(120, 120);
+      return img;
     }
 
     if (entity.kind === "dreadnought") {
