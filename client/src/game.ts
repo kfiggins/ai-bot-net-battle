@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { Entity, PlayerInputData, WORLD_WIDTH, WORLD_HEIGHT, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, GRID_SPACING, PLAYER_MAX_SPEED, PLAYER_ACCEL, PLAYER_BRAKE_FRICTION, SPEED_PER_UPGRADE, ORB_RADIUS, CANNON_LENGTH, CANNON_WIDTH, CANNON_OFFSET_LATERAL, CANNON_SPREAD_ANGLE, BOOST_PARTICLE_THRESHOLD, PLAYER_RADIUS, DREADNOUGHT_TURRET_BASE_ANGLES, DREADNOUGHT_TURRET_OFFSET, DREADNOUGHT_TURRET_COUNT, DREADNOUGHT_TURRET_ARC, DREADNOUGHT_BIG_CANNON_SPEED } from "shared";
+import { Entity, PlayerInputData, WORLD_WIDTH, WORLD_HEIGHT, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, GRID_SPACING, PLAYER_MAX_SPEED, PLAYER_ACCEL, PLAYER_BRAKE_FRICTION, SPEED_PER_UPGRADE, ORB_RADIUS, CANNON_LENGTH, CANNON_WIDTH, CANNON_OFFSET_LATERAL, CANNON_SPREAD_ANGLE, BOOST_PARTICLE_THRESHOLD, PLAYER_RADIUS, DREADNOUGHT_TURRET_BASE_ANGLES, DREADNOUGHT_TURRET_OFFSET, DREADNOUGHT_TURRET_COUNT, DREADNOUGHT_TURRET_ARC, DREADNOUGHT_BIG_CANNON_SPEED, DREADNOUGHT_TURRET_BULLET_RADIUS } from "shared";
 import { NetClient } from "./net.js";
 import { SnapshotInterpolator, InterpolatedEntity } from "./interpolation.js";
 import { VFXManager } from "./vfx.js";
@@ -59,7 +59,7 @@ export class GameScene extends Phaser.Scene {
     this.load.image("spaceship_black", "assets/spaceship_black.png");
     // Phantom ship — place your sprite at client/public/assets/phantom.png
     this.load.image("phantom", "assets/phantom.png");
-    this.load.image("sub_base", "assets/Sub_Base.png");
+    this.load.image("sub_base", "assets/sub_base.png");
     this.load.image("mothership", "assets/mothership.png");
     this.load.image("dreadnought", "assets/dreadnought.png");
 
@@ -690,9 +690,9 @@ export class GameScene extends Phaser.Scene {
     const old = this.cannonSprites.get(entityId);
     if (old) old.forEach((r) => r.destroy());
     const rects: Phaser.GameObjects.Rectangle[] = [];
-    // 4 auto-turret barrels — thin and short
+    // auto-turret barrels — medium width and length to match medium bullet
     for (let t = 0; t < DREADNOUGHT_TURRET_COUNT; t++) {
-      const rect = this.add.rectangle(0, 0, 5, 16, 0xaaaaaa);
+      const rect = this.add.rectangle(0, 0, 8, 22, 0xbbbbbb);
       rect.setDepth(9.5); // above dreadnought sprite (9)
       rects.push(rect);
     }
@@ -715,7 +715,7 @@ export class GameScene extends Phaser.Scene {
     const players = entities.filter(e => e.kind === "player_ship");
 
     // Auto-turrets: fixed mount positions (absolute N/E/S/W), barrel tip extends toward target
-    const BARREL_HALF = 8; // half of rectangle height (16px) — offsets center so base sits at mount
+    const BARREL_HALF = 11; // half of rectangle height (22px) — offsets center so base sits at mount
     for (let t = 0; t < DREADNOUGHT_TURRET_COUNT; t++) {
       const mountAngle = DREADNOUGHT_TURRET_BASE_ANGLES[t]; // absolute world angle
       const mountX = pos.x + Math.cos(mountAngle) * DREADNOUGHT_TURRET_OFFSET;
@@ -844,8 +844,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (entity.kind === "bullet" && entity.ownerKind === "dreadnought_turret") {
-      const r = 4;
-      const circle = this.add.circle(entity.pos.x, entity.pos.y, r, 0xff4400);
+      const circle = this.add.circle(entity.pos.x, entity.pos.y, DREADNOUGHT_TURRET_BULLET_RADIUS, 0xff6600);
       circle.setDepth(8);
       return circle;
     }

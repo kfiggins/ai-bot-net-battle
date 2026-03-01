@@ -216,17 +216,18 @@ export const DREADNOUGHT_KILL_XP = 100;
 export const DREADNOUGHT_BODY_COLLISION_DAMAGE = 20;
 
 // Dreadnought Auto Turrets — 4 turrets at N/E/S/W positions on the hull
-export const DREADNOUGHT_TURRET_COUNT = 4;
+export const DREADNOUGHT_TURRET_COUNT = 6;
 export const DREADNOUGHT_TURRET_FIRE_RANGE = 600;
 export const DREADNOUGHT_TURRET_FIRE_COOLDOWN = 25; // ticks (~0.83s per turret)
-export const DREADNOUGHT_TURRET_ARC = Math.PI * 0.6; // each turret covers ±54° (108° arc)
-export const DREADNOUGHT_TURRET_BASE_ANGLES = [
-  0,              // front  (0°)
-  Math.PI / 2,    // right  (90°)
-  Math.PI,        // back   (180°)
-  -Math.PI / 2,   // left   (-90°)
-];
+export const DREADNOUGHT_TURRET_ARC = (2 * Math.PI) / (DREADNOUGHT_TURRET_COUNT/2); // each turret covers its even share of 360°
+export const DREADNOUGHT_TURRET_BASE_ANGLES = Array.from(
+  { length: DREADNOUGHT_TURRET_COUNT },
+  (_, i) => (2 * Math.PI * i) / DREADNOUGHT_TURRET_COUNT,
+);
 export const DREADNOUGHT_TURRET_OFFSET = 32;        // px from center to turret mount point
+
+// Dreadnought Turret Bullet — medium projectile fired by outer turrets
+export const DREADNOUGHT_TURRET_BULLET_RADIUS = 9; // between normal bullet (4) and big cannon (12)
 
 // Dreadnought Big Cannon — devastating slow projectile
 export const DREADNOUGHT_BIG_CANNON_DAMAGE = 80;
