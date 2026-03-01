@@ -103,6 +103,7 @@ export interface PlayerState {
   upgrades: Upgrades;
   cannons: number;
   pendingUpgrades: number;
+  baseHp: number;
 }
 
 export interface BulletState {
@@ -141,6 +142,8 @@ export class Simulation {
 
   private dt = 1 / TICK_RATE;
 
+  constructor(private readonly playerBaseHp: number = PLAYER_HP) {}
+
   addPlayer(playerId: string, label?: string, playerIndex?: number): Entity {
     const entityId = uuid();
     const entity: Entity = {
@@ -148,7 +151,8 @@ export class Simulation {
       kind: "player_ship",
       pos: playerSpawnPosition(),
       vel: { x: 0, y: 0 },
-      hp: PLAYER_HP,
+      hp: this.playerBaseHp,
+      baseHp: this.playerBaseHp,
       team: 1,
       label,
       playerIndex,
@@ -176,6 +180,7 @@ export class Simulation {
       upgrades: { damage: 0, speed: 0, health: 0, fire_rate: 0 },
       cannons: 1,
       pendingUpgrades: 0,
+      baseHp: this.playerBaseHp,
     });
     return entity;
   }
@@ -374,7 +379,8 @@ export class Simulation {
         kind: "player_ship",
         pos,
         vel: { x: 0, y: 0 },
-        hp: PLAYER_HP,
+        hp: player.baseHp,
+        baseHp: player.baseHp,
         team: 1,
         label: player.label,
         playerIndex: player.playerIndex,
@@ -935,7 +941,7 @@ export function entityRadius(kind: string): number {
 }
 
 export function getEffectiveMaxHp(player: PlayerState): number {
-  return PLAYER_HP + player.upgrades.health * HEALTH_PER_UPGRADE;
+  return player.baseHp + player.upgrades.health * HEALTH_PER_UPGRADE;
 }
 
 export function getCannonAngles(aimAngle: number, cannons: number): number[] {

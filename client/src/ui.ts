@@ -492,7 +492,8 @@ function getMaxHp(entity: Entity): number {
   switch (entity.kind) {
     case "player_ship": {
       const healthUpgrades = entity.upgrades?.health ?? 0;
-      return 100 + healthUpgrades * 20; // PLAYER_HP + HEALTH_PER_UPGRADE * upgrades
+      const baseHp = entity.baseHp ?? 100;
+      return baseHp + healthUpgrades * 20;
     }
     case "minion_ship": return 30;
     case "phantom_ship": return 20;

@@ -25,6 +25,7 @@ export const EntitySchema = z.object({
   pos: Vec2Schema,
   vel: Vec2Schema,
   hp: z.number(),
+  baseHp: z.number().optional(),
   team: z.number(),
   label: z.string().optional(),
   playerIndex: z.number().int().optional(),

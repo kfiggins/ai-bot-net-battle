@@ -3,6 +3,7 @@ import type { GameDifficulty } from "./protocol.js";
 export interface DifficultyProfile {
   key: GameDifficulty;
   label: string;
+  playerBaseHpMult: number;
   enemyIncomeMult: number;
   enemyBuildCooldownMult: number;
   enemyCapMult: number;
@@ -27,6 +28,7 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
   beginner: {
     key: "beginner",
     label: "Beginner",
+    playerBaseHpMult: 1.4,
     enemyIncomeMult: 0.65,
     enemyBuildCooldownMult: 1.4,
     enemyCapMult: 0.5,
@@ -55,6 +57,7 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
   normal: {
     key: "normal",
     label: "Normal",
+    playerBaseHpMult: 1.15,
     enemyIncomeMult: 0.85,
     enemyBuildCooldownMult: 1.15,
     enemyCapMult: 0.8,
@@ -83,6 +86,7 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
   hard: {
     key: "hard",
     label: "Hard",
+    playerBaseHpMult: 1,
     enemyIncomeMult: 1,
     enemyBuildCooldownMult: 1,
     enemyCapMult: 1,

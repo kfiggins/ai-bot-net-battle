@@ -68,9 +68,10 @@ export class Room {
 
   constructor(roomId: string) {
     this.roomId = roomId;
-    this.sim = new Simulation();
-    this.ai = new AIManager(getDifficultyProfile(this.difficulty));
-    this.economy = new Economy(getDifficultyProfile(this.difficulty));
+    const profile = getDifficultyProfile(this.difficulty);
+    this.sim = new Simulation(Math.round(100 * profile.playerBaseHpMult));
+    this.ai = new AIManager(profile);
+    this.economy = new Economy(profile);
     this.agent = new AgentAPI();
     this.fakeAI = new FakeAI(getDifficultyProfile(this.difficulty));
     this.boss = new BossManager();
@@ -245,7 +246,7 @@ export class Room {
 
     // Reset simulation and subsystems
     const profile = getDifficultyProfile(this.difficulty);
-    this.sim = new Simulation();
+    this.sim = new Simulation(Math.round(100 * profile.playerBaseHpMult));
     this.sim.initOrbs();
     this.ai = new AIManager(profile);
     this.economy = new Economy(profile);
@@ -293,6 +294,16 @@ export class Room {
     this.ai = new AIManager(profile);
     this.economy = new Economy(profile);
     this.fakeAI = new FakeAI(profile);
+
+    const playerBaseHp = Math.round(100 * profile.playerBaseHpMult);
+    for (const player of this.sim.players.values()) {
+      player.baseHp = playerBaseHp;
+      const entity = this.sim.entities.get(player.entityId);
+      if (entity) {
+        entity.baseHp = playerBaseHp;
+        entity.hp = playerBaseHp;
+      }
+    }
 
     const mothership = this.boss.spawnMothership(this.sim);
     this.ai.setPatrolCenter({ x: mothership.pos.x, y: mothership.pos.y });
