@@ -6,6 +6,7 @@ export interface DifficultyProfile {
   playerBaseHpMult: number;
   enemyIncomeMult: number;
   enemyBuildCooldownMult: number;
+  subBaseMaxTowers: number;
   enemyCapMult: number;
   enemyRangeMult: number;
   enemyFireRateMult: number;
@@ -29,8 +30,9 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
     key: "beginner",
     label: "Beginner",
     playerBaseHpMult: 1.4,
-    enemyIncomeMult: 0.65,
+    enemyIncomeMult: 0.5,
     enemyBuildCooldownMult: 1.4,
+    subBaseMaxTowers: 1,
     enemyCapMult: 0.5,
     enemyRangeMult: 0.75,
     enemyFireRateMult: 0.75,
@@ -60,6 +62,7 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
     playerBaseHpMult: 1.15,
     enemyIncomeMult: 0.85,
     enemyBuildCooldownMult: 1.15,
+    subBaseMaxTowers: 2,
     enemyCapMult: 0.8,
     enemyRangeMult: 0.9,
     enemyFireRateMult: 0.9,
@@ -89,6 +92,7 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
     playerBaseHpMult: 1,
     enemyIncomeMult: 1,
     enemyBuildCooldownMult: 1,
+    subBaseMaxTowers: 2,
     enemyCapMult: 1,
     enemyRangeMult: 1,
     enemyFireRateMult: 1,

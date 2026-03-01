@@ -73,8 +73,8 @@ export class Room {
     this.ai = new AIManager(profile);
     this.economy = new Economy(profile);
     this.agent = new AgentAPI();
-    this.fakeAI = new FakeAI(getDifficultyProfile(this.difficulty));
-    this.boss = new BossManager();
+    this.fakeAI = new FakeAI(profile);
+    this.boss = new BossManager(profile);
     this.sim.initOrbs();
   }
 
@@ -252,7 +252,7 @@ export class Room {
     this.economy = new Economy(profile);
     this.agent = new AgentAPI();
     this.fakeAI = new FakeAI(profile);
-    this.boss = new BossManager();
+    this.boss = new BossManager(profile);
 
     // Re-add player entities for everyone still connected
     for (const player of this.players.values()) {

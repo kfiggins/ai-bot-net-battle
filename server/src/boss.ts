@@ -20,9 +20,10 @@ import {
   SUB_BASE_HP,
   SUB_BASE_DISTANCE,
   SUB_BASE_TOWER_RANGE,
-  SUB_BASE_MAX_TOWERS,
   SUB_BASE_POP_MINIONS,
   SUB_BASE_POP_PHANTOMS,
+  DifficultyProfile,
+  getDifficultyProfile,
 } from "shared";
 import { Simulation } from "./sim.js";
 import { AIManager } from "./ai.js";
@@ -47,6 +48,8 @@ export interface SubBaseState {
 }
 
 export class BossManager {
+  constructor(private readonly profile: DifficultyProfile = getDifficultyProfile("hard")) {}
+
   mothershipId: string | null = null;
   nemesisId: string | null = null;
   phaseState: BossPhaseState = {
@@ -132,7 +135,8 @@ export class BossManager {
         { kind: "missile_tower", offsetAngle: angle + 0.4 },
       ];
 
-      for (const cfg of towerConfigs) {
+      const maxSubBaseTowers = Math.max(0, this.profile.subBaseMaxTowers);
+      for (const cfg of towerConfigs.slice(0, maxSubBaseTowers)) {
         const towerDist = 120 + Math.random() * 80;
         const towerX = sbX + Math.cos(cfg.offsetAngle) * towerDist;
         const towerY = sbY + Math.sin(cfg.offsetAngle) * towerDist;
@@ -189,7 +193,7 @@ export class BossManager {
       for (const towerId of sb.towerIds) {
         if (sim.entities.has(towerId)) livingTowers++;
       }
-      if (livingTowers < SUB_BASE_MAX_TOWERS) {
+      if (livingTowers < this.profile.subBaseMaxTowers) {
         result.push(sb);
       }
     }
@@ -207,7 +211,7 @@ export class BossManager {
       for (const tid of sb.towerIds) {
         if (sim.entities.has(tid)) livingTowers++;
       }
-      if (livingTowers >= SUB_BASE_MAX_TOWERS) continue;
+      if (livingTowers >= this.profile.subBaseMaxTowers) continue;
 
       const dx = x - sb.pos.x;
       const dy = y - sb.pos.y;
