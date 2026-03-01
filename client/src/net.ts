@@ -1,5 +1,6 @@
 import {
   AgentControlMode,
+  GameDifficulty,
   PlayerInputData,
   SnapshotMessage,
   LobbyUpdateMessage,
@@ -20,6 +21,7 @@ export class NetClient {
   selfPlayerIndex: number | null = null;
   roomId: string | null = null;
   currentMode: AgentControlMode = "builtin_fake_ai";
+  currentDifficulty: GameDifficulty = "normal";
   debugLogEnabled = true;
   private reconnectToken: string | null = null;
   private targetRoomId: string = "default";
@@ -74,6 +76,7 @@ export class NetClient {
           this.roomId = msg.roomId;
           this.reconnectToken = msg.reconnectToken;
           this.currentMode = msg.lobby.mode;
+          this.currentDifficulty = msg.lobby.difficulty;
           console.log(`[net] Joined room ${msg.roomId}, entity: ${msg.entityId}`);
           // Notify game if entity changed (reconnect with new entity)
           if (oldEntityId !== msg.entityId && this.onEntityChange) {
@@ -88,6 +91,7 @@ export class NetClient {
           this.onSnapshot(msg);
         } else if (msg.type === "lobby_update") {
           this.currentMode = msg.mode;
+          this.currentDifficulty = msg.difficulty;
           if (this.onLobbyUpdate) this.onLobbyUpdate(msg);
         } else if (msg.type === "match_start" && this.onMatchStart) {
           this.onMatchStart();
@@ -129,9 +133,9 @@ export class NetClient {
   }
 
   /** Request the server to start the match */
-  sendStartGame(mode: AgentControlMode): void {
+  sendStartGame(mode: AgentControlMode, difficulty: GameDifficulty): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ v: 1, type: "start_game", mode }));
+      this.ws.send(JSON.stringify({ v: 1, type: "start_game", mode, difficulty }));
     }
   }
 

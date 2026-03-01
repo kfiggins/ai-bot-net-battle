@@ -10,7 +10,9 @@ import {
   WORLD_HEIGHT,
   LobbyPlayer,
   AgentControlMode,
+  GameDifficulty,
   SUB_BASE_TOWER_RANGE,
+  getDifficultyProfile,
 } from "shared";
 import { Simulation } from "./sim.js";
 import { AIManager } from "./ai.js";
@@ -44,6 +46,7 @@ export class Room {
   state: RoomState = "waiting";
   readonly createdAt: number = Date.now();
   agentControlMode: AgentControlMode = "builtin_fake_ai";
+  difficulty: GameDifficulty = "normal";
 
   sim: Simulation;
   ai: AIManager;
@@ -66,12 +69,12 @@ export class Room {
   constructor(roomId: string) {
     this.roomId = roomId;
     this.sim = new Simulation();
-    this.sim.initOrbs();
-    this.ai = new AIManager();
-    this.economy = new Economy();
+    this.ai = new AIManager(getDifficultyProfile(this.difficulty));
+    this.economy = new Economy(getDifficultyProfile(this.difficulty));
     this.agent = new AgentAPI();
-    this.fakeAI = new FakeAI();
+    this.fakeAI = new FakeAI(getDifficultyProfile(this.difficulty));
     this.boss = new BossManager();
+    this.sim.initOrbs();
   }
 
   get playerCount(): number {
@@ -96,6 +99,7 @@ export class Room {
       players: this.playerCount,
       maxPlayers: MAX_PLAYERS_PER_ROOM,
       mode: this.agentControlMode,
+      difficulty: this.difficulty,
     };
   }
 
@@ -206,9 +210,10 @@ export class Room {
     return undefined;
   }
 
-  startMatch(mode?: AgentControlMode): void {
+  startMatch(mode?: AgentControlMode, difficulty?: GameDifficulty): void {
     if (this.state !== "waiting") return;
     this.agentControlMode = mode ?? this.agentControlMode;
+    this.difficulty = difficulty ?? this.difficulty;
     this.state = "in_progress";
     this.initGameState();
     this.startTickLoop();
@@ -236,14 +241,16 @@ export class Room {
 
     this.state = "waiting";
     this.agentControlMode = "builtin_fake_ai";
+    this.difficulty = "normal";
 
     // Reset simulation and subsystems
+    const profile = getDifficultyProfile(this.difficulty);
     this.sim = new Simulation();
     this.sim.initOrbs();
-    this.ai = new AIManager();
-    this.economy = new Economy();
+    this.ai = new AIManager(profile);
+    this.economy = new Economy(profile);
     this.agent = new AgentAPI();
-    this.fakeAI = new FakeAI();
+    this.fakeAI = new FakeAI(profile);
     this.boss = new BossManager();
 
     // Re-add player entities for everyone still connected
@@ -282,6 +289,11 @@ export class Room {
   }
 
   private initGameState(): void {
+    const profile = getDifficultyProfile(this.difficulty);
+    this.ai = new AIManager(profile);
+    this.economy = new Economy(profile);
+    this.fakeAI = new FakeAI(profile);
+
     const mothership = this.boss.spawnMothership(this.sim);
     this.ai.setPatrolCenter({ x: mothership.pos.x, y: mothership.pos.y });
 
@@ -290,21 +302,41 @@ export class Room {
 
     const cx = WORLD_WIDTH / 2;
     const cy = WORLD_HEIGHT / 2;
-    const m1 = this.sim.spawnEnemy("minion_ship", cx - 200, cy - 150);
-    this.ai.registerEntity(m1.id);
-    const m2 = this.sim.spawnEnemy("minion_ship", cx + 150, cy + 200);
-    this.ai.registerEntity(m2.id);
-    const t1 = this.sim.spawnEnemy("tower", cx + 250, cy - 100);
-    this.ai.registerEntity(t1.id);
-    const t2 = this.sim.spawnEnemy("tower", cx - 150, cy + 250);
-    this.ai.registerEntity(t2.id);
-    const mt1 = this.sim.spawnEnemy("missile_tower", cx + 100, cy - 300);
-    this.ai.registerEntity(mt1.id);
 
-    const angles = [0, (2 * Math.PI) / 3, (4 * Math.PI) / 3];
-    for (const angle of angles) {
-      const p = this.sim.spawnEnemy("phantom_ship", cx + Math.cos(angle) * 220, cy + Math.sin(angle) * 220);
-      this.ai.registerEntity(p.id);
+    const minionPositions = [
+      { x: cx - 200, y: cy - 150 },
+      { x: cx + 150, y: cy + 200 },
+    ];
+    for (let i = 0; i < profile.initialSpawns.minions; i++) {
+      const pos = minionPositions[i % minionPositions.length];
+      const m = this.sim.spawnEnemy("minion_ship", pos.x, pos.y);
+      this.ai.registerEntity(m.id);
+    }
+
+    const towerPositions = [
+      { x: cx + 250, y: cy - 100 },
+      { x: cx - 150, y: cy + 250 },
+    ];
+    for (let i = 0; i < profile.initialSpawns.towers; i++) {
+      const pos = towerPositions[i % towerPositions.length];
+      const t = this.sim.spawnEnemy("tower", pos.x, pos.y);
+      this.ai.registerEntity(t.id);
+    }
+
+    if (profile.allowMissileTowers) {
+      for (let i = 0; i < profile.initialSpawns.missileTowers; i++) {
+        const mt = this.sim.spawnEnemy("missile_tower", cx + 100 + i * 40, cy - 300 + i * 20);
+        this.ai.registerEntity(mt.id);
+      }
+    }
+
+    if (profile.allowPhantoms) {
+      const angles = [0, (2 * Math.PI) / 3, (4 * Math.PI) / 3];
+      for (let i = 0; i < profile.initialSpawns.phantoms; i++) {
+        const angle = angles[i % angles.length];
+        const p = this.sim.spawnEnemy("phantom_ship", cx + Math.cos(angle) * 220, cy + Math.sin(angle) * 220);
+        this.ai.registerEntity(p.id);
+      }
     }
   }
 
@@ -399,7 +431,7 @@ export class Room {
         players.push({ name: p.displayName, playerIndex: p.playerIndex });
       }
     }
-    const msg = JSON.stringify({ v: 1, type: "lobby_update", players, mode: this.agentControlMode });
+    const msg = JSON.stringify({ v: 1, type: "lobby_update", players, mode: this.agentControlMode, difficulty: this.difficulty });
     for (const player of this.players.values()) {
       if (player.ws?.readyState === WebSocket.OPEN) {
         player.ws.send(msg);

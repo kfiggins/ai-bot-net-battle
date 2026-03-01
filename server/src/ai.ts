@@ -50,6 +50,8 @@ import {
   DREADNOUGHT_BIG_CANNON_RANGE,
   DREADNOUGHT_BIG_CANNON_SPEED,
   MINE_LAY_INTERVAL_TICKS,
+  DifficultyProfile,
+  getDifficultyProfile,
 } from "shared";
 import { Simulation, circlesOverlap } from "./sim.js";
 
@@ -89,6 +91,7 @@ export class AIManager {
   private claimedOrbs: Set<string> = new Set();
 
   private dt = 1 / TICK_RATE;
+  constructor(private readonly profile: DifficultyProfile = getDifficultyProfile("hard")) {}
 
   setPatrolCenter(pos: { x: number; y: number }): void {
     this.patrolCenter = pos;
@@ -145,6 +148,14 @@ export class AIManager {
     }
   }
 
+  private scaleRange(base: number): number {
+    return base * this.profile.enemyRangeMult;
+  }
+
+  private scaleCooldown(baseTicks: number): number {
+    return Math.max(1, Math.round(baseTicks / this.profile.enemyFireRateMult));
+  }
+
   private allTurretsDestroyed(sim: Simulation): boolean {
     return (
       sim.getEntitiesByKind("tower").length === 0 &&
@@ -162,9 +173,11 @@ export class AIManager {
       const dy = target.pos.y - entity.pos.y;
       const distToTarget = Math.sqrt(dx * dx + dy * dy);
 
-      if (aiState.aiMode !== "chase" && distToTarget < ENEMY_AGGRO_RANGE) {
+      const aggroRange = ENEMY_AGGRO_RANGE * this.profile.enemyAggroMult;
+      const deaggroRange = ENEMY_DEAGGRO_RANGE * this.profile.enemyAggroMult;
+      if (aiState.aiMode !== "chase" && distToTarget < aggroRange) {
         aiState.aiMode = "chase";
-      } else if (aiState.aiMode === "chase" && distToTarget > ENEMY_DEAGGRO_RANGE) {
+      } else if (aiState.aiMode === "chase" && distToTarget > deaggroRange) {
         if (noTurrets) {
           aiState.aiMode = "return_to_base";
         } else {
@@ -221,7 +234,9 @@ export class AIManager {
     let thrustX: number;
     let thrustY: number;
 
-    if (dist > MINION_FIRE_RANGE * 0.7) {
+    const minionRange = this.scaleRange(MINION_FIRE_RANGE);
+
+    if (dist > minionRange * 0.7) {
       // Closing in: thrust toward target with a strafe weave
       thrustX = nx * aiState.moveSpeedScale + px * (strafe / MINION_SPEED) * 0.6;
       thrustY = ny * aiState.moveSpeedScale + py * (strafe / MINION_SPEED) * 0.6;
@@ -233,8 +248,8 @@ export class AIManager {
 
     const tMag = Math.sqrt(thrustX * thrustX + thrustY * thrustY);
     if (tMag > 0.01) {
-      entity.vel.x += (thrustX / tMag) * MINION_ACCEL * this.dt;
-      entity.vel.y += (thrustY / tMag) * MINION_ACCEL * this.dt;
+      entity.vel.x += (thrustX / tMag) * MINION_ACCEL * this.profile.enemyAccelMult * this.dt;
+      entity.vel.y += (thrustY / tMag) * MINION_ACCEL * this.profile.enemyAccelMult * this.dt;
     } else {
       // No meaningful thrust direction — apply braking
       entity.vel.x *= MINION_BRAKE_FRICTION;
@@ -242,7 +257,7 @@ export class AIManager {
     }
 
     // Clamp to max speed
-    const maxSpeed = MINION_SPEED * aiState.moveSpeedScale;
+    const maxSpeed = MINION_SPEED * aiState.moveSpeedScale * this.profile.enemyMoveSpeedMult;
     const speed = Math.sqrt(entity.vel.x * entity.vel.x + entity.vel.y * entity.vel.y);
     if (speed > maxSpeed) {
       entity.vel.x = (entity.vel.x / speed) * maxSpeed;
@@ -253,10 +268,10 @@ export class AIManager {
     entity.pos.y += entity.vel.y * this.dt;
 
     // Fire at target if in range
-    if (dist <= MINION_FIRE_RANGE && aiState.fireCooldown <= 0) {
+    if (dist <= minionRange && aiState.fireCooldown <= 0) {
       const aimAngle = Math.atan2(dy, dx);
       sim.spawnBullet(entity, entity.id, aimAngle);
-      aiState.fireCooldown = MINION_FIRE_COOLDOWN_TICKS;
+      aiState.fireCooldown = this.scaleCooldown(MINION_FIRE_COOLDOWN_TICKS);
     }
   }
 
@@ -317,10 +332,10 @@ export class AIManager {
     // Accelerate toward waypoint, capped at patrol speed
     const nx = dx / dist;
     const ny = dy / dist;
-    entity.vel.x += nx * MINION_ACCEL * this.dt;
-    entity.vel.y += ny * MINION_ACCEL * this.dt;
+    entity.vel.x += nx * MINION_ACCEL * this.profile.enemyAccelMult * this.dt;
+    entity.vel.y += ny * MINION_ACCEL * this.profile.enemyAccelMult * this.dt;
 
-    const maxSpeed = ENEMY_PATROL_SPEED * aiState.moveSpeedScale;
+    const maxSpeed = ENEMY_PATROL_SPEED * aiState.moveSpeedScale * this.profile.enemyMoveSpeedMult;
     const speed = Math.sqrt(entity.vel.x * entity.vel.x + entity.vel.y * entity.vel.y);
     if (speed > maxSpeed) {
       entity.vel.x = (entity.vel.x / speed) * maxSpeed;
@@ -351,10 +366,10 @@ export class AIManager {
     const nx = dx / dist;
     const ny = dy / dist;
     const LIGHTSPEED_FACTOR = 4;
-    entity.vel.x += nx * MINION_ACCEL * this.dt * LIGHTSPEED_FACTOR;
-    entity.vel.y += ny * MINION_ACCEL * this.dt * LIGHTSPEED_FACTOR;
+    entity.vel.x += nx * MINION_ACCEL * this.profile.enemyAccelMult * this.dt * LIGHTSPEED_FACTOR;
+    entity.vel.y += ny * MINION_ACCEL * this.profile.enemyAccelMult * this.dt * LIGHTSPEED_FACTOR;
 
-    const maxSpeed = ENEMY_PATROL_SPEED * aiState.moveSpeedScale * LIGHTSPEED_FACTOR;
+    const maxSpeed = ENEMY_PATROL_SPEED * aiState.moveSpeedScale * this.profile.enemyMoveSpeedMult * LIGHTSPEED_FACTOR;
     const speed = Math.sqrt(entity.vel.x * entity.vel.x + entity.vel.y * entity.vel.y);
     if (speed > maxSpeed) {
       entity.vel.x = (entity.vel.x / speed) * maxSpeed;
@@ -406,9 +421,9 @@ export class AIManager {
     entity.aimAngle = Math.atan2(dy, dx);
 
     // Fire at target if in range
-    if (dist <= TOWER_FIRE_RANGE && aiState.fireCooldown <= 0) {
+    if (dist <= this.scaleRange(TOWER_FIRE_RANGE) && aiState.fireCooldown <= 0) {
       sim.spawnBullet(entity, entity.id, entity.aimAngle);
-      aiState.fireCooldown = TOWER_FIRE_COOLDOWN_TICKS;
+      aiState.fireCooldown = this.scaleCooldown(TOWER_FIRE_COOLDOWN_TICKS);
     }
   }
 
@@ -439,13 +454,13 @@ export class AIManager {
     // Always track aim angle toward nearest target (for client rendering)
     entity.aimAngle = Math.atan2(dy, dx);
 
-    if (dist <= MISSILE_TOWER_FIRE_RANGE && aiState.fireCooldown <= 0) {
+    if (dist <= this.scaleRange(MISSILE_TOWER_FIRE_RANGE) && aiState.fireCooldown <= 0) {
       const aimAngle = entity.aimAngle;
       sim.spawnMissile(entity, entity.id, aimAngle);
       aiState.burstRemaining = MISSILE_BURST_SIZE - 1;
       aiState.burstCooldown = MISSILE_BURST_DELAY_TICKS;
       aiState.burstAimAngle = aimAngle;
-      aiState.fireCooldown = MISSILE_TOWER_FIRE_COOLDOWN_TICKS;
+      aiState.fireCooldown = this.scaleCooldown(MISSILE_TOWER_FIRE_COOLDOWN_TICKS);
     }
   }
 
@@ -520,7 +535,7 @@ export class AIManager {
     const dyPlayerMs = target.pos.y - msPos.y;
     const distPlayerToMs = Math.sqrt(dxPlayerMs * dxPlayerMs + dyPlayerMs * dyPlayerMs);
 
-    if (distPlayerToMs > PHANTOM_GUARD_RADIUS) {
+    if (distPlayerToMs > PHANTOM_GUARD_RADIUS * this.profile.enemyAggroMult) {
       // Player left the guard zone — return to orbit
       if (aiState.aiMode !== "return_to_base" && aiState.aiMode !== "patrol") {
         aiState.aiMode = "return_to_base";
@@ -550,7 +565,8 @@ export class AIManager {
 
     // State machine
     const prevMode = aiState.aiMode;
-    if (distToTarget <= PHANTOM_FIRE_RANGE) {
+    const phantomRange = this.scaleRange(PHANTOM_FIRE_RANGE);
+    if (distToTarget <= phantomRange) {
       if (prevMode !== "chase") {
         // Sync orbit angle to current position so we don't fly through the player
         aiState.phantomOrbitAngle = Math.atan2(entity.pos.y - target.pos.y, entity.pos.x - target.pos.x);
@@ -563,13 +579,13 @@ export class AIManager {
     // Movement: go to flank position (far side of mothership) or circle orbit (chase)
     if (aiState.aiMode === "flank") {
       // flankX/flankY already leads the player's movement via PHANTOM_FLANK_LOOK_AHEAD_S
-      this.phantomThrustTo(entity, aiState, flankX, flankY, PHANTOM_SPEED);
+      this.phantomThrustTo(entity, aiState, flankX, flankY, PHANTOM_SPEED * this.profile.enemyMoveSpeedMult);
     } else {
       // Advance the orbit angle each tick to strafe around the player
       aiState.phantomOrbitAngle += PHANTOM_CHASE_ORBIT_SPEED * this.dt;
       const orbitX = target.pos.x + Math.cos(aiState.phantomOrbitAngle) * PHANTOM_CHASE_ORBIT_RADIUS;
       const orbitY = target.pos.y + Math.sin(aiState.phantomOrbitAngle) * PHANTOM_CHASE_ORBIT_RADIUS;
-      this.phantomThrustTo(entity, aiState, orbitX, orbitY, PHANTOM_SPEED);
+      this.phantomThrustTo(entity, aiState, orbitX, orbitY, PHANTOM_SPEED * this.profile.enemyMoveSpeedMult);
     }
 
     // Re-clamp speed after evasion impulse (allow small overspeed for snappy dodge feel)
@@ -587,9 +603,9 @@ export class AIManager {
     entity.pos.y = Math.max(0, Math.min(WORLD_HEIGHT, entity.pos.y));
 
     // Fire burst at target if in range and cooldown is ready
-    if (distToTarget <= PHANTOM_FIRE_RANGE && aiState.fireCooldown <= 0 && aiState.burstRemaining === 0) {
+    if (distToTarget <= phantomRange && aiState.fireCooldown <= 0 && aiState.burstRemaining === 0) {
       this.phantomStartBurst(entity, aiState, target, sim);
-      aiState.fireCooldown = PHANTOM_FIRE_COOLDOWN_TICKS;
+      aiState.fireCooldown = this.scaleCooldown(PHANTOM_FIRE_COOLDOWN_TICKS);
     }
   }
 
@@ -604,7 +620,7 @@ export class AIManager {
         aiState.aiMode = "patrol";
       } else {
         // Sprint directly toward mothership center, then transition to orbit
-        this.phantomThrustTo(entity, aiState, msPos.x, msPos.y, PHANTOM_SPEED);
+        this.phantomThrustTo(entity, aiState, msPos.x, msPos.y, PHANTOM_SPEED * this.profile.enemyMoveSpeedMult);
         entity.pos.x += entity.vel.x * this.dt;
         entity.pos.y += entity.vel.y * this.dt;
         return;
@@ -616,7 +632,7 @@ export class AIManager {
     const nextAngle = currentAngle + PHANTOM_ORBIT_ANGULAR_SPEED * this.dt;
     const targetX = msPos.x + Math.cos(nextAngle) * PHANTOM_ORBIT_RADIUS;
     const targetY = msPos.y + Math.sin(nextAngle) * PHANTOM_ORBIT_RADIUS;
-    this.phantomThrustTo(entity, aiState, targetX, targetY, PHANTOM_SPEED * 0.5);
+    this.phantomThrustTo(entity, aiState, targetX, targetY, PHANTOM_SPEED * this.profile.enemyMoveSpeedMult * 0.5);
     entity.pos.x += entity.vel.x * this.dt;
     entity.pos.y += entity.vel.y * this.dt;
   }
@@ -642,8 +658,8 @@ export class AIManager {
 
     const nx = dx / dist;
     const ny = dy / dist;
-    entity.vel.x += nx * PHANTOM_ACCEL * this.dt;
-    entity.vel.y += ny * PHANTOM_ACCEL * this.dt;
+    entity.vel.x += nx * PHANTOM_ACCEL * this.profile.enemyAccelMult * this.dt;
+    entity.vel.y += ny * PHANTOM_ACCEL * this.profile.enemyAccelMult * this.dt;
 
     const spd = Math.sqrt(entity.vel.x * entity.vel.x + entity.vel.y * entity.vel.y);
     const cap = maxSpeed * aiState.moveSpeedScale;

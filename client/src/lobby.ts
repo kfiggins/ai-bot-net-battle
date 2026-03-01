@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { AgentControlMode, LobbyPlayer, VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from "shared";
+import { AgentControlMode, GameDifficulty, LobbyPlayer, VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from "shared";
 import { NetClient } from "./net.js";
 import { Starfield } from "./starfield.js";
 import { AudioManager } from "./audio.js";
@@ -21,9 +21,12 @@ export class LobbyScene extends Phaser.Scene {
   private startButton!: Phaser.GameObjects.Text;
   private modeToggle!: Phaser.GameObjects.Text;
   private modeLabel!: Phaser.GameObjects.Text;
+  private difficultyToggle!: Phaser.GameObjects.Text;
+  private difficultyLabel!: Phaser.GameObjects.Text;
   private devLogToggle!: Phaser.GameObjects.Text;
   private devLogLabel!: Phaser.GameObjects.Text;
   private mode: AgentControlMode = "builtin_fake_ai";
+  private difficulty: GameDifficulty = "normal";
   private players: LobbyPlayer[] = [];
   private displayName = "Player";
 
@@ -110,7 +113,7 @@ export class LobbyScene extends Phaser.Scene {
       this.startButton.setStyle({ backgroundColor: "#00ff88" });
     });
     this.startButton.on("pointerdown", () => {
-      this.net.sendStartGame(this.mode);
+      this.net.sendStartGame(this.mode, this.difficulty);
       this.startButton.setText("STARTING...");
       this.startButton.disableInteractive();
     });
@@ -158,6 +161,31 @@ export class LobbyScene extends Phaser.Scene {
       this.refreshModeUI();
     });
 
+    this.difficultyLabel = this.add
+      .text(VIEWPORT_WIDTH - 24, VIEWPORT_HEIGHT - 164, "Difficulty", {
+        fontSize: "13px",
+        color: "#7d7db7",
+        fontFamily: "monospace",
+      })
+      .setOrigin(1, 0.5);
+
+    this.difficultyToggle = this.add
+      .text(VIEWPORT_WIDTH - 24, VIEWPORT_HEIGHT - 138, "NORMAL", {
+        fontSize: "16px",
+        color: "#111122",
+        fontFamily: "monospace",
+        fontStyle: "bold",
+        backgroundColor: "#6da7ff",
+        padding: { x: 14, y: 6 },
+      })
+      .setOrigin(1, 0.5)
+      .setInteractive({ useHandCursor: true });
+
+    this.difficultyToggle.on("pointerdown", () => {
+      this.difficulty = this.difficulty === "beginner" ? "normal" : this.difficulty === "normal" ? "hard" : "beginner";
+      this.refreshDifficultyUI();
+    });
+
     this.devLogLabel = this.add
       .text(VIEWPORT_WIDTH - 24, VIEWPORT_HEIGHT - 118, "Dev Log", {
         fontSize: "13px",
@@ -194,16 +222,20 @@ export class LobbyScene extends Phaser.Scene {
       this.registry.set("net", this.net);
     }
     this.mode = this.net.currentMode;
+    this.difficulty = this.net.currentDifficulty;
     const storedDebug = localStorage.getItem("debugLogEnabled");
     if (storedDebug !== null) {
       this.net.debugLogEnabled = storedDebug === "1";
     }
     this.refreshModeUI();
+    this.refreshDifficultyUI();
     this.refreshDevLogUI();
 
     this.net.setWelcomeHandler((lobby) => {
       this.mode = lobby.mode;
+      this.difficulty = lobby.difficulty;
       this.refreshModeUI();
+      this.refreshDifficultyUI();
       if (lobby.state === "in_progress") {
         // Game already started — skip lobby
         this.audio.stopMusic();
@@ -220,7 +252,9 @@ export class LobbyScene extends Phaser.Scene {
 
     this.net.setLobbyUpdateHandler((msg) => {
       this.mode = msg.mode;
+      this.difficulty = msg.difficulty;
       this.refreshModeUI();
+      this.refreshDifficultyUI();
       this.players = msg.players;
       this.renderPlayerList();
     });
@@ -254,6 +288,19 @@ export class LobbyScene extends Phaser.Scene {
       color: "#111122",
     });
     this.modeLabel.setText(`Agent Mode (${isAgent ? "Live" : "Kids"})`);
+  }
+
+  private refreshDifficultyUI(): void {
+    if (!this.difficultyToggle || !this.difficultyLabel) return;
+    const map = {
+      beginner: { text: "BEGINNER", color: "#7bd88f", hint: "Fewer enemies" },
+      normal: { text: "NORMAL", color: "#6da7ff", hint: "Balanced" },
+      hard: { text: "HARD", color: "#ff7b7b", hint: "Current brutal" },
+    } as const;
+    const cfg = map[this.difficulty];
+    this.difficultyToggle.setText(cfg.text);
+    this.difficultyToggle.setStyle({ backgroundColor: cfg.color, color: "#111122" });
+    this.difficultyLabel.setText(`Difficulty (${cfg.hint})`);
   }
 
   private refreshDevLogUI(): void {

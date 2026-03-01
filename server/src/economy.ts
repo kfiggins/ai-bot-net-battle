@@ -7,6 +7,8 @@ import {
   WORLD_WIDTH,
   WORLD_HEIGHT,
   TOWER_MAX_SPAWN_DISTANCE,
+  DifficultyProfile,
+  getDifficultyProfile,
 } from "shared";
 import { Simulation } from "./sim.js";
 import { AIManager } from "./ai.js";
@@ -41,11 +43,19 @@ export class Economy {
   balance = STARTING_BALANCE;
   incomePerTick = INCOME_PER_TICK;
   buildQueue: QueuedBuild[] = [];
+  private readonly profile: DifficultyProfile;
+  private readonly buildCooldownTicks: number;
   recentlyBuilt: RecentBuild[] = [];
 
   // Dynamic state set each tick by room (sub-base bonuses)
   dynamicCapBonuses: Record<string, number> = {};
   towerAnchors: Array<{ x: number; y: number; maxDist: number }> = [];
+
+  constructor(profile: DifficultyProfile = getDifficultyProfile("hard")) {
+    this.profile = profile;
+    this.incomePerTick = INCOME_PER_TICK * profile.enemyIncomeMult;
+    this.buildCooldownTicks = Math.max(1, Math.round(BUILD_COOLDOWN_TICKS * profile.enemyBuildCooldownMult));
+  }
 
   update(sim: Simulation, ai: AIManager): void {
     // Accrue income
@@ -109,8 +119,10 @@ export class Economy {
     // Check cap (with dynamic sub-base bonuses)
     const baseCap = UNIT_CAPS[unitKind];
     if (baseCap !== undefined) {
+      const unitCapMult = this.profile.perUnitCapMult?.[unitKind as keyof typeof this.profile.perUnitCapMult] ?? 1;
+      const scaledBaseCap = Math.max(0, Math.floor(baseCap * this.profile.enemyCapMult * unitCapMult));
       const bonus = this.dynamicCapBonuses[unitKind] ?? 0;
-      const cap = baseCap + bonus;
+      const cap = scaledBaseCap + bonus;
       const currentCount = sim.getEntitiesByKind(unitKind as any).length;
       const queuedCount = this.buildQueue.filter((b) => b.unitKind === unitKind).length;
       if (currentCount + queuedCount >= cap) {
@@ -175,7 +187,7 @@ export class Economy {
     this.balance -= cost;
     this.buildQueue.push({
       unitKind,
-      readyAtTick: sim.tick + BUILD_COOLDOWN_TICKS,
+      readyAtTick: sim.tick + this.buildCooldownTicks,
       x,
       y,
     });

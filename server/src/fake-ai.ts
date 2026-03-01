@@ -1,4 +1,4 @@
-import { UNIT_COSTS, SUB_BASE_TOWER_RANGE } from "shared";
+import { UNIT_COSTS, SUB_BASE_TOWER_RANGE, DifficultyProfile, getDifficultyProfile } from "shared";
 import { Simulation } from "./sim.js";
 import { Economy } from "./economy.js";
 import { AgentAPI } from "./agent.js";
@@ -20,6 +20,12 @@ export class FakeAI {
   private nextPhantomTick = 0;
   private nextSubBaseTowerTick = 0;
   private nextDreadnoughtTick = 0;
+
+  constructor(private readonly profile: DifficultyProfile = getDifficultyProfile("hard")) {}
+
+  private cooldown(baseTicks: number): number {
+    return Math.max(1, Math.round(baseTicks * this.profile.enemyBuildCooldownMult));
+  }
 
   update(sim: Simulation, economy: Economy, agent: AgentAPI, mothershipPos?: { x: number; y: number }, boss?: BossManager): void {
     if (sim.tick < this.nextDecisionTick) return;
@@ -63,8 +69,9 @@ export class FakeAI {
     }
 
     // Priority 1: defense near mothership if low tower count.
+    const desiredTowers = this.profile.key === "hard" ? 3 : this.profile.key === "normal" ? 2 : 1;
     const towers = sim.getEntitiesByKind("tower").length;
-    if (towers < 3 && sim.tick >= this.nextTowerTick) {
+    if (towers < desiredTowers && sim.tick >= this.nextTowerTick) {
       const p = this.pickTowerPos(mothershipPos);
       const towerResult = agent.processCommand({
         v: 1,
@@ -74,14 +81,15 @@ export class FakeAI {
       }, sim, economy, mothershipPos);
 
       if (towerResult.ok) {
-        this.nextTowerTick = sim.tick + FAKE_AI_TOWER_COOLDOWN_TICKS;
+        this.nextTowerTick = sim.tick + this.cooldown(FAKE_AI_TOWER_COOLDOWN_TICKS);
         return;
       }
     }
 
     // Priority 2: build a missile tower if we can afford one and don't have one yet.
+    const maxMissileTowers = this.profile.key === "hard" ? 2 : this.profile.key === "normal" ? 1 : 0;
     const missileTowers = sim.getEntitiesByKind("missile_tower").length;
-    if (missileTowers < 2 && economy.balance >= UNIT_COSTS.missile_tower && sim.tick >= this.nextMissileTowerTick) {
+    if (this.profile.allowMissileTowers && missileTowers < maxMissileTowers && economy.balance >= UNIT_COSTS.missile_tower && sim.tick >= this.nextMissileTowerTick) {
       const p = this.pickTowerPos(mothershipPos);
       const result = economy.requestBuild(
         { unitKind: "missile_tower", x: p.x, y: p.y },
@@ -89,7 +97,7 @@ export class FakeAI {
         mothershipPos
       );
       if (result.ok) {
-        this.nextMissileTowerTick = sim.tick + 300; // don't spam
+        this.nextMissileTowerTick = sim.tick + this.cooldown(300); // don't spam
         return;
       }
     }
@@ -106,33 +114,34 @@ export class FakeAI {
       }, sim, economy, mothershipPos);
 
       if (spawnResult.ok) {
-        this.nextSpawnTick = sim.tick + FAKE_AI_SPAWN_COOLDOWN_TICKS;
+        this.nextSpawnTick = sim.tick + this.cooldown(FAKE_AI_SPAWN_COOLDOWN_TICKS);
       }
     }
 
     // Priority 4: deploy a phantom if the mothership is alive and we can afford one.
+    const maxPhantoms = this.profile.key === "hard" ? 5 : this.profile.key === "normal" ? 2 : 0;
     const phantoms = sim.getEntitiesByKind("phantom_ship").length;
-    if (phantoms < 5 && economy.balance >= UNIT_COSTS.phantom_ship && sim.tick >= this.nextPhantomTick) {
+    if (this.profile.allowPhantoms && phantoms < maxPhantoms && economy.balance >= UNIT_COSTS.phantom_ship && sim.tick >= this.nextPhantomTick) {
       const result = economy.requestBuild(
         { unitKind: "phantom_ship" },
         sim,
         mothershipPos
       );
       if (result.ok) {
-        this.nextPhantomTick = sim.tick + FAKE_AI_PHANTOM_COOLDOWN_TICKS;
+        this.nextPhantomTick = sim.tick + this.cooldown(FAKE_AI_PHANTOM_COOLDOWN_TICKS);
       }
     }
 
     // Priority 5: deploy a dreadnought if we can afford one (late-game threat).
     const dreadnoughts = sim.getEntitiesByKind("dreadnought").length;
-    if (dreadnoughts < 1 && economy.balance >= UNIT_COSTS.dreadnought && sim.tick >= this.nextDreadnoughtTick) {
+    if (this.profile.allowDreadnought && dreadnoughts < 1 && economy.balance >= UNIT_COSTS.dreadnought && sim.tick >= this.nextDreadnoughtTick) {
       const result = economy.requestBuild(
         { unitKind: "dreadnought" },
         sim,
         mothershipPos
       );
       if (result.ok) {
-        this.nextDreadnoughtTick = sim.tick + FAKE_AI_DREADNOUGHT_COOLDOWN_TICKS;
+        this.nextDreadnoughtTick = sim.tick + this.cooldown(FAKE_AI_DREADNOUGHT_COOLDOWN_TICKS);
       }
     }
   }
