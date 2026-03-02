@@ -12,6 +12,7 @@ const FAKE_AI_PHANTOM_COOLDOWN_TICKS = 300; // 10 s between phantom spawns
 const FAKE_AI_SUB_BASE_TOWER_COOLDOWN_TICKS = 150; // 5s between sub-base tower rebuilds
 const FAKE_AI_DREADNOUGHT_COOLDOWN_TICKS = 600; // 20s between dreadnought attempts
 const FAKE_AI_GRENADER_COOLDOWN_TICKS = 240; // 8s between grenader spawns
+const FAKE_AI_INTERCEPTOR_COOLDOWN_TICKS = 300; // 10s between interceptor spawns
 
 export class FakeAI {
   private nextDecisionTick = 0;
@@ -22,6 +23,7 @@ export class FakeAI {
   private nextSubBaseTowerTick = 0;
   private nextDreadnoughtTick = 0;
   private nextGrenaderTick = 0;
+  private nextInterceptorTick = 0;
 
   constructor(private readonly profile: DifficultyProfile = getDifficultyProfile("hard")) {}
 
@@ -155,6 +157,18 @@ export class FakeAI {
       );
       if (result.ok) {
         this.nextGrenaderTick = sim.tick + this.cooldown(FAKE_AI_GRENADER_COOLDOWN_TICKS);
+      }
+    }
+
+    // Priority 7: deploy interceptors if allowed (hard mode only).
+    if (this.profile.allowInterceptor && economy.balance >= UNIT_COSTS.interceptor && sim.tick >= this.nextInterceptorTick) {
+      const result = economy.requestBuild(
+        { unitKind: "interceptor" },
+        sim,
+        mothershipPos
+      );
+      if (result.ok) {
+        this.nextInterceptorTick = sim.tick + this.cooldown(FAKE_AI_INTERCEPTOR_COOLDOWN_TICKS);
       }
     }
   }

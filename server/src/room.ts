@@ -379,6 +379,21 @@ export class Room {
         this.ai.registerEntity(g.id);
       }
     }
+
+    if (profile.allowInterceptor && profile.initialSpawns.interceptor) {
+      const interceptorCount = profile.interceptorPerPlayer
+        ? profile.initialSpawns.interceptor * this.playerCount
+        : profile.initialSpawns.interceptor;
+      const angles = [Math.PI / 4, (3 * Math.PI) / 4, (5 * Math.PI) / 4, (7 * Math.PI) / 4];
+      for (let i = 0; i < interceptorCount; i++) {
+        const angle = angles[i % angles.length];
+        const g = this.sim.spawnEnemy("interceptor", cx + Math.cos(angle) * 250, cy + Math.sin(angle) * 250);
+        this.ai.registerEntity(g.id);
+      }
+      if (profile.interceptorPerPlayer) {
+        this.ai.assignInterceptorTargets(this.sim);
+      }
+    }
   }
 
   private startTickLoop(): void {
@@ -398,6 +413,9 @@ export class Room {
       if (profile.dreadnoughtPerPlayer && this.sim.tick % 30 === 0) {
         this.ai.assignDreadnoughtTargets(this.sim);
       }
+      if (profile.interceptorPerPlayer && this.sim.tick % 30 === 0) {
+        this.ai.assignInterceptorTargets(this.sim);
+      }
 
       // Set dynamic state from player count for per-player scaling
       this.economy.playerCount = this.playerCount;
@@ -410,6 +428,7 @@ export class Room {
         grenader: aliveSubBases + (profile.grenaderPerPlayer ? extraPerPlayer : 0),
         // Hard mode: dreadnought cap = playerCount (base cap is 1, so add extra)
         ...(profile.dreadnoughtPerPlayer ? { dreadnought: extraPerPlayer } : {}),
+        ...(profile.interceptorPerPlayer ? { interceptor: extraPerPlayer } : {}),
       };
       this.economy.towerAnchors = Array.from(this.boss.subBases.values())
         .filter(sb => this.sim.entities.has(sb.entityId))

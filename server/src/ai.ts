@@ -60,6 +60,21 @@ import {
   GRENADER_FIRE_COOLDOWN,
   GRENADER_KEEP_DISTANCE,
   GRENADE_SPEED,
+  INTERCEPTOR_SPEED,
+  INTERCEPTOR_ACCEL,
+  INTERCEPTOR_BRAKE_FRICTION,
+  INTERCEPTOR_RADIUS,
+  INTERCEPTOR_FIRE_RANGE,
+  INTERCEPTOR_FIRE_COOLDOWN,
+  INTERCEPTOR_BURST_SIZE,
+  INTERCEPTOR_BURST_DELAY_TICKS,
+  INTERCEPTOR_BURST_SPREAD,
+  INTERCEPTOR_ORBIT_RADIUS,
+  INTERCEPTOR_ORBIT_SPEED,
+  INTERCEPTOR_DODGE_SCAN_RADIUS,
+  INTERCEPTOR_DODGE_LOOKAHEAD_S,
+  INTERCEPTOR_DODGE_IMPULSE,
+  BULLET_RADIUS,
 } from "shared";
 import { Simulation, circlesOverlap } from "./sim.js";
 
@@ -157,6 +172,8 @@ export class AIManager {
         this.updateDreadnought(entity, aiState, sim);
       } else if (entity.kind === "grenader") {
         this.updateGrenader(entity, aiState, sim);
+      } else if (entity.kind === "interceptor") {
+        this.updateInterceptor(entity, aiState, sim);
       }
     }
   }
@@ -940,6 +957,223 @@ export class AIManager {
     // Track facing direction for rendering
     if (speed > 5) {
       entity.aimAngle = Math.atan2(entity.vel.y, entity.vel.x);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Interceptor — bullet-dodging hunter that targets assigned players
+  // ---------------------------------------------------------------------------
+
+  private updateInterceptor(entity: Entity, aiState: AIState, sim: Simulation): void {
+    const dt = this.dt;
+
+    // --- Burst fire (non-blocking, keeps moving during burst) ---
+    if (aiState.burstRemaining > 0) {
+      if (aiState.burstCooldown <= 0) {
+        const burstTarget = aiState.burstTargetId ? sim.entities.get(aiState.burstTargetId) : null;
+        let baseAngle = aiState.burstAimAngle;
+        if (burstTarget && burstTarget.hp > 0) {
+          const btDx = burstTarget.pos.x - entity.pos.x;
+          const btDy = burstTarget.pos.y - entity.pos.y;
+          const btDist = Math.sqrt(btDx * btDx + btDy * btDy) || 1;
+          const btTravel = btDist / BULLET_SPEED;
+          const btPredX = burstTarget.pos.x + burstTarget.vel.x * btTravel;
+          const btPredY = burstTarget.pos.y + burstTarget.vel.y * btTravel;
+          baseAngle = Math.atan2(btPredY - entity.pos.y, btPredX - entity.pos.x);
+        }
+        // Fan spread: center(0), left(-spread), right(+spread)
+        const shotIndex = INTERCEPTOR_BURST_SIZE - aiState.burstRemaining;
+        const spreadOffsets = [0, -INTERCEPTOR_BURST_SPREAD, INTERCEPTOR_BURST_SPREAD];
+        const offset = spreadOffsets[shotIndex % spreadOffsets.length];
+        sim.spawnBullet(entity, entity.id, baseAngle + offset);
+        aiState.burstRemaining--;
+        aiState.burstCooldown = INTERCEPTOR_BURST_DELAY_TICKS;
+      } else {
+        aiState.burstCooldown--;
+      }
+    }
+
+    // --- Target selection: prefer assigned player ---
+    let target: Entity | null = null;
+    if (aiState.assignedPlayerId) {
+      const assigned = sim.entities.get(aiState.assignedPlayerId);
+      if (assigned && assigned.hp > 0 && assigned.kind === "player_ship") {
+        target = assigned;
+      }
+    }
+    if (!target) {
+      target = this.findNearestPlayer(entity, sim);
+    }
+
+    if (!target) {
+      // No targets — brake to stop
+      entity.vel.x *= INTERCEPTOR_BRAKE_FRICTION;
+      entity.vel.y *= INTERCEPTOR_BRAKE_FRICTION;
+      entity.pos.x += entity.vel.x * dt;
+      entity.pos.y += entity.vel.y * dt;
+      return;
+    }
+
+    // --- Distance to target ---
+    const dx = target.pos.x - entity.pos.x;
+    const dy = target.pos.y - entity.pos.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const interceptorRange = this.scaleRange(INTERCEPTOR_FIRE_RANGE);
+
+    // --- Movement: chase or orbit ---
+    if (dist > interceptorRange) {
+      // Chase: thrust directly toward target
+      if (dist > 1) {
+        const nx = dx / dist;
+        const ny = dy / dist;
+        entity.vel.x += nx * INTERCEPTOR_ACCEL * this.profile.enemyAccelMult * dt;
+        entity.vel.y += ny * INTERCEPTOR_ACCEL * this.profile.enemyAccelMult * dt;
+      }
+      aiState.aiMode = "patrol"; // reset so orbit angle syncs on re-engage
+    } else {
+      // Engage: orbit the target
+      if (aiState.aiMode !== "chase") {
+        aiState.phantomOrbitAngle = Math.atan2(entity.pos.y - target.pos.y, entity.pos.x - target.pos.x);
+      }
+      aiState.aiMode = "chase";
+      aiState.phantomOrbitAngle += INTERCEPTOR_ORBIT_SPEED * dt;
+      const orbitX = target.pos.x + Math.cos(aiState.phantomOrbitAngle) * INTERCEPTOR_ORBIT_RADIUS;
+      const orbitY = target.pos.y + Math.sin(aiState.phantomOrbitAngle) * INTERCEPTOR_ORBIT_RADIUS;
+      const odx = orbitX - entity.pos.x;
+      const ody = orbitY - entity.pos.y;
+      const odist = Math.sqrt(odx * odx + ody * ody);
+      if (odist > 5) {
+        entity.vel.x += (odx / odist) * INTERCEPTOR_ACCEL * this.profile.enemyAccelMult * dt;
+        entity.vel.y += (ody / odist) * INTERCEPTOR_ACCEL * this.profile.enemyAccelMult * dt;
+      }
+    }
+
+    // --- Bullet dodging ---
+    this.interceptorDodge(entity, sim);
+
+    // --- Clamp to max speed (allow 20% overspeed for dodge responsiveness) ---
+    const maxSpeed = INTERCEPTOR_SPEED * aiState.moveSpeedScale * this.profile.enemyMoveSpeedMult;
+    const speed = Math.sqrt(entity.vel.x * entity.vel.x + entity.vel.y * entity.vel.y);
+    const cap = maxSpeed * 1.2;
+    if (speed > cap) {
+      entity.vel.x = (entity.vel.x / speed) * cap;
+      entity.vel.y = (entity.vel.y / speed) * cap;
+    }
+
+    // --- Integrate position ---
+    entity.pos.x += entity.vel.x * dt;
+    entity.pos.y += entity.vel.y * dt;
+    entity.pos.x = Math.max(INTERCEPTOR_RADIUS, Math.min(WORLD_WIDTH - INTERCEPTOR_RADIUS, entity.pos.x));
+    entity.pos.y = Math.max(INTERCEPTOR_RADIUS, Math.min(WORLD_HEIGHT - INTERCEPTOR_RADIUS, entity.pos.y));
+
+    // --- Track facing direction ---
+    if (speed > 5) {
+      entity.aimAngle = Math.atan2(entity.vel.y, entity.vel.x);
+    }
+
+    // --- Fire burst ---
+    if (dist <= interceptorRange && aiState.fireCooldown <= 0 && aiState.burstRemaining === 0) {
+      this.interceptorStartBurst(entity, aiState, target, sim);
+      aiState.fireCooldown = this.scaleCooldown(INTERCEPTOR_FIRE_COOLDOWN);
+    }
+  }
+
+  private interceptorDodge(entity: Entity, sim: Simulation): void {
+    let dodgeX = 0;
+    let dodgeY = 0;
+
+    for (const [bulletId, bulletState] of sim.bullets) {
+      const bullet = sim.entities.get(bulletId);
+      if (!bullet || bullet.team === entity.team) continue;
+
+      const dx = entity.pos.x - bullet.pos.x;
+      const dy = entity.pos.y - bullet.pos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > INTERCEPTOR_DODGE_SCAN_RADIUS) continue;
+
+      const bSpeed = Math.sqrt(bullet.vel.x * bullet.vel.x + bullet.vel.y * bullet.vel.y);
+      if (bSpeed < 1) continue;
+
+      const bDirX = bullet.vel.x / bSpeed;
+      const bDirY = bullet.vel.y / bSpeed;
+
+      // Dot product: is the bullet heading toward us?
+      const dot = dx * bDirX + dy * bDirY;
+      if (dot < 0) continue; // heading away
+
+      // Perpendicular distance from bullet path
+      const cross = dx * bDirY - dy * bDirX;
+      const perpDist = Math.abs(cross);
+
+      const dodgeThreshold = INTERCEPTOR_RADIUS + BULLET_RADIUS + 15;
+      if (perpDist > dodgeThreshold) continue;
+
+      // Time until closest approach
+      const timeToImpact = dot / bSpeed;
+      if (timeToImpact > INTERCEPTOR_DODGE_LOOKAHEAD_S) continue;
+
+      // Dodge perpendicular to bullet, on the side we're already on
+      const dodgeDir = cross >= 0 ? 1 : -1;
+      const perpX = -bDirY * dodgeDir;
+      const perpY = bDirX * dodgeDir;
+
+      const urgency = 1 - (timeToImpact / INTERCEPTOR_DODGE_LOOKAHEAD_S);
+      dodgeX += perpX * urgency;
+      dodgeY += perpY * urgency;
+    }
+
+    const mag = Math.sqrt(dodgeX * dodgeX + dodgeY * dodgeY);
+    if (mag > 0.01) {
+      entity.vel.x += (dodgeX / mag) * INTERCEPTOR_DODGE_IMPULSE * this.dt;
+      entity.vel.y += (dodgeY / mag) * INTERCEPTOR_DODGE_IMPULSE * this.dt;
+    }
+  }
+
+  private interceptorStartBurst(entity: Entity, aiState: AIState, target: Entity, _sim: Simulation): void {
+    aiState.burstTargetId = target.id;
+    aiState.burstRemaining = INTERCEPTOR_BURST_SIZE - 1;
+    aiState.burstCooldown = INTERCEPTOR_BURST_DELAY_TICKS;
+
+    // Fire first bullet (center shot) with predictive aim
+    const dx = target.pos.x - entity.pos.x;
+    const dy = target.pos.y - entity.pos.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const travelTime = dist / BULLET_SPEED;
+    const predictedX = target.pos.x + target.vel.x * travelTime;
+    const predictedY = target.pos.y + target.vel.y * travelTime;
+    const baseAngle = Math.atan2(predictedY - entity.pos.y, predictedX - entity.pos.x);
+    aiState.burstAimAngle = baseAngle;
+
+    _sim.spawnBullet(entity, entity.id, baseAngle);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Interceptor player assignment — assigns one interceptor per player
+  // ---------------------------------------------------------------------------
+
+  assignInterceptorTargets(sim: Simulation): void {
+    const alivePlayers: Entity[] = [];
+    for (const e of sim.entities.values()) {
+      if (e.kind === "player_ship" && e.hp > 0) alivePlayers.push(e);
+    }
+
+    const interceptorStates: AIState[] = [];
+    for (const [entityId, aiState] of this.aiStates) {
+      const entity = sim.entities.get(entityId);
+      if (entity && entity.kind === "interceptor" && entity.hp > 0) {
+        interceptorStates.push(aiState);
+      }
+    }
+
+    if (alivePlayers.length === 0) {
+      for (const s of interceptorStates) s.assignedPlayerId = null;
+      return;
+    }
+
+    for (let i = 0; i < interceptorStates.length; i++) {
+      const playerIdx = i % alivePlayers.length;
+      interceptorStates[i].assignedPlayerId = alivePlayers[playerIdx].id;
     }
   }
 

@@ -25,6 +25,7 @@ Multiplayer browser game: 1-8 players cooperate to destroy enemy towers, minions
 | `mine` | 2 | 1 | 10 | no | Laid by dreadnought, 30s TTL, detonates on player contact for 60 dmg, trigger radius 20px |
 | `grenader` | 2 | 60 | 14 | yes | Grenade-lobbing ship — keeps distance (350px), fires grenades with predictive aim, 5s fire cooldown, 10 body collision dmg |
 | `grenade` | 2 | 1 | 6 | yes | Lobbed by grenader — travels to target, arms on arrival (or after 3s TTL), blinks 2-3s fuse, explodes for 50 dmg in 80px blast radius. Instant explosion on armed player contact |
+| `interceptor` | 2 | 25 | 11 | yes | Bullet-dodging hunter — 1 per player, predictive 3-burst spread fire, actively dodges incoming bullets, orbits target in engagement range. Hard mode only |
 | `energy_orb` | 0 | 1 | 8 | no | Neutral, gives 5 XP to players or 10 resources to enemy |
 
 ## Game Flow (Boss Phases)
@@ -46,7 +47,7 @@ Multiplayer browser game: 1-8 players cooperate to destroy enemy towers, minions
 
 ## Player Progression
 
-- **XP sources**: Energy orbs (5 XP), minion kills (10 XP), tower kills (25 XP), grenader kill (40 XP), dreadnought kill (100 XP), nemesis kill (500 XP to all)
+- **XP sources**: Energy orbs (5 XP), minion kills (10 XP), tower kills (25 XP), interceptor kill (30 XP), grenader kill (40 XP), dreadnought kill (100 XP), nemesis kill (500 XP to all)
 - **Max level**: 15, XP formula: `floor(10 * level^1.5)`
 - **Stat upgrades** (4 types, max 5 each): damage (+3), speed (+25 px/s), health (+20 HP), fire_rate (-1 tick cooldown)
 - **Cannon milestones** (auto): level 5 → 2 cannons, level 10 → 3, level 15 → 4
@@ -68,8 +69,8 @@ Snapshots broadcast every `SNAPSHOT_INTERVAL` ticks (~20 Hz).
 ## Economy (Enemy Side)
 
 - Starting balance: 200, income: 10/s, plus minion orb collection (10 per orb)
-- **Unit costs**: minion 50, tower 100, missile_tower 125, phantom 65, grenader 80, dreadnought 1000
-- **Unit caps**: minion 20 (+5 per alive sub-base), tower 10, missile_tower 5, phantom 5 (+1 per alive sub-base), grenader 6 (+1 per alive sub-base), dreadnought 1 (hard: 1 per player)
+- **Unit costs**: minion 50, tower 100, missile_tower 125, phantom 65, grenader 80, interceptor 90, dreadnought 1000
+- **Unit caps**: minion 20 (+5 per alive sub-base), tower 10, missile_tower 5, phantom 5 (+1 per alive sub-base), grenader 6 (+1 per alive sub-base), interceptor 4 (hard: 1 per player), dreadnought 1 (hard: 1 per player)
 - **Build cooldown**: 0.5s queue delay
 - **Tower placement**: Must be within 500px of mothership OR 250px of an alive sub-base
 
@@ -79,6 +80,7 @@ Snapshots broadcast every `SNAPSHOT_INTERVAL` ticks (~20 Hz).
 |---|---|---|---|
 | Dreadnoughts | disabled | 1 max | 1 per player, assigned targeting |
 | Grenaders | disabled | half cap (~2) | full cap (6) |
+| Interceptors | disabled | disabled | 1 per player, bullet dodging |
 | Phantoms | disabled | 2 max | 5 max |
 | Missile towers | disabled | 1 max | 2 max |
 

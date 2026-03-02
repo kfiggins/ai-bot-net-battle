@@ -98,6 +98,10 @@ import {
   GRENADE_FUSE_MAX_TICKS,
   GRENADE_TRAVEL_TTL,
   GRENADE_ARM_DISTANCE,
+  INTERCEPTOR_HP,
+  INTERCEPTOR_RADIUS,
+  INTERCEPTOR_KILL_XP,
+  INTERCEPTOR_BODY_COLLISION_DAMAGE,
 } from "shared";
 
 export interface PlayerState {
@@ -225,7 +229,7 @@ export class Simulation {
     }
   }
 
-  spawnEnemy(kind: "minion_ship" | "tower" | "missile_tower" | "phantom_ship" | "sub_base" | "dreadnought" | "grenader", x: number, y: number): Entity {
+  spawnEnemy(kind: "minion_ship" | "tower" | "missile_tower" | "phantom_ship" | "sub_base" | "dreadnought" | "grenader" | "interceptor", x: number, y: number): Entity {
     const entityId = uuid();
     const hp =
       kind === "minion_ship" ? MINION_HP :
@@ -234,6 +238,7 @@ export class Simulation {
       kind === "sub_base" ? SUB_BASE_HP :
       kind === "dreadnought" ? DREADNOUGHT_HP :
       kind === "grenader" ? GRENADER_HP :
+      kind === "interceptor" ? INTERCEPTOR_HP :
       TOWER_HP;
     const entity: Entity = {
       id: entityId,
@@ -916,6 +921,7 @@ export class Simulation {
       killedKind === "sub_base" ? SUB_BASE_KILL_XP :
       killedKind === "dreadnought" ? DREADNOUGHT_KILL_XP :
       killedKind === "grenader" ? GRENADER_KILL_XP :
+      killedKind === "interceptor" ? INTERCEPTOR_KILL_XP :
       0;
     if (xp === 0) return;
     for (const player of this.players.values()) {
@@ -942,7 +948,7 @@ export class Simulation {
   }
 
   private checkBodyCollisions(): void {
-    const solidKinds = new Set(["mothership", "tower", "missile_tower", "minion_ship", "nemesis", "phantom_ship", "sub_base", "dreadnought", "grenader"]);
+    const solidKinds = new Set(["mothership", "tower", "missile_tower", "minion_ship", "nemesis", "phantom_ship", "sub_base", "dreadnought", "grenader", "interceptor"]);
 
     for (const [playerId, player] of this.players) {
       const playerEntity = this.entities.get(player.entityId);
@@ -968,6 +974,7 @@ export class Simulation {
         const damage = enemy.kind === "nemesis" ? NEMESIS_BODY_COLLISION_DAMAGE :
           enemy.kind === "dreadnought" ? DREADNOUGHT_BODY_COLLISION_DAMAGE :
           enemy.kind === "grenader" ? GRENADER_BODY_COLLISION_DAMAGE :
+          enemy.kind === "interceptor" ? INTERCEPTOR_BODY_COLLISION_DAMAGE :
           BODY_COLLISION_DAMAGE;
         playerEntity.hp -= damage;
         cooldowns.set(enemyId, BODY_COLLISION_COOLDOWN_TICKS);
@@ -1071,6 +1078,8 @@ export function entityRadius(kind: string): number {
       return MINE_RADIUS;
     case "grenader":
       return GRENADER_RADIUS;
+    case "interceptor":
+      return INTERCEPTOR_RADIUS;
     case "grenade":
       return GRENADE_RADIUS;
     default:

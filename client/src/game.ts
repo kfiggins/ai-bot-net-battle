@@ -559,7 +559,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       // Boost particles for moving AI entities and remote players
-      if (entity.kind === "minion_ship" || entity.kind === "nemesis" || entity.kind === "phantom_ship" || entity.kind === "dreadnought" || entity.kind === "grenader" ||
+      if (entity.kind === "minion_ship" || entity.kind === "nemesis" || entity.kind === "phantom_ship" || entity.kind === "dreadnought" || entity.kind === "grenader" || entity.kind === "interceptor" ||
           (entity.kind === "player_ship" && entity.id !== selfId)) {
         const spd = Math.sqrt(entity.vel.x * entity.vel.x + entity.vel.y * entity.vel.y);
         if (spd > BOOST_PARTICLE_THRESHOLD) {
@@ -867,6 +867,13 @@ export class GameScene extends Phaser.Scene {
       return circle;
     }
 
+    if (entity.kind === "interceptor") {
+      const r = getRadius("interceptor");
+      const circle = this.add.circle(entity.pos.x, entity.pos.y, r, 0xcc00cc);
+      circle.setStrokeStyle(2, 0xff44ff);
+      return circle;
+    }
+
     if (entity.kind === "grenade") {
       const r = getRadius("grenade");
       const circle = this.add.circle(entity.pos.x, entity.pos.y, r, 0x88ff00);
@@ -1037,6 +1044,7 @@ function getColorByKind(kind: string): number {
     case "mine": return 0xff6600;
     case "grenader": return 0x44aa44;
     case "grenade": return 0x88ff00;
+    case "interceptor": return 0xcc00cc;
     case "energy_orb": return 0x00ffcc;
     default: return 0xffffff;
   }
@@ -1061,6 +1069,7 @@ function getColor(entity: Entity): number {
     case "mine": return 0xff6600;
     case "grenader": return 0x44aa44;
     case "grenade": return entity.vel.x === 0 && entity.vel.y === 0 ? 0xff4400 : 0x88ff00;
+    case "interceptor": return 0xcc00cc;
     case "energy_orb": return 0x00ffcc;
     default: return 0xffffff;
   }
@@ -1081,6 +1090,7 @@ function getRadius(kind: string): number {
     case "dreadnought": return 36;
     case "mine": return 10;
     case "grenader": return 14;
+    case "interceptor": return 11;
     case "grenade": return 6;
     case "energy_orb": return ORB_RADIUS;
     default: return 8;

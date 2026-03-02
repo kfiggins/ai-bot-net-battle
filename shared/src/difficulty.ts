@@ -17,13 +17,15 @@ export interface DifficultyProfile {
   allowPhantoms: boolean;
   allowDreadnought: boolean;
   allowGrenader: boolean;
+  allowInterceptor: boolean;
   dreadnoughtPerPlayer?: boolean;
   phantomPerPlayer?: boolean;
   grenaderPerPlayer?: boolean;
+  interceptorPerPlayer?: boolean;
   perPlayerIncomeMult?: number; // extra income fraction per additional player (e.g. 0.15 = +15%/player)
   nemesisHpMult?: number; // base Nemesis HP multiplier (e.g. 1.25 = 1500 HP)
   nemesisPerPlayerHpMult?: number; // extra HP fraction per additional player (e.g. 0.25 = +300 HP/player)
-  perUnitCapMult?: Partial<Record<"minion_ship" | "tower" | "missile_tower" | "phantom_ship" | "dreadnought" | "grenader", number>>;
+  perUnitCapMult?: Partial<Record<"minion_ship" | "tower" | "missile_tower" | "phantom_ship" | "dreadnought" | "grenader" | "interceptor", number>>;
   initialSpawns: {
     minions: number;
     towers: number;
@@ -31,6 +33,7 @@ export interface DifficultyProfile {
     phantoms: number;
     dreadnought?: number;
     grenader?: number;
+    interceptor?: number;
   };
 }
 
@@ -52,6 +55,7 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
     allowPhantoms: false,
     allowDreadnought: false,
     allowGrenader: false,
+    allowInterceptor: false,
     perUnitCapMult: {
       minion_ship: 0.5,
       tower: 0.5,
@@ -59,6 +63,7 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
       phantom_ship: 0,
       dreadnought: 0,
       grenader: 0,
+      interceptor: 0,
     },
     initialSpawns: {
       minions: 1,
@@ -84,6 +89,7 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
     allowPhantoms: true,
     allowDreadnought: true,
     allowGrenader: true,
+    allowInterceptor: false,
     perUnitCapMult: {
       minion_ship: 0.75,
       tower: 0.8,
@@ -91,6 +97,7 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
       phantom_ship: 0.4,
       dreadnought: 1,
       grenader: 0.5,
+      interceptor: 0,
     },
     initialSpawns: {
       minions: 2,
@@ -117,9 +124,11 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
     allowPhantoms: true,
     allowDreadnought: true,
     allowGrenader: true,
+    allowInterceptor: true,
     dreadnoughtPerPlayer: true,
     phantomPerPlayer: true,
     grenaderPerPlayer: true,
+    interceptorPerPlayer: true,
     perPlayerIncomeMult: 0.15,
     nemesisHpMult: 1.25,
     nemesisPerPlayerHpMult: 0.25,
@@ -130,6 +139,7 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
       phantom_ship: 1,
       dreadnought: 1,
       grenader: 1,
+      interceptor: 1,
     },
     initialSpawns: {
       minions: 4,
@@ -138,6 +148,7 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
       phantoms: 1,
       dreadnought: 1,
       grenader: 1,
+      interceptor: 1,
     },
   },
 };

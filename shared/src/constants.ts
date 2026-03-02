@@ -65,6 +65,7 @@ export const UNIT_COSTS: Record<string, number> = {
   phantom_ship: 65,
   dreadnought: 1000,
   grenader: 80,
+  interceptor: 90,
 };
 
 export const UNIT_CAPS: Record<string, number> = {
@@ -74,6 +75,7 @@ export const UNIT_CAPS: Record<string, number> = {
   phantom_ship: 5,
   dreadnought: 1,
   grenader: 6,
+  interceptor: 4,
 };
 
 export const BUILD_COOLDOWN_TICKS = 15; // 0.5 seconds between builds
@@ -269,6 +271,25 @@ export const GRENADE_FUSE_MIN_TICKS = 60;           // 2 seconds at 30Hz
 export const GRENADE_FUSE_MAX_TICKS = 90;           // 3 seconds at 30Hz
 export const GRENADE_TRAVEL_TTL = 90;               // 3 seconds max travel before auto-arm
 export const GRENADE_ARM_DISTANCE = 20;             // px — arms when this close to target
+
+// Interceptor — bullet-dodging hunter that targets assigned players
+export const INTERCEPTOR_HP = 25;
+export const INTERCEPTOR_RADIUS = 11;
+export const INTERCEPTOR_SPEED = 250;                  // px/s — between minion (120) and phantom (450)
+export const INTERCEPTOR_ACCEL = 600;                  // px/s² — snappy for responsive dodging
+export const INTERCEPTOR_BRAKE_FRICTION = 0.80;
+export const INTERCEPTOR_KILL_XP = 30;
+export const INTERCEPTOR_FIRE_RANGE = 550;             // px — medium range, must get close
+export const INTERCEPTOR_FIRE_COOLDOWN = 120;          // ticks (4 seconds between bursts)
+export const INTERCEPTOR_BURST_SIZE = 3;               // 3-bullet predictive spread
+export const INTERCEPTOR_BURST_DELAY_TICKS = 3;        // ~100ms between burst shots
+export const INTERCEPTOR_BURST_SPREAD = 0.18;          // radians — half-angle of fan spread
+export const INTERCEPTOR_ORBIT_RADIUS = 180;           // px — orbit radius when engaging
+export const INTERCEPTOR_ORBIT_SPEED = 2.0;            // rad/s — fast circling
+export const INTERCEPTOR_DODGE_SCAN_RADIUS = 300;      // px — bullet scan range
+export const INTERCEPTOR_DODGE_LOOKAHEAD_S = 0.5;      // seconds — predict bullet arrival
+export const INTERCEPTOR_DODGE_IMPULSE = 400;          // px/s² — lateral dodge thrust
+export const INTERCEPTOR_BODY_COLLISION_DAMAGE = 8;    // same as standard
 
 // Body collision damage (player rams into solid enemy — not player vs player)
 export const BODY_COLLISION_DAMAGE = 8;           // for mothership, towers, minions

@@ -503,6 +503,7 @@ function getMaxHp(entity: Entity): number {
     case "sub_base": return 300;
     case "dreadnought": return 800;
     case "grenader": return 60;
+    case "interceptor": return 25;
     default: return 0;
   }
 }
@@ -518,6 +519,7 @@ function getBarOffset(kind: string): number {
     case "sub_base": return 36;
     case "dreadnought": return 42;
     case "grenader": return 20;
+    case "interceptor": return 17;
     default: return 16;
   }
 }
