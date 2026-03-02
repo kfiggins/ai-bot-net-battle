@@ -64,6 +64,7 @@ export const UNIT_COSTS: Record<string, number> = {
   missile_tower: 125,
   phantom_ship: 65,
   dreadnought: 1000,
+  grenader: 80,
 };
 
 export const UNIT_CAPS: Record<string, number> = {
@@ -72,6 +73,7 @@ export const UNIT_CAPS: Record<string, number> = {
   missile_tower: 5,
   phantom_ship: 5,
   dreadnought: 1,
+  grenader: 6,
 };
 
 export const BUILD_COOLDOWN_TICKS = 15; // 0.5 seconds between builds
@@ -244,6 +246,29 @@ export const MINE_DAMAGE = 60;
 export const MINE_TTL_TICKS = 900;                   // 30 seconds at 30Hz
 export const MINE_LAY_INTERVAL_TICKS = 90;           // lay a mine every 3 seconds
 export const MINE_TRIGGER_RADIUS = 20;               // detection radius (slightly larger than visual)
+
+// Grenader — grenade-lobbing enemy ship
+export const GRENADER_HP = 60;
+export const GRENADER_RADIUS = 14;
+export const GRENADER_SPEED = 120;                  // px/s — moderate speed
+export const GRENADER_ACCEL = 180;                  // px/s²
+export const GRENADER_BRAKE_FRICTION = 0.80;
+export const GRENADER_KILL_XP = 40;
+export const GRENADER_FIRE_RANGE = 700;             // px — engagement range
+export const GRENADER_FIRE_COOLDOWN = 150;          // ticks (5 seconds — low fire rate)
+export const GRENADER_BODY_COLLISION_DAMAGE = 10;
+export const GRENADER_KEEP_DISTANCE = 350;          // px — tries to stay this far from target
+
+// Grenade — lobbed explosive from grenader
+export const GRENADE_HP = 1;
+export const GRENADE_RADIUS = 6;
+export const GRENADE_SPEED = 200;                   // px/s — moderate travel speed
+export const GRENADE_DAMAGE = 50;                   // ~50% of base HP (100)
+export const GRENADE_BLAST_RADIUS = 80;             // px — explosion area
+export const GRENADE_FUSE_MIN_TICKS = 60;           // 2 seconds at 30Hz
+export const GRENADE_FUSE_MAX_TICKS = 90;           // 3 seconds at 30Hz
+export const GRENADE_TRAVEL_TTL = 90;               // 3 seconds max travel before auto-arm
+export const GRENADE_ARM_DISTANCE = 20;             // px — arms when this close to target
 
 // Body collision damage (player rams into solid enemy — not player vs player)
 export const BODY_COLLISION_DAMAGE = 8;           // for mothership, towers, minions

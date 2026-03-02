@@ -351,9 +351,26 @@ export class Room {
     }
 
     if (profile.allowDreadnought && profile.initialSpawns.dreadnought) {
-      for (let i = 0; i < profile.initialSpawns.dreadnought; i++) {
+      // Hard mode with dreadnoughtPerPlayer: spawn 1 per player
+      const dreadnoughtCount = profile.dreadnoughtPerPlayer
+        ? this.playerCount
+        : profile.initialSpawns.dreadnought;
+      for (let i = 0; i < dreadnoughtCount; i++) {
         const mt = this.sim.spawnEnemy("dreadnought", cx + 100 + i * 40, cy - 300 + i * 20);
         this.ai.registerEntity(mt.id);
+      }
+      // Assign dreadnoughts to players
+      if (profile.dreadnoughtPerPlayer) {
+        this.ai.assignDreadnoughtTargets(this.sim);
+      }
+    }
+
+    if (profile.allowGrenader && profile.initialSpawns.grenader) {
+      const angles = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2];
+      for (let i = 0; i < profile.initialSpawns.grenader; i++) {
+        const angle = angles[i % angles.length];
+        const g = this.sim.spawnEnemy("grenader", cx + Math.cos(angle) * 300, cy + Math.sin(angle) * 300);
+        this.ai.registerEntity(g.id);
       }
     }
   }
@@ -370,10 +387,20 @@ export class Room {
       this.sim.update();
       this.ai.update(this.sim);
 
+      // Reassign dreadnought targets periodically (handles player death/respawn)
+      const profile = getDifficultyProfile(this.difficulty);
+      if (profile.dreadnoughtPerPlayer && this.sim.tick % 30 === 0) {
+        this.ai.assignDreadnoughtTargets(this.sim);
+      }
+
       // Set dynamic economy state from sub-base bonuses before build processing
+      const aliveSubBases = this.boss.getAliveSubBaseCount(this.sim);
       this.economy.dynamicCapBonuses = {
         minion_ship: this.boss.getMinionCapBonus(this.sim),
         phantom_ship: this.boss.getPhantomCapBonus(this.sim),
+        grenader: aliveSubBases,
+        // Hard mode: dreadnought cap = playerCount (base cap is 1, so add extra)
+        ...(profile.dreadnoughtPerPlayer ? { dreadnought: Math.max(0, this.playerCount - 1) } : {}),
       };
       this.economy.towerAnchors = Array.from(this.boss.subBases.values())
         .filter(sb => this.sim.entities.has(sb.entityId))

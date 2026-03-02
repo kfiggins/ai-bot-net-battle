@@ -85,6 +85,19 @@ import {
   MINE_DAMAGE,
   MINE_TTL_TICKS,
   MINE_TRIGGER_RADIUS,
+  GRENADER_HP,
+  GRENADER_RADIUS,
+  GRENADER_KILL_XP,
+  GRENADER_BODY_COLLISION_DAMAGE,
+  GRENADE_HP,
+  GRENADE_RADIUS,
+  GRENADE_SPEED,
+  GRENADE_DAMAGE,
+  GRENADE_BLAST_RADIUS,
+  GRENADE_FUSE_MIN_TICKS,
+  GRENADE_FUSE_MAX_TICKS,
+  GRENADE_TRAVEL_TTL,
+  GRENADE_ARM_DISTANCE,
 } from "shared";
 
 export interface PlayerState {
@@ -128,6 +141,17 @@ export interface MineState {
   damage: number;
 }
 
+export interface GrenadeState {
+  entityId: string;
+  ownerId: string;
+  damage: number;
+  blastRadius: number;
+  targetPos: { x: number; y: number };
+  armed: boolean;
+  fuseTicks: number;
+  travelTtl: number;
+}
+
 export class Simulation {
   tick = 0;
   entities: Map<string, Entity> = new Map();
@@ -135,6 +159,7 @@ export class Simulation {
   bullets: Map<string, BulletState> = new Map();
   missiles: Map<string, MissileState> = new Map();
   mines: Map<string, MineState> = new Map();
+  grenades: Map<string, GrenadeState> = new Map();
   private orbSpawnCooldown = ORB_SPAWN_INTERVAL_TICKS;
   pendingEnemyResources = 0;
   // playerId → enemyEntityId → ticksRemaining immunity
@@ -200,7 +225,7 @@ export class Simulation {
     }
   }
 
-  spawnEnemy(kind: "minion_ship" | "tower" | "missile_tower" | "phantom_ship" | "sub_base" | "dreadnought", x: number, y: number): Entity {
+  spawnEnemy(kind: "minion_ship" | "tower" | "missile_tower" | "phantom_ship" | "sub_base" | "dreadnought" | "grenader", x: number, y: number): Entity {
     const entityId = uuid();
     const hp =
       kind === "minion_ship" ? MINION_HP :
@@ -208,6 +233,7 @@ export class Simulation {
       kind === "missile_tower" ? MISSILE_TOWER_HP :
       kind === "sub_base" ? SUB_BASE_HP :
       kind === "dreadnought" ? DREADNOUGHT_HP :
+      kind === "grenader" ? GRENADER_HP :
       TOWER_HP;
     const entity: Entity = {
       id: entityId,
@@ -236,8 +262,10 @@ export class Simulation {
     this.updateBullets();
     this.updateMissiles();
     this.updateMines();
+    this.updateGrenades();
     this.checkCollisions();
     this.checkMineCollisions();
+    this.checkGrenadeCollisions();
     this.updateBodyCollisionCooldowns();
     this.checkBodyCollisions();
     this.checkOrbPickups();
@@ -595,6 +623,38 @@ export class Simulation {
     return entity;
   }
 
+  spawnGrenade(owner: Entity, ownerId: string, aimAngle: number, targetPos: { x: number; y: number }): Entity {
+    const entityId = uuid();
+    const ownerRadius = entityRadius(owner.kind);
+    const entity: Entity = {
+      id: entityId,
+      kind: "grenade",
+      pos: {
+        x: owner.pos.x + Math.cos(aimAngle) * (ownerRadius + GRENADE_RADIUS + 2),
+        y: owner.pos.y + Math.sin(aimAngle) * (ownerRadius + GRENADE_RADIUS + 2),
+      },
+      vel: {
+        x: Math.cos(aimAngle) * GRENADE_SPEED,
+        y: Math.sin(aimAngle) * GRENADE_SPEED,
+      },
+      hp: GRENADE_HP,
+      team: owner.team,
+    };
+    this.entities.set(entityId, entity);
+    const fuseTicks = GRENADE_FUSE_MIN_TICKS + Math.floor(Math.random() * (GRENADE_FUSE_MAX_TICKS - GRENADE_FUSE_MIN_TICKS + 1));
+    this.grenades.set(entityId, {
+      entityId,
+      ownerId,
+      damage: GRENADE_DAMAGE,
+      blastRadius: GRENADE_BLAST_RADIUS,
+      targetPos: { ...targetPos },
+      armed: false,
+      fuseTicks,
+      travelTtl: GRENADE_TRAVEL_TTL,
+    });
+    return entity;
+  }
+
   private updateBullets(): void {
     for (const [entityId, bullet] of this.bullets) {
       const entity = this.entities.get(entityId);
@@ -722,6 +782,77 @@ export class Simulation {
     }
   }
 
+  private updateGrenades(): void {
+    for (const [entityId, grenade] of this.grenades) {
+      const entity = this.entities.get(entityId);
+      if (!entity || entity.hp <= 0) {
+        this.grenades.delete(entityId);
+        continue;
+      }
+
+      if (!grenade.armed) {
+        // Travel phase — move toward target
+        entity.pos.x += entity.vel.x * this.dt;
+        entity.pos.y += entity.vel.y * this.dt;
+        grenade.travelTtl--;
+
+        // Check if close to target or travel TTL expired
+        const dx = entity.pos.x - grenade.targetPos.x;
+        const dy = entity.pos.y - grenade.targetPos.y;
+        const distSq = dx * dx + dy * dy;
+        if (distSq <= GRENADE_ARM_DISTANCE * GRENADE_ARM_DISTANCE || grenade.travelTtl <= 0) {
+          grenade.armed = true;
+          entity.vel = { x: 0, y: 0 };
+        }
+      } else {
+        // Armed phase — countdown fuse
+        grenade.fuseTicks--;
+        if (grenade.fuseTicks <= 0) {
+          this.explodeGrenade(entityId, grenade);
+        }
+      }
+    }
+  }
+
+  private explodeGrenade(grenadeId: string, grenade: GrenadeState): void {
+    const grenadeEntity = this.entities.get(grenadeId);
+    if (!grenadeEntity) return;
+
+    // Damage all opposite-team player_ship entities within blast radius
+    for (const [, target] of this.entities) {
+      if (target.kind !== "player_ship") continue;
+      if (target.team === grenadeEntity.team) continue;
+      if (target.hp <= 0) continue;
+
+      if (circlesOverlap(grenadeEntity.pos, grenade.blastRadius, target.pos, PLAYER_RADIUS)) {
+        target.hp -= grenade.damage;
+        if (target.hp <= 0) this.awardKillXP(grenade.ownerId, target.kind);
+      }
+    }
+
+    grenadeEntity.hp = 0;
+  }
+
+  private checkGrenadeCollisions(): void {
+    for (const [grenadeId, grenadeState] of this.grenades) {
+      if (!grenadeState.armed) continue;
+      const grenadeEntity = this.entities.get(grenadeId);
+      if (!grenadeEntity || grenadeEntity.hp <= 0) continue;
+
+      for (const [, target] of this.entities) {
+        if (target.kind !== "player_ship") continue;
+        if (target.team === grenadeEntity.team) continue;
+        if (target.hp <= 0) continue;
+
+        if (circlesOverlap(grenadeEntity.pos, GRENADE_RADIUS, target.pos, PLAYER_RADIUS)) {
+          // Direct contact — instant explode
+          this.explodeGrenade(grenadeId, grenadeState);
+          break;
+        }
+      }
+    }
+  }
+
   checkCollisions(): void {
     // Bullets hit any opposite-team non-bullet, non-orb entity (including missiles)
     for (const [bulletId, bulletState] of this.bullets) {
@@ -730,7 +861,7 @@ export class Simulation {
 
       for (const [entityId, target] of this.entities) {
         if (entityId === bulletId) continue;
-        if (target.kind === "bullet" || target.kind === "energy_orb") continue;
+        if (target.kind === "bullet" || target.kind === "energy_orb" || target.kind === "grenade") continue;
         if (target.team === bulletEntity.team) continue;
         if (target.hp <= 0) continue;
 
@@ -753,7 +884,7 @@ export class Simulation {
 
       for (const [entityId, target] of this.entities) {
         if (entityId === missileId) continue;
-        if (target.kind === "bullet" || target.kind === "missile" || target.kind === "energy_orb") continue;
+        if (target.kind === "bullet" || target.kind === "missile" || target.kind === "energy_orb" || target.kind === "grenade") continue;
         if (target.team === missileEntity.team) continue;
         if (target.hp <= 0) continue;
 
@@ -784,6 +915,7 @@ export class Simulation {
       killedKind === "tower" || killedKind === "missile_tower" ? TOWER_KILL_XP :
       killedKind === "sub_base" ? SUB_BASE_KILL_XP :
       killedKind === "dreadnought" ? DREADNOUGHT_KILL_XP :
+      killedKind === "grenader" ? GRENADER_KILL_XP :
       0;
     if (xp === 0) return;
     for (const player of this.players.values()) {
@@ -810,7 +942,7 @@ export class Simulation {
   }
 
   private checkBodyCollisions(): void {
-    const solidKinds = new Set(["mothership", "tower", "missile_tower", "minion_ship", "nemesis", "phantom_ship", "sub_base", "dreadnought"]);
+    const solidKinds = new Set(["mothership", "tower", "missile_tower", "minion_ship", "nemesis", "phantom_ship", "sub_base", "dreadnought", "grenader"]);
 
     for (const [playerId, player] of this.players) {
       const playerEntity = this.entities.get(player.entityId);
@@ -835,6 +967,7 @@ export class Simulation {
 
         const damage = enemy.kind === "nemesis" ? NEMESIS_BODY_COLLISION_DAMAGE :
           enemy.kind === "dreadnought" ? DREADNOUGHT_BODY_COLLISION_DAMAGE :
+          enemy.kind === "grenader" ? GRENADER_BODY_COLLISION_DAMAGE :
           BODY_COLLISION_DAMAGE;
         playerEntity.hp -= damage;
         cooldowns.set(enemyId, BODY_COLLISION_COOLDOWN_TICKS);
@@ -849,6 +982,7 @@ export class Simulation {
         this.bullets.delete(id);
         this.missiles.delete(id);
         this.mines.delete(id);
+        this.grenades.delete(id);
       }
     }
   }
@@ -935,6 +1069,10 @@ export function entityRadius(kind: string): number {
       return DREADNOUGHT_RADIUS;
     case "mine":
       return MINE_RADIUS;
+    case "grenader":
+      return GRENADER_RADIUS;
+    case "grenade":
+      return GRENADE_RADIUS;
     default:
       return PLAYER_RADIUS;
   }

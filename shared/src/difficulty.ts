@@ -16,13 +16,16 @@ export interface DifficultyProfile {
   allowMissileTowers: boolean;
   allowPhantoms: boolean;
   allowDreadnought: boolean;
-  perUnitCapMult?: Partial<Record<"minion_ship" | "tower" | "missile_tower" | "phantom_ship" | "dreadnought", number>>;
+  allowGrenader: boolean;
+  dreadnoughtPerPlayer?: boolean;
+  perUnitCapMult?: Partial<Record<"minion_ship" | "tower" | "missile_tower" | "phantom_ship" | "dreadnought" | "grenader", number>>;
   initialSpawns: {
     minions: number;
     towers: number;
     missileTowers: number;
     phantoms: number;
     dreadnought?: number;
+    grenader?: number;
   };
 }
 
@@ -43,12 +46,14 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
     allowMissileTowers: true,
     allowPhantoms: false,
     allowDreadnought: false,
+    allowGrenader: false,
     perUnitCapMult: {
       minion_ship: 0.5,
       tower: 0.5,
       missile_tower: 0.4,
       phantom_ship: 0,
       dreadnought: 0,
+      grenader: 0,
     },
     initialSpawns: {
       minions: 1,
@@ -72,19 +77,22 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
     enemyAggroMult: 0.9,
     allowMissileTowers: true,
     allowPhantoms: true,
-    allowDreadnought: false,
+    allowDreadnought: true,
+    allowGrenader: true,
     perUnitCapMult: {
       minion_ship: 0.75,
       tower: 0.8,
       missile_tower: 0.6,
       phantom_ship: 0.4,
-      dreadnought: 0,
+      dreadnought: 1,
+      grenader: 0.5,
     },
     initialSpawns: {
       minions: 2,
       towers: 2,
       missileTowers: 1,
       phantoms: 1,
+      grenader: 1,
     },
   },
   hard: {
@@ -103,12 +111,15 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
     allowMissileTowers: true,
     allowPhantoms: true,
     allowDreadnought: true,
+    allowGrenader: true,
+    dreadnoughtPerPlayer: true,
     perUnitCapMult: {
       minion_ship: 1,
       tower: 1,
       missile_tower: 1,
       phantom_ship: 1,
       dreadnought: 1,
+      grenader: 1,
     },
     initialSpawns: {
       minions: 2,
@@ -116,6 +127,7 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
       missileTowers: 1,
       phantoms: 3,
       dreadnought: 1,
+      grenader: 2,
     },
   },
 };

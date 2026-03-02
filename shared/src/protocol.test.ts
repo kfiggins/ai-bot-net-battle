@@ -240,17 +240,18 @@ describe("LobbyUpdateMessageSchema", () => {
         { name: "Player 2", playerIndex: 2 },
       ],
       mode: "builtin_fake_ai",
+      difficulty: "hard",
     };
     expect(LobbyUpdateMessageSchema.parse(msg)).toEqual(msg);
   });
 
   it("accepts empty player list", () => {
-    const msg = { v: 1, type: "lobby_update", players: [], mode: "external_agent" };
+    const msg = { v: 1, type: "lobby_update", players: [], mode: "external_agent", difficulty: "normal" };
     expect(LobbyUpdateMessageSchema.parse(msg)).toEqual(msg);
   });
 
   it("is accepted as a server message", () => {
-    const msg = { v: 1, type: "lobby_update", players: [], mode: "builtin_fake_ai" };
+    const msg = { v: 1, type: "lobby_update", players: [], mode: "builtin_fake_ai", difficulty: "hard" };
     expect(ServerMessageSchema.parse(msg)).toEqual(msg);
   });
 });

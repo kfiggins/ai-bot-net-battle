@@ -23,6 +23,7 @@ import {
   BODY_COLLISION_COOLDOWN_TICKS,
   Entity,
   xpForLevel,
+  getDifficultyProfile,
 } from "shared";
 
 describe("Dreadnought", () => {
@@ -446,5 +447,109 @@ describe("Dreadnought Economy", () => {
     const result = economy.requestBuild({ unitKind: "dreadnought" }, sim, msPos);
     expect(result.ok).toBe(false);
     expect(result.error).toBe("cap_reached");
+  });
+});
+
+describe("Dreadnought Per-Player Targeting", () => {
+  it("assigns each dreadnought to a different player", () => {
+    const profile = getDifficultyProfile("hard");
+    const ai = new AIManager(profile);
+    const sim = new Simulation();
+
+    // Add 2 players
+    const p1 = sim.addPlayer("p1", "Player1", 1);
+    const p2 = sim.addPlayer("p2", "Player2", 2);
+
+    // Spawn 2 dreadnoughts
+    const d1 = sim.spawnEnemy("dreadnought", 500, 500);
+    ai.registerEntity(d1.id);
+    const d2 = sim.spawnEnemy("dreadnought", 600, 500);
+    ai.registerEntity(d2.id);
+
+    // Assign targets
+    ai.assignDreadnoughtTargets(sim);
+
+    const state1 = ai.aiStates.get(d1.id)!;
+    const state2 = ai.aiStates.get(d2.id)!;
+
+    // Both should have assigned players
+    expect(state1.assignedPlayerId).toBeTruthy();
+    expect(state2.assignedPlayerId).toBeTruthy();
+
+    // They should target different players
+    expect(state1.assignedPlayerId).not.toBe(state2.assignedPlayerId);
+  });
+
+  it("wraps around when more dreadnoughts than players", () => {
+    const profile = getDifficultyProfile("hard");
+    const ai = new AIManager(profile);
+    const sim = new Simulation();
+
+    // Add 1 player
+    const p1 = sim.addPlayer("p1", "Player1", 1);
+
+    // Spawn 3 dreadnoughts
+    const d1 = sim.spawnEnemy("dreadnought", 500, 500);
+    ai.registerEntity(d1.id);
+    const d2 = sim.spawnEnemy("dreadnought", 600, 500);
+    ai.registerEntity(d2.id);
+    const d3 = sim.spawnEnemy("dreadnought", 700, 500);
+    ai.registerEntity(d3.id);
+
+    ai.assignDreadnoughtTargets(sim);
+
+    // All should target the only player
+    const state1 = ai.aiStates.get(d1.id)!;
+    const state2 = ai.aiStates.get(d2.id)!;
+    const state3 = ai.aiStates.get(d3.id)!;
+    expect(state1.assignedPlayerId).toBe(p1.id);
+    expect(state2.assignedPlayerId).toBe(p1.id);
+    expect(state3.assignedPlayerId).toBe(p1.id);
+  });
+
+  it("clears assignments when no players alive", () => {
+    const profile = getDifficultyProfile("hard");
+    const ai = new AIManager(profile);
+    const sim = new Simulation();
+
+    const d1 = sim.spawnEnemy("dreadnought", 500, 500);
+    ai.registerEntity(d1.id);
+
+    ai.assignDreadnoughtTargets(sim);
+
+    const state = ai.aiStates.get(d1.id)!;
+    expect(state.assignedPlayerId).toBeNull();
+  });
+
+  it("dreadnought chases assigned player instead of nearest", () => {
+    const profile = getDifficultyProfile("hard");
+    const ai = new AIManager(profile);
+    const sim = new Simulation();
+
+    // Player 1 is close, Player 2 is far
+    const p1 = sim.addPlayer("p1", "Player1", 1);
+    const p1Entity = sim.entities.get(p1.id)!;
+    p1Entity.pos = { x: 550, y: 500 }; // 50px away
+
+    const p2 = sim.addPlayer("p2", "Player2", 2);
+    const p2Entity = sim.entities.get(p2.id)!;
+    p2Entity.pos = { x: 2000, y: 2000 }; // far away
+
+    const d = sim.spawnEnemy("dreadnought", 500, 500);
+    ai.registerEntity(d.id);
+
+    // Assign dreadnought to the FAR player
+    const state = ai.aiStates.get(d.id)!;
+    state.assignedPlayerId = p2Entity.id;
+
+    ai.update(sim);
+
+    // Dreadnought should move toward the far player, not the close one
+    // Check velocity direction
+    const dx = p2Entity.pos.x - d.pos.x;
+    const dy = p2Entity.pos.y - d.pos.y;
+    // Velocity should be in the general direction of p2 (positive x and y)
+    expect(d.vel.x).toBeGreaterThan(0);
+    expect(d.vel.y).toBeGreaterThan(0);
   });
 });

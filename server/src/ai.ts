@@ -52,6 +52,14 @@ import {
   MINE_LAY_INTERVAL_TICKS,
   DifficultyProfile,
   getDifficultyProfile,
+  GRENADER_SPEED,
+  GRENADER_ACCEL,
+  GRENADER_BRAKE_FRICTION,
+  GRENADER_RADIUS,
+  GRENADER_FIRE_RANGE,
+  GRENADER_FIRE_COOLDOWN,
+  GRENADER_KEEP_DISTANCE,
+  GRENADE_SPEED,
 } from "shared";
 import { Simulation, circlesOverlap } from "./sim.js";
 
@@ -81,6 +89,8 @@ export interface AIState {
   turretCooldowns: number[];
   mineLayCooldown: number;
   bigCannonCooldown: number;
+  // Dreadnought assigned player targeting (hard mode: 1 per player)
+  assignedPlayerId: string | null;
 }
 
 export class AIManager {
@@ -115,9 +125,10 @@ export class AIManager {
       targetOrbId: null,
       burstTargetId: null,
       phantomOrbitAngle: Math.random() * Math.PI * 2,
-      turretCooldowns: [0, 0, 0, 0],
+      turretCooldowns: Array.from({ length: DREADNOUGHT_TURRET_COUNT }, () => 0),
       mineLayCooldown: 0,
       bigCannonCooldown: DREADNOUGHT_BIG_CANNON_COOLDOWN,
+      assignedPlayerId: null,
     });
   }
 
@@ -144,6 +155,8 @@ export class AIManager {
         this.updatePhantom(entity, aiState, sim);
       } else if (entity.kind === "dreadnought") {
         this.updateDreadnought(entity, aiState, sim);
+      } else if (entity.kind === "grenader") {
+        this.updateGrenader(entity, aiState, sim);
       }
     }
   }
@@ -479,6 +492,8 @@ export class AIManager {
       if (other.kind === "bullet") continue;
       if (other.kind === "missile") continue;
       if (other.kind === "energy_orb") continue;
+      if (other.kind === "grenade") continue;
+      if (other.kind === "mine") continue;
       if (other.hp <= 0) continue;
 
       const dx = other.pos.x - entity.pos.x;
@@ -701,7 +716,17 @@ export class AIManager {
 
   private updateDreadnought(entity: Entity, aiState: AIState, sim: Simulation): void {
     const dt = this.dt;
-    const target = this.findNearestPlayer(entity, sim);
+    // Prefer assigned player (hard mode per-player targeting), fallback to nearest
+    let target: Entity | null = null;
+    if (aiState.assignedPlayerId) {
+      const assigned = sim.entities.get(aiState.assignedPlayerId);
+      if (assigned && assigned.hp > 0 && assigned.kind === "player_ship") {
+        target = assigned;
+      }
+    }
+    if (!target) {
+      target = this.findNearestPlayer(entity, sim);
+    }
 
     // --- 1. Chase nearest player ---
     if (target) {
@@ -845,6 +870,109 @@ export class AIManager {
       }
     }
     return nearest;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Grenader AI — keeps distance and lobs predictive grenades
+  // ---------------------------------------------------------------------------
+
+  private updateGrenader(entity: Entity, aiState: AIState, sim: Simulation): void {
+    const dt = this.dt;
+    const target = this.findNearestPlayer(entity, sim);
+
+    if (target) {
+      const dx = target.pos.x - entity.pos.x;
+      const dy = target.pos.y - entity.pos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const nx = dist > 0 ? dx / dist : 0;
+      const ny = dist > 0 ? dy / dist : 0;
+
+      const keepDist = GRENADER_KEEP_DISTANCE * this.profile.enemyAggroMult;
+
+      if (dist > keepDist + 50) {
+        // Too far — approach
+        entity.vel.x += nx * GRENADER_ACCEL * this.profile.enemyAccelMult * dt;
+        entity.vel.y += ny * GRENADER_ACCEL * this.profile.enemyAccelMult * dt;
+      } else if (dist < keepDist - 50) {
+        // Too close — back away
+        entity.vel.x -= nx * GRENADER_ACCEL * this.profile.enemyAccelMult * dt;
+        entity.vel.y -= ny * GRENADER_ACCEL * this.profile.enemyAccelMult * dt;
+      } else {
+        // At preferred distance — strafe perpendicular
+        const px = -ny;
+        const py = nx;
+        const strafe = Math.sin((sim.tick / TICK_RATE) * aiState.strafeFrequency + aiState.strafePhase);
+        entity.vel.x += px * strafe * GRENADER_ACCEL * this.profile.enemyAccelMult * dt * 0.5;
+        entity.vel.y += py * strafe * GRENADER_ACCEL * this.profile.enemyAccelMult * dt * 0.5;
+      }
+
+      // Fire grenade if in range and cooldown ready
+      const grenaderRange = this.scaleRange(GRENADER_FIRE_RANGE);
+      if (dist <= grenaderRange && aiState.fireCooldown <= 0) {
+        // Predictive aim — calculate where player will be when grenade arrives
+        const travelTime = dist / GRENADE_SPEED;
+        const predX = target.pos.x + target.vel.x * travelTime;
+        const predY = target.pos.y + target.vel.y * travelTime;
+        const aimAngle = Math.atan2(predY - entity.pos.y, predX - entity.pos.x);
+        sim.spawnGrenade(entity, entity.id, aimAngle, { x: predX, y: predY });
+        aiState.fireCooldown = this.scaleCooldown(GRENADER_FIRE_COOLDOWN);
+      }
+    } else {
+      // No target — brake
+      entity.vel.x *= GRENADER_BRAKE_FRICTION;
+      entity.vel.y *= GRENADER_BRAKE_FRICTION;
+    }
+
+    // Clamp to max speed
+    const maxSpeed = GRENADER_SPEED * aiState.moveSpeedScale * this.profile.enemyMoveSpeedMult;
+    const speed = Math.sqrt(entity.vel.x * entity.vel.x + entity.vel.y * entity.vel.y);
+    if (speed > maxSpeed) {
+      entity.vel.x = (entity.vel.x / speed) * maxSpeed;
+      entity.vel.y = (entity.vel.y / speed) * maxSpeed;
+    }
+
+    // Integrate position
+    entity.pos.x += entity.vel.x * dt;
+    entity.pos.y += entity.vel.y * dt;
+    entity.pos.x = Math.max(GRENADER_RADIUS, Math.min(WORLD_WIDTH - GRENADER_RADIUS, entity.pos.x));
+    entity.pos.y = Math.max(GRENADER_RADIUS, Math.min(WORLD_HEIGHT - GRENADER_RADIUS, entity.pos.y));
+
+    // Track facing direction for rendering
+    if (speed > 5) {
+      entity.aimAngle = Math.atan2(entity.vel.y, entity.vel.x);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Dreadnought player assignment — assigns one dreadnought per player
+  // ---------------------------------------------------------------------------
+
+  assignDreadnoughtTargets(sim: Simulation): void {
+    // Collect alive players and alive dreadnoughts
+    const alivePlayers: Entity[] = [];
+    for (const e of sim.entities.values()) {
+      if (e.kind === "player_ship" && e.hp > 0) alivePlayers.push(e);
+    }
+
+    const dreadnoughtStates: AIState[] = [];
+    for (const [entityId, aiState] of this.aiStates) {
+      const entity = sim.entities.get(entityId);
+      if (entity && entity.kind === "dreadnought" && entity.hp > 0) {
+        dreadnoughtStates.push(aiState);
+      }
+    }
+
+    if (alivePlayers.length === 0) {
+      // No players — clear all assignments
+      for (const ds of dreadnoughtStates) ds.assignedPlayerId = null;
+      return;
+    }
+
+    // Round-robin assign players to dreadnoughts
+    for (let i = 0; i < dreadnoughtStates.length; i++) {
+      const playerIdx = i % alivePlayers.length;
+      dreadnoughtStates[i].assignedPlayerId = alivePlayers[playerIdx].id;
+    }
   }
 
   /** Get all alive players within range of an entity */

@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { Entity, PlayerInputData, WORLD_WIDTH, WORLD_HEIGHT, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, GRID_SPACING, PLAYER_MAX_SPEED, PLAYER_ACCEL, PLAYER_BRAKE_FRICTION, SPEED_PER_UPGRADE, ORB_RADIUS, CANNON_LENGTH, CANNON_WIDTH, CANNON_OFFSET_LATERAL, CANNON_SPREAD_ANGLE, BOOST_PARTICLE_THRESHOLD, PLAYER_RADIUS, DREADNOUGHT_TURRET_BASE_ANGLES, DREADNOUGHT_TURRET_OFFSET, DREADNOUGHT_TURRET_COUNT, DREADNOUGHT_TURRET_ARC, DREADNOUGHT_BIG_CANNON_SPEED, DREADNOUGHT_TURRET_BULLET_RADIUS } from "shared";
+import { Entity, PlayerInputData, WORLD_WIDTH, WORLD_HEIGHT, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, GRID_SPACING, PLAYER_MAX_SPEED, PLAYER_ACCEL, PLAYER_BRAKE_FRICTION, SPEED_PER_UPGRADE, ORB_RADIUS, CANNON_LENGTH, CANNON_WIDTH, CANNON_OFFSET_LATERAL, CANNON_SPREAD_ANGLE, BOOST_PARTICLE_THRESHOLD, PLAYER_RADIUS, DREADNOUGHT_TURRET_BASE_ANGLES, DREADNOUGHT_TURRET_OFFSET, DREADNOUGHT_TURRET_COUNT, DREADNOUGHT_TURRET_ARC, DREADNOUGHT_BIG_CANNON_SPEED, DREADNOUGHT_TURRET_BULLET_RADIUS, GRENADE_BLAST_RADIUS } from "shared";
 import { NetClient } from "./net.js";
 import { SnapshotInterpolator, InterpolatedEntity } from "./interpolation.js";
 import { VFXManager } from "./vfx.js";
@@ -33,6 +33,7 @@ export class GameScene extends Phaser.Scene {
   private predictedMaxSpeed = PLAYER_MAX_SPEED;
   private latestBotResources: number | undefined;
   private cannonSprites: Map<string, Phaser.GameObjects.Rectangle[]> = new Map();
+  private grenadeBlastCircles: Map<string, Phaser.GameObjects.Arc> = new Map();
   private localAimAngle = 0;
   private lastShotSoundMs = 0;
   private previousLevel = 1;
@@ -77,6 +78,7 @@ export class GameScene extends Phaser.Scene {
     this.previousEntityHp.clear();
     this.previousEntityKinds.clear();
     this.cannonSprites.clear();
+    this.grenadeBlastCircles.clear();
     this.predictedPos = null;
     this.cameraPos = null;
     this.victoryShown = false;
@@ -496,6 +498,18 @@ export class GameScene extends Phaser.Scene {
               this.vfx.explosion(sprite.x, sprite.y, 0xff6600, 12);
             }
 
+            // Grenade detonation: large blast radius explosion
+            if (this.previousEntityKinds.get(id) === "grenade") {
+              this.vfx.explosion(sprite.x, sprite.y, 0xff4400, 20);
+              // Secondary ring of particles at blast radius edge
+              for (let i = 0; i < 12; i++) {
+                const angle = (Math.PI * 2 * i) / 12;
+                const ox = Math.cos(angle) * GRENADE_BLAST_RADIUS * 0.6;
+                const oy = Math.sin(angle) * GRENADE_BLAST_RADIUS * 0.6;
+                this.vfx.explosion(sprite.x + ox, sprite.y + oy, 0xff8800, 3);
+              }
+            }
+
             // Mothership death: chain explosions over ~2 s before Nemesis arrives
             if (this.previousEntityKinds.get(id) === "mothership") {
               const pos = { x: sprite.x, y: sprite.y };
@@ -528,7 +542,7 @@ export class GameScene extends Phaser.Scene {
         sprite = this.createEntitySprite(entity);
         this.entitySprites.set(entity.id, sprite);
         // Spawn telegraph for non-projectile, non-orb entities
-        if (entity.kind !== "bullet" && entity.kind !== "missile" && entity.kind !== "energy_orb") {
+        if (entity.kind !== "bullet" && entity.kind !== "missile" && entity.kind !== "energy_orb" && entity.kind !== "grenade") {
           this.vfx.spawnTelegraph(entity.pos.x, entity.pos.y, getRadius(entity.kind));
         }
         // Nemesis arrival: large explosion effect at spawn point
@@ -545,7 +559,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       // Boost particles for moving AI entities and remote players
-      if (entity.kind === "minion_ship" || entity.kind === "nemesis" || entity.kind === "phantom_ship" || entity.kind === "dreadnought" ||
+      if (entity.kind === "minion_ship" || entity.kind === "nemesis" || entity.kind === "phantom_ship" || entity.kind === "dreadnought" || entity.kind === "grenader" ||
           (entity.kind === "player_ship" && entity.id !== selfId)) {
         const spd = Math.sqrt(entity.vel.x * entity.vel.x + entity.vel.y * entity.vel.y);
         if (spd > BOOST_PARTICLE_THRESHOLD) {
@@ -555,6 +569,31 @@ export class GameScene extends Phaser.Scene {
             -entity.vel.x / spd, -entity.vel.y / spd,
             color, PLAYER_RADIUS
           );
+        }
+      }
+
+      // Grenade: armed = stopped, show blink + blast radius indicator
+      if (entity.kind === "grenade") {
+        const isArmed = entity.vel.x === 0 && entity.vel.y === 0;
+        if (isArmed) {
+          // Blink the grenade sprite (toggle alpha every ~10 frames)
+          const blinkPhase = Math.floor(Date.now() / 200) % 2;
+          sprite.setAlpha(blinkPhase === 0 ? 1.0 : 0.3);
+
+          // Show blast radius indicator
+          let blastCircle = this.grenadeBlastCircles.get(entity.id);
+          if (!blastCircle) {
+            blastCircle = this.add.circle(entity.pos.x, entity.pos.y, GRENADE_BLAST_RADIUS, 0xff4400, 0);
+            blastCircle.setStrokeStyle(2, 0xff4400, 0.5);
+            blastCircle.setDepth(1);
+            this.grenadeBlastCircles.set(entity.id, blastCircle);
+          }
+          blastCircle.setPosition(entity.pos.x, entity.pos.y);
+          // Pulse the blast radius indicator
+          const pulseAlpha = 0.1 + 0.15 * Math.sin(Date.now() / 150);
+          blastCircle.setFillStyle(0xff4400, pulseAlpha);
+        } else {
+          sprite.setAlpha(0.8);
         }
       }
 
@@ -635,6 +674,11 @@ export class GameScene extends Phaser.Scene {
         if (cannons) {
           cannons.forEach((r) => r.destroy());
           this.cannonSprites.delete(id);
+        }
+        const blastCircle = this.grenadeBlastCircles.get(id);
+        if (blastCircle) {
+          blastCircle.destroy();
+          this.grenadeBlastCircles.delete(id);
         }
       }
     }
@@ -816,6 +860,20 @@ export class GameScene extends Phaser.Scene {
       return img;
     }
 
+    if (entity.kind === "grenader") {
+      const r = getRadius("grenader");
+      const circle = this.add.circle(entity.pos.x, entity.pos.y, r, 0x44aa44);
+      circle.setStrokeStyle(2, 0x88ff00);
+      return circle;
+    }
+
+    if (entity.kind === "grenade") {
+      const r = getRadius("grenade");
+      const circle = this.add.circle(entity.pos.x, entity.pos.y, r, 0x88ff00);
+      circle.setStrokeStyle(1, 0xff4400);
+      return circle;
+    }
+
     if (entity.kind === "mine") {
       const r = getRadius("mine");
       const circle = this.add.circle(entity.pos.x, entity.pos.y, r, 0xff6600);
@@ -977,6 +1035,8 @@ function getColorByKind(kind: string): number {
     case "sub_base": return 0xcc4400;
     case "dreadnought": return 0xcc0000;
     case "mine": return 0xff6600;
+    case "grenader": return 0x44aa44;
+    case "grenade": return 0x88ff00;
     case "energy_orb": return 0x00ffcc;
     default: return 0xffffff;
   }
@@ -999,6 +1059,8 @@ function getColor(entity: Entity): number {
     case "sub_base": return 0xcc4400;
     case "dreadnought": return 0xcc0000;
     case "mine": return 0xff6600;
+    case "grenader": return 0x44aa44;
+    case "grenade": return entity.vel.x === 0 && entity.vel.y === 0 ? 0xff4400 : 0x88ff00;
     case "energy_orb": return 0x00ffcc;
     default: return 0xffffff;
   }
@@ -1018,6 +1080,8 @@ function getRadius(kind: string): number {
     case "sub_base": return 30;
     case "dreadnought": return 36;
     case "mine": return 10;
+    case "grenader": return 14;
+    case "grenade": return 6;
     case "energy_orb": return ORB_RADIUS;
     default: return 8;
   }

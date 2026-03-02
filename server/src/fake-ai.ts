@@ -11,6 +11,7 @@ const FAKE_AI_SPAWN_COOLDOWN_TICKS = 30; // 1s
 const FAKE_AI_PHANTOM_COOLDOWN_TICKS = 300; // 10 s between phantom spawns
 const FAKE_AI_SUB_BASE_TOWER_COOLDOWN_TICKS = 150; // 5s between sub-base tower rebuilds
 const FAKE_AI_DREADNOUGHT_COOLDOWN_TICKS = 600; // 20s between dreadnought attempts
+const FAKE_AI_GRENADER_COOLDOWN_TICKS = 240; // 8s between grenader spawns
 
 export class FakeAI {
   private nextDecisionTick = 0;
@@ -20,6 +21,7 @@ export class FakeAI {
   private nextPhantomTick = 0;
   private nextSubBaseTowerTick = 0;
   private nextDreadnoughtTick = 0;
+  private nextGrenaderTick = 0;
 
   constructor(private readonly profile: DifficultyProfile = getDifficultyProfile("hard")) {}
 
@@ -142,6 +144,18 @@ export class FakeAI {
       );
       if (result.ok) {
         this.nextDreadnoughtTick = sim.tick + this.cooldown(FAKE_AI_DREADNOUGHT_COOLDOWN_TICKS);
+      }
+    }
+
+    // Priority 6: deploy grenaders if allowed.
+    if (this.profile.allowGrenader && economy.balance >= UNIT_COSTS.grenader && sim.tick >= this.nextGrenaderTick) {
+      const result = economy.requestBuild(
+        { unitKind: "grenader" },
+        sim,
+        mothershipPos
+      );
+      if (result.ok) {
+        this.nextGrenaderTick = sim.tick + this.cooldown(FAKE_AI_GRENADER_COOLDOWN_TICKS);
       }
     }
   }
