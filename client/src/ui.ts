@@ -503,7 +503,7 @@ function getMaxHp(entity: Entity): number {
     case "sub_base": return 300;
     case "dreadnought": return 800;
     case "grenader": return 60;
-    case "interceptor": return 25;
+    case "interceptor": return 45;
     default: return 0;
   }
 }

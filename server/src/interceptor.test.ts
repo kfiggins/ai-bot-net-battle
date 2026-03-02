@@ -61,7 +61,7 @@ describe("Interceptor — spawning", () => {
   it("spawns with correct HP", () => {
     const { entity } = makeSimWithInterceptor();
     expect(entity.hp).toBe(INTERCEPTOR_HP);
-    expect(entity.hp).toBe(25);
+    expect(entity.hp).toBe(45);
   });
 
   it("spawns on the enemy team", () => {

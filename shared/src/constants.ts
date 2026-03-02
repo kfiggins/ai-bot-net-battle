@@ -273,7 +273,7 @@ export const GRENADE_TRAVEL_TTL = 90;               // 3 seconds max travel befo
 export const GRENADE_ARM_DISTANCE = 20;             // px — arms when this close to target
 
 // Interceptor — bullet-dodging hunter that targets assigned players
-export const INTERCEPTOR_HP = 25;
+export const INTERCEPTOR_HP = 45;
 export const INTERCEPTOR_RADIUS = 11;
 export const INTERCEPTOR_SPEED = 250;                  // px/s — between minion (120) and phantom (450)
 export const INTERCEPTOR_ACCEL = 600;                  // px/s² — snappy for responsive dodging

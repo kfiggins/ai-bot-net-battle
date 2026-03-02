@@ -54,6 +54,7 @@ export class Economy {
 
   constructor(profile: DifficultyProfile = getDifficultyProfile("hard")) {
     this.profile = profile;
+    this.balance = STARTING_BALANCE * (profile.startingBalanceMult ?? 1);
     this.incomePerTick = INCOME_PER_TICK * profile.enemyIncomeMult;
     this.buildCooldownTicks = Math.max(1, Math.round(BUILD_COOLDOWN_TICKS * profile.enemyBuildCooldownMult));
   }
@@ -66,7 +67,8 @@ export class Economy {
 
     // Collect resources from minion orb pickups
     if (sim.pendingEnemyResources > 0) {
-      this.balance += sim.pendingEnemyResources;
+      const orbMult = this.profile.orbResourceMult ?? 1;
+      this.balance += sim.pendingEnemyResources * orbMult;
       sim.pendingEnemyResources = 0;
     }
 

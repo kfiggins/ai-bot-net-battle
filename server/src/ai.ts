@@ -1171,9 +1171,38 @@ export class AIManager {
       return;
     }
 
-    for (let i = 0; i < interceptorStates.length; i++) {
-      const playerIdx = i % alivePlayers.length;
-      interceptorStates[i].assignedPlayerId = alivePlayers[playerIdx].id;
+    // Track which players already have an interceptor assigned
+    const assignedPlayerIds = new Set<string>();
+
+    // Keep existing valid assignments — only clear if assigned player is dead
+    for (const s of interceptorStates) {
+      if (s.assignedPlayerId) {
+        const assigned = sim.entities.get(s.assignedPlayerId);
+        if (assigned && assigned.hp > 0 && assigned.kind === "player_ship") {
+          assignedPlayerIds.add(s.assignedPlayerId);
+          continue; // keep this assignment
+        }
+      }
+      s.assignedPlayerId = null; // clear invalid assignment
+    }
+
+    // Assign unassigned interceptors to players with fewest interceptors
+    const unassigned = interceptorStates.filter((s) => s.assignedPlayerId === null);
+    for (const s of unassigned) {
+      // Pick the player with the fewest interceptors currently assigned
+      let bestPlayer: Entity | null = null;
+      let bestCount = Infinity;
+      for (const p of alivePlayers) {
+        const count = interceptorStates.filter((is) => is.assignedPlayerId === p.id).length;
+        if (count < bestCount) {
+          bestCount = count;
+          bestPlayer = p;
+        }
+      }
+      if (bestPlayer) {
+        s.assignedPlayerId = bestPlayer.id;
+        assignedPlayerIds.add(bestPlayer.id);
+      }
     }
   }
 

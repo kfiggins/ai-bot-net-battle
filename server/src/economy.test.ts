@@ -18,7 +18,7 @@ import {
 
 // Use normal profile for economy mechanic tests (cap/income multipliers = 1.0 on normal would be wrong,
 // so we use a custom baseline profile to isolate economy logic from difficulty tuning)
-const baselineProfile = { ...getDifficultyProfile("hard"), enemyCapMult: 1, enemyIncomeMult: 1, perPlayerIncomeMult: 0 };
+const baselineProfile = { ...getDifficultyProfile("hard"), enemyCapMult: 1, enemyIncomeMult: 1, perPlayerIncomeMult: 0, startingBalanceMult: 1, orbResourceMult: 1 };
 
 describe("Economy", () => {
   let economy: Economy;

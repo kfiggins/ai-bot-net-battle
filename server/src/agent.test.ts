@@ -8,7 +8,10 @@ import {
   UNIT_COSTS,
   STARTING_BALANCE,
   WORLD_HEIGHT,
+  getDifficultyProfile,
 } from "shared";
+
+const baselineProfile = { ...getDifficultyProfile("hard"), startingBalanceMult: 1, orbResourceMult: 1 };
 
 describe("AgentAPI", () => {
   let agent: AgentAPI;
@@ -18,7 +21,7 @@ describe("AgentAPI", () => {
   beforeEach(() => {
     agent = new AgentAPI();
     sim = new Simulation();
-    economy = new Economy();
+    economy = new Economy(baselineProfile);
   });
 
   describe("spawn_ship command", () => {

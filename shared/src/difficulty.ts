@@ -23,6 +23,8 @@ export interface DifficultyProfile {
   grenaderPerPlayer?: boolean;
   interceptorPerPlayer?: boolean;
   perPlayerIncomeMult?: number; // extra income fraction per additional player (e.g. 0.15 = +15%/player)
+  startingBalanceMult?: number; // multiplier for STARTING_BALANCE (default 1)
+  orbResourceMult?: number; // multiplier for MINION_ORB_RESOURCE (default 1)
   nemesisHpMult?: number; // base Nemesis HP multiplier (e.g. 1.25 = 1500 HP)
   nemesisPerPlayerHpMult?: number; // extra HP fraction per additional player (e.g. 0.25 = +300 HP/player)
   perUnitCapMult?: Partial<Record<"minion_ship" | "tower" | "missile_tower" | "phantom_ship" | "dreadnought" | "grenader" | "interceptor", number>>;
@@ -111,7 +113,7 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
     key: "hard",
     label: "Hard",
     playerBaseHpMult: 0.85,
-    enemyIncomeMult: 1,
+    enemyIncomeMult: 1.5,
     enemyBuildCooldownMult: 1,
     subBaseMaxTowers: 2,
     enemyCapMult: 1.3,
@@ -129,7 +131,9 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
     phantomPerPlayer: true,
     grenaderPerPlayer: true,
     interceptorPerPlayer: true,
-    perPlayerIncomeMult: 0.15,
+    perPlayerIncomeMult: 0.25,
+    startingBalanceMult: 5,
+    orbResourceMult: 2,
     nemesisHpMult: 1.25,
     nemesisPerPlayerHpMult: 0.25,
     perUnitCapMult: {
