@@ -69,7 +69,12 @@ export class Room {
   constructor(roomId: string) {
     this.roomId = roomId;
     const profile = getDifficultyProfile(this.difficulty);
-    this.sim = new Simulation(Math.round(100 * profile.playerBaseHpMult));
+    this.sim = new Simulation(
+      Math.round(100 * profile.playerBaseHpMult),
+      profile.levelUpHealFraction,
+      profile.regenHealFraction,
+      Math.round(profile.regenTriggerSecs * TICK_RATE),
+    );
     this.ai = new AIManager(profile);
     this.economy = new Economy(profile);
     this.agent = new AgentAPI();
@@ -246,7 +251,12 @@ export class Room {
 
     // Reset simulation and subsystems
     const profile = getDifficultyProfile(this.difficulty);
-    this.sim = new Simulation(Math.round(100 * profile.playerBaseHpMult));
+    this.sim = new Simulation(
+      Math.round(100 * profile.playerBaseHpMult),
+      profile.levelUpHealFraction,
+      profile.regenHealFraction,
+      Math.round(profile.regenTriggerSecs * TICK_RATE),
+    );
     this.sim.initOrbs();
     this.ai = new AIManager(profile);
     this.economy = new Economy(profile);

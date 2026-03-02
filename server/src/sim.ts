@@ -121,6 +121,7 @@ export interface PlayerState {
   cannons: number;
   pendingUpgrades: number;
   baseHp: number;
+  lastDamageTick: number;
 }
 
 export interface BulletState {
@@ -168,10 +169,17 @@ export class Simulation {
   pendingEnemyResources = 0;
   // playerId → enemyEntityId → ticksRemaining immunity
   private bodyCollisionCooldowns: Map<string, Map<string, number>> = new Map();
+  // entityId → PlayerState for O(1) damage tracking
+  private playerByEntityId: Map<string, PlayerState> = new Map();
 
   private dt = 1 / TICK_RATE;
 
-  constructor(private readonly playerBaseHp: number = PLAYER_HP) {}
+  constructor(
+    private readonly playerBaseHp: number = PLAYER_HP,
+    private readonly levelUpHealFraction: number = 1.0,
+    private readonly regenHealFraction: number = 0.05,
+    private readonly regenTriggerTicks: number = 7 * TICK_RATE,
+  ) {}
 
   addPlayer(playerId: string, label?: string, playerIndex?: number): Entity {
     const entityId = uuid();
@@ -187,7 +195,7 @@ export class Simulation {
       playerIndex,
     };
     this.entities.set(entityId, entity);
-    this.players.set(playerId, {
+    const playerState: PlayerState = {
       id: playerId,
       entityId,
       input: {
@@ -210,13 +218,17 @@ export class Simulation {
       cannons: 1,
       pendingUpgrades: 0,
       baseHp: this.playerBaseHp,
-    });
+      lastDamageTick: 0,
+    };
+    this.players.set(playerId, playerState);
+    this.playerByEntityId.set(entityId, playerState);
     return entity;
   }
 
   removePlayer(playerId: string): void {
     const player = this.players.get(playerId);
     if (player) {
+      this.playerByEntityId.delete(player.entityId);
       this.entities.delete(player.entityId);
       this.players.delete(playerId);
     }
@@ -274,8 +286,33 @@ export class Simulation {
     this.updateBodyCollisionCooldowns();
     this.checkBodyCollisions();
     this.checkOrbPickups();
+    this.updatePlayerRegen();
     this.removeDeadEntities();
     this.respawnDeadPlayers();
+  }
+
+  private notifyPlayerDamaged(entityId: string): void {
+    const player = this.playerByEntityId.get(entityId);
+    if (player) player.lastDamageTick = this.tick;
+  }
+
+  private updatePlayerRegen(): void {
+    for (const player of this.players.values()) {
+      const entity = this.entities.get(player.entityId);
+      if (!entity || entity.hp <= 0) continue;
+
+      const maxHp = getEffectiveMaxHp(player);
+      if (entity.hp >= maxHp) continue;
+
+      const ticksSinceDamage = this.tick - player.lastDamageTick;
+      if (ticksSinceDamage < this.regenTriggerTicks) continue;
+
+      // Apply regenHealFraction of max HP every second (TICK_RATE ticks)
+      const ticksIntoRegen = ticksSinceDamage - this.regenTriggerTicks;
+      if (ticksIntoRegen % TICK_RATE === 0) {
+        entity.hp = Math.min(maxHp, entity.hp + maxHp * this.regenHealFraction);
+      }
+    }
   }
 
   private spawnOrbs(): void {
@@ -366,11 +403,11 @@ export class Simulation {
         player.pendingUpgrades++;
       }
 
-      // Heal to new max HP on level up
+      // Heal on level up — amount depends on difficulty
       const maxHp = getEffectiveMaxHp(player);
       const entity = this.entities.get(player.entityId);
       if (entity) {
-        entity.hp = maxHp;
+        entity.hp = Math.min(maxHp, entity.hp + maxHp * this.levelUpHealFraction);
       }
     }
 
@@ -419,6 +456,7 @@ export class Simulation {
         playerIndex: player.playerIndex,
       };
       this.entities.set(entity.id, entity);
+      this.playerByEntityId.set(entity.id, player);
 
       // Reset XP, level, and upgrades
       player.xp = 0;
@@ -780,6 +818,7 @@ export class Simulation {
 
         if (circlesOverlap(mineEntity.pos, MINE_TRIGGER_RADIUS, target.pos, PLAYER_RADIUS)) {
           target.hp -= mineState.damage;
+          this.notifyPlayerDamaged(target.id);
           mineEntity.hp = 0;
           break;
         }
@@ -831,6 +870,7 @@ export class Simulation {
 
       if (circlesOverlap(grenadeEntity.pos, grenade.blastRadius, target.pos, PLAYER_RADIUS)) {
         target.hp -= grenade.damage;
+        this.notifyPlayerDamaged(target.id);
         if (target.hp <= 0) this.awardKillXP(grenade.ownerId, target.kind);
       }
     }
@@ -875,6 +915,7 @@ export class Simulation {
         if (circlesOverlap(bulletEntity.pos, BULLET_RADIUS, target.pos, targetRadius)) {
           const damage = applyDirectionalArmor(target, bulletEntity.pos, bulletState.damage);
           target.hp -= damage;
+          if (target.kind === "player_ship") this.notifyPlayerDamaged(target.id);
           if (target.hp <= 0) this.awardKillXP(bulletState.ownerId, target.kind);
           bulletEntity.hp = 0;
           break;
@@ -898,6 +939,7 @@ export class Simulation {
         if (circlesOverlap(missileEntity.pos, MISSILE_RADIUS, target.pos, targetRadius)) {
           const damage = applyDirectionalArmor(target, missileEntity.pos, missileState.damage);
           target.hp -= damage;
+          if (target.kind === "player_ship") this.notifyPlayerDamaged(target.id);
           if (target.hp <= 0) this.awardKillXP(missileState.ownerId, target.kind);
           missileEntity.hp = 0;
           break;
@@ -977,6 +1019,7 @@ export class Simulation {
           enemy.kind === "interceptor" ? INTERCEPTOR_BODY_COLLISION_DAMAGE :
           BODY_COLLISION_DAMAGE;
         playerEntity.hp -= damage;
+        player.lastDamageTick = this.tick;
         cooldowns.set(enemyId, BODY_COLLISION_COOLDOWN_TICKS);
       }
     }

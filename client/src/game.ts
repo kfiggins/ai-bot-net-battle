@@ -60,6 +60,8 @@ export class GameScene extends Phaser.Scene {
     this.load.image("spaceship_black", "assets/spaceship_black.png");
     // Phantom ship — place your sprite at client/public/assets/phantom.png
     this.load.image("phantom", "assets/phantom.png");
+    this.load.image("grenade_ship", "assets/grenade_ship.png");
+    this.load.image("interceptor", "assets/interceptor.png");
     this.load.image("sub_base", "assets/sub_base.png");
     this.load.image("mothership", "assets/mothership.png");
     this.load.image("dreadnought", "assets/dreadnought.png");
@@ -618,7 +620,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       // Plasma bullet / missile / minion / phantom rotation — image points up, rotate to match travel direction
-      if ((entity.kind === "bullet" || entity.kind === "missile" || entity.kind === "minion_ship" || entity.kind === "phantom_ship") && sprite instanceof Phaser.GameObjects.Image) {
+      if ((entity.kind === "bullet" || entity.kind === "missile" || entity.kind === "minion_ship" || entity.kind === "phantom_ship" || entity.kind === "grenader" || entity.kind === "interceptor") && sprite instanceof Phaser.GameObjects.Image) {
         const travelAngle = Math.atan2(entity.vel.y, entity.vel.x);
         sprite.setRotation(travelAngle + Math.PI / 2);
       }
@@ -861,17 +863,15 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (entity.kind === "grenader") {
-      const r = getRadius("grenader");
-      const circle = this.add.circle(entity.pos.x, entity.pos.y, r, 0x44aa44);
-      circle.setStrokeStyle(2, 0x88ff00);
-      return circle;
+      const img = this.add.image(entity.pos.x, entity.pos.y, "grenade_ship");
+      img.setDisplaySize(50, 50);
+      return img;
     }
 
     if (entity.kind === "interceptor") {
-      const r = getRadius("interceptor");
-      const circle = this.add.circle(entity.pos.x, entity.pos.y, r, 0xcc00cc);
-      circle.setStrokeStyle(2, 0xff44ff);
-      return circle;
+      const img = this.add.image(entity.pos.x, entity.pos.y, "interceptor");
+      img.setDisplaySize(35, 35);
+      return img;
     }
 
     if (entity.kind === "grenade") {

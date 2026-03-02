@@ -27,6 +27,9 @@ export interface DifficultyProfile {
   orbResourceMult?: number; // multiplier for MINION_ORB_RESOURCE (default 1)
   nemesisHpMult?: number; // base Nemesis HP multiplier (e.g. 1.25 = 1500 HP)
   nemesisPerPlayerHpMult?: number; // extra HP fraction per additional player (e.g. 0.25 = +300 HP/player)
+  levelUpHealFraction: number;  // fraction of max HP restored on level-up (1.0 = full heal)
+  regenTriggerSecs: number;     // seconds of no damage before regen activates
+  regenHealFraction: number;    // fraction of max HP healed per second once out-of-combat
   perUnitCapMult?: Partial<Record<"minion_ship" | "tower" | "missile_tower" | "phantom_ship" | "dreadnought" | "grenader" | "interceptor", number>>;
   initialSpawns: {
     minions: number;
@@ -58,6 +61,9 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
     allowDreadnought: false,
     allowGrenader: false,
     allowInterceptor: false,
+    levelUpHealFraction: 1.0,
+    regenTriggerSecs: 7,
+    regenHealFraction: 0.05,
     perUnitCapMult: {
       minion_ship: 0.5,
       tower: 0.5,
@@ -92,6 +98,9 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
     allowDreadnought: true,
     allowGrenader: true,
     allowInterceptor: false,
+    levelUpHealFraction: 0.5,
+    regenTriggerSecs: 10,
+    regenHealFraction: 0.03,
     perUnitCapMult: {
       minion_ship: 0.75,
       tower: 0.8,
@@ -127,6 +136,9 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
     allowDreadnought: true,
     allowGrenader: true,
     allowInterceptor: true,
+    levelUpHealFraction: 0.25,
+    regenTriggerSecs: 15,
+    regenHealFraction: 0.01,
     dreadnoughtPerPlayer: true,
     phantomPerPlayer: true,
     grenaderPerPlayer: true,

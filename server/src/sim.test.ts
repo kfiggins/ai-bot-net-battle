@@ -2078,3 +2078,196 @@ describe("player right-click missile", () => {
     expect(ps.missileCooldown).toBe(0);
   });
 });
+
+describe("level-up heal fraction", () => {
+  it("heals 100% of max HP on level-up for beginner (fraction=1.0)", () => {
+    const sim = new Simulation(100, 1.0);
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    const entity = sim.entities.get(ps.entityId)!;
+
+    // Damage the player then level up
+    entity.hp = 10;
+    sim.awardXP(ps, xpForLevel(1));
+
+    expect(ps.level).toBe(2);
+    expect(entity.hp).toBe(getEffectiveMaxHp(ps));
+  });
+
+  it("heals 50% of max HP on level-up for normal (fraction=0.5)", () => {
+    const sim = new Simulation(100, 0.5);
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    const entity = sim.entities.get(ps.entityId)!;
+
+    const maxHp = getEffectiveMaxHp(ps);
+    entity.hp = 10;
+    sim.awardXP(ps, xpForLevel(1));
+
+    expect(ps.level).toBe(2);
+    expect(entity.hp).toBeCloseTo(10 + maxHp * 0.5);
+  });
+
+  it("heals 25% of max HP on level-up for hard (fraction=0.25)", () => {
+    const sim = new Simulation(100, 0.25);
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    const entity = sim.entities.get(ps.entityId)!;
+
+    const maxHp = getEffectiveMaxHp(ps);
+    entity.hp = 10;
+    sim.awardXP(ps, xpForLevel(1));
+
+    expect(ps.level).toBe(2);
+    expect(entity.hp).toBeCloseTo(10 + maxHp * 0.25);
+  });
+
+  it("does not overheal beyond max HP", () => {
+    const sim = new Simulation(100, 1.0);
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    const entity = sim.entities.get(ps.entityId)!;
+
+    // Already at full HP
+    entity.hp = getEffectiveMaxHp(ps);
+    sim.awardXP(ps, xpForLevel(1));
+
+    expect(entity.hp).toBe(getEffectiveMaxHp(ps));
+  });
+});
+
+describe("out-of-combat regeneration", () => {
+  // Helper: advance sim by N ticks without triggering any damage
+  function advanceTicks(sim: Simulation, n: number) {
+    for (let i = 0; i < n; i++) sim.update();
+  }
+
+  it("does not regen before the trigger window expires", () => {
+    // 5% per sec, 7-sec trigger (210 ticks at 30 Hz)
+    const sim = new Simulation(100, 1.0, 0.05, 7 * TICK_RATE);
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    const entity = sim.entities.get(ps.entityId)!;
+
+    entity.hp = 50;
+    ps.lastDamageTick = 0;
+    // Advance to one tick before the trigger
+    advanceTicks(sim, 7 * TICK_RATE - 1);
+
+    expect(entity.hp).toBe(50);
+  });
+
+  it("starts regen exactly at the trigger tick", () => {
+    const sim = new Simulation(100, 1.0, 0.05, 7 * TICK_RATE);
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    const entity = sim.entities.get(ps.entityId)!;
+
+    const maxHp = getEffectiveMaxHp(ps);
+    entity.hp = 50;
+    ps.lastDamageTick = 0;
+    // Advance exactly to the trigger tick (first regen fires here)
+    advanceTicks(sim, 7 * TICK_RATE);
+
+    expect(entity.hp).toBeCloseTo(50 + maxHp * 0.05);
+  });
+
+  it("heals 5% per second on beginner after trigger", () => {
+    const sim = new Simulation(100, 1.0, 0.05, 7 * TICK_RATE);
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    const entity = sim.entities.get(ps.entityId)!;
+
+    const maxHp = getEffectiveMaxHp(ps);
+    entity.hp = 50;
+    ps.lastDamageTick = 0;
+    // Trigger + 2 more seconds = 3 regen ticks total
+    advanceTicks(sim, 7 * TICK_RATE + 2 * TICK_RATE);
+
+    expect(entity.hp).toBeCloseTo(50 + maxHp * 0.05 * 3);
+  });
+
+  it("heals 3% per second on normal after trigger", () => {
+    const sim = new Simulation(100, 1.0, 0.03, 10 * TICK_RATE);
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    const entity = sim.entities.get(ps.entityId)!;
+
+    const maxHp = getEffectiveMaxHp(ps);
+    entity.hp = 50;
+    ps.lastDamageTick = 0;
+    // Trigger + 2 more seconds = 3 regen ticks total
+    advanceTicks(sim, 10 * TICK_RATE + 2 * TICK_RATE);
+
+    expect(entity.hp).toBeCloseTo(50 + maxHp * 0.03 * 3);
+  });
+
+  it("heals 1% per second on hard after trigger", () => {
+    const sim = new Simulation(100, 1.0, 0.01, 15 * TICK_RATE);
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    const entity = sim.entities.get(ps.entityId)!;
+
+    const maxHp = getEffectiveMaxHp(ps);
+    entity.hp = 50;
+    ps.lastDamageTick = 0;
+    // Trigger + 2 more seconds = 3 regen ticks total
+    advanceTicks(sim, 15 * TICK_RATE + 2 * TICK_RATE);
+
+    expect(entity.hp).toBeCloseTo(50 + maxHp * 0.01 * 3);
+  });
+
+  it("does not overheal beyond max HP", () => {
+    const sim = new Simulation(100, 1.0, 0.05, 7 * TICK_RATE);
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    const entity = sim.entities.get(ps.entityId)!;
+
+    const maxHp = getEffectiveMaxHp(ps);
+    entity.hp = maxHp - 1; // just below max
+    ps.lastDamageTick = 0;
+    // Advance well past trigger + many regen ticks
+    advanceTicks(sim, 7 * TICK_RATE + 60 * TICK_RATE);
+
+    expect(entity.hp).toBe(maxHp);
+  });
+
+  it("resets regen timer when player takes damage", () => {
+    const sim = new Simulation(100, 1.0, 0.05, 7 * TICK_RATE);
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    const entity = sim.entities.get(ps.entityId)!;
+
+    entity.hp = 50;
+    ps.lastDamageTick = 0;
+    // Advance past the trigger so regen starts
+    advanceTicks(sim, 7 * TICK_RATE);
+    const hpAfterFirstRegen = entity.hp;
+    expect(hpAfterFirstRegen).toBeGreaterThan(50);
+
+    // Simulate damage resetting the timer at the current tick
+    ps.lastDamageTick = sim.tick;
+    entity.hp = 50;
+    // Advance just past old trigger — should NOT regen yet since timer reset
+    advanceTicks(sim, 7 * TICK_RATE - 1);
+
+    expect(entity.hp).toBe(50);
+  });
+
+  it("does not regen while entity hp is 0 (respawns at baseHp, not healed)", () => {
+    // trigger=1 tick so regen would fire immediately if entity were alive
+    const sim = new Simulation(100, 1.0, 0.05, 1);
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    const entity = sim.entities.get(ps.entityId)!;
+
+    entity.hp = 0; // mark as dead before update
+    ps.lastDamageTick = 0;
+    sim.update(); // removeDeadEntities + respawnDeadPlayers run in same tick
+
+    // Respawned entity exists and starts at baseHp, not regen-boosted
+    const respawned = sim.entities.get(ps.entityId)!;
+    expect(respawned).toBeDefined();
+    expect(respawned.hp).toBe(ps.baseHp);
+  });
+});
