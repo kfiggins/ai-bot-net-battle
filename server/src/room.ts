@@ -342,8 +342,11 @@ export class Room {
     }
 
     if (profile.allowPhantoms) {
+      const phantomCount = profile.phantomPerPlayer
+        ? profile.initialSpawns.phantoms * this.playerCount
+        : profile.initialSpawns.phantoms;
       const angles = [0, (2 * Math.PI) / 3, (4 * Math.PI) / 3];
-      for (let i = 0; i < profile.initialSpawns.phantoms; i++) {
+      for (let i = 0; i < phantomCount; i++) {
         const angle = angles[i % angles.length];
         const p = this.sim.spawnEnemy("phantom_ship", cx + Math.cos(angle) * 220, cy + Math.sin(angle) * 220);
         this.ai.registerEntity(p.id);
@@ -366,8 +369,11 @@ export class Room {
     }
 
     if (profile.allowGrenader && profile.initialSpawns.grenader) {
+      const grenaderCount = profile.grenaderPerPlayer
+        ? profile.initialSpawns.grenader * this.playerCount
+        : profile.initialSpawns.grenader;
       const angles = [0, Math.PI / 2, Math.PI, (3 * Math.PI) / 2];
-      for (let i = 0; i < profile.initialSpawns.grenader; i++) {
+      for (let i = 0; i < grenaderCount; i++) {
         const angle = angles[i % angles.length];
         const g = this.sim.spawnEnemy("grenader", cx + Math.cos(angle) * 300, cy + Math.sin(angle) * 300);
         this.ai.registerEntity(g.id);
@@ -393,14 +399,17 @@ export class Room {
         this.ai.assignDreadnoughtTargets(this.sim);
       }
 
-      // Set dynamic economy state from sub-base bonuses before build processing
+      // Set dynamic state from player count for per-player scaling
+      this.economy.playerCount = this.playerCount;
+      this.boss.playerCount = this.playerCount;
       const aliveSubBases = this.boss.getAliveSubBaseCount(this.sim);
+      const extraPerPlayer = Math.max(0, this.playerCount - 1);
       this.economy.dynamicCapBonuses = {
         minion_ship: this.boss.getMinionCapBonus(this.sim),
-        phantom_ship: this.boss.getPhantomCapBonus(this.sim),
-        grenader: aliveSubBases,
+        phantom_ship: this.boss.getPhantomCapBonus(this.sim) + (profile.phantomPerPlayer ? extraPerPlayer : 0),
+        grenader: aliveSubBases + (profile.grenaderPerPlayer ? extraPerPlayer : 0),
         // Hard mode: dreadnought cap = playerCount (base cap is 1, so add extra)
-        ...(profile.dreadnoughtPerPlayer ? { dreadnought: Math.max(0, this.playerCount - 1) } : {}),
+        ...(profile.dreadnoughtPerPlayer ? { dreadnought: extraPerPlayer } : {}),
       };
       this.economy.towerAnchors = Array.from(this.boss.subBases.values())
         .filter(sb => this.sim.entities.has(sb.entityId))

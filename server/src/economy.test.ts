@@ -13,7 +13,12 @@ import {
   TOWER_MAX_SPAWN_DISTANCE,
   MINION_ORB_RESOURCE,
   SUB_BASE_TOWER_RANGE,
+  getDifficultyProfile,
 } from "shared";
+
+// Use normal profile for economy mechanic tests (cap/income multipliers = 1.0 on normal would be wrong,
+// so we use a custom baseline profile to isolate economy logic from difficulty tuning)
+const baselineProfile = { ...getDifficultyProfile("hard"), enemyCapMult: 1, enemyIncomeMult: 1, perPlayerIncomeMult: 0 };
 
 describe("Economy", () => {
   let economy: Economy;
@@ -21,7 +26,7 @@ describe("Economy", () => {
   let ai: AIManager;
 
   beforeEach(() => {
-    economy = new Economy();
+    economy = new Economy(baselineProfile);
     sim = new Simulation();
     ai = new AIManager();
   });

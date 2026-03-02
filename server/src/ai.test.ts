@@ -20,6 +20,7 @@ import {
   ENEMY_AGGRO_RANGE,
   ENEMY_DEAGGRO_RANGE,
   ENEMY_PATROL_SPEED,
+  getDifficultyProfile,
 } from "shared";
 
 /** Helper: register entity with AI and force fire cooldown to 0 for deterministic tests */
@@ -28,13 +29,23 @@ function registerReady(ai: AIManager, entityId: string): void {
   ai.aiStates.get(entityId)!.fireCooldown = 0;
 }
 
+// Use baseline profile (1.0x multipliers) for mechanic tests
+const baselineProfile = {
+  ...getDifficultyProfile("hard"),
+  enemyFireRateMult: 1,
+  enemyRangeMult: 1,
+  enemyMoveSpeedMult: 1,
+  enemyAccelMult: 1,
+  enemyAggroMult: 1,
+};
+
 describe("AIManager", () => {
   let sim: Simulation;
   let ai: AIManager;
 
   beforeEach(() => {
     sim = new Simulation();
-    ai = new AIManager();
+    ai = new AIManager(baselineProfile);
   });
 
   describe("minion_ship AI", () => {
@@ -641,7 +652,7 @@ describe("Simulation.spawnEnemy", () => {
 describe("combat integration", () => {
   it("player bullets can destroy minions", () => {
     const sim = new Simulation();
-    const ai = new AIManager();
+    const ai = new AIManager(baselineProfile);
 
     const player = sim.addPlayer("p1");
     player.pos.x = 100;
@@ -673,7 +684,7 @@ describe("combat integration", () => {
 
   it("player bullets can destroy towers", () => {
     const sim = new Simulation();
-    const ai = new AIManager();
+    const ai = new AIManager(baselineProfile);
 
     const player = sim.addPlayer("p1");
     player.pos.x = 100;
@@ -698,7 +709,7 @@ describe("combat integration", () => {
 
   it("enemy bullets can damage players", () => {
     const sim = new Simulation();
-    const ai = new AIManager();
+    const ai = new AIManager(baselineProfile);
 
     const player = sim.addPlayer("p1");
     player.pos.x = 400;

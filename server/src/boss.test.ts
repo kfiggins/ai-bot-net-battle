@@ -2,14 +2,17 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { BossManager } from "./boss.js";
 import { Simulation } from "./sim.js";
 import { AIManager } from "./ai.js";
-import { MOTHERSHIP_HP, NEMESIS_HP, NEMESIS_RADIUS, ENEMY_TEAM, WORLD_WIDTH, WORLD_HEIGHT, SUB_BASE_HP, SUB_BASE_POP_MINIONS, SUB_BASE_POP_PHANTOMS } from "shared";
+import { MOTHERSHIP_HP, NEMESIS_HP, NEMESIS_RADIUS, ENEMY_TEAM, WORLD_WIDTH, WORLD_HEIGHT, SUB_BASE_HP, SUB_BASE_POP_MINIONS, SUB_BASE_POP_PHANTOMS, getDifficultyProfile } from "shared";
+
+// Use a baseline profile that keeps Nemesis HP at base value for mechanic tests
+const baselineProfile = { ...getDifficultyProfile("hard"), nemesisHpMult: 1, nemesisPerPlayerHpMult: 0, enemyFireRateMult: 1 };
 
 describe("BossManager", () => {
   let boss: BossManager;
   let sim: Simulation;
 
   beforeEach(() => {
-    boss = new BossManager();
+    boss = new BossManager(baselineProfile);
     sim = new Simulation();
   });
 

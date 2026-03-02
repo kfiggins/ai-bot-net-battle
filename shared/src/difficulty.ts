@@ -18,6 +18,11 @@ export interface DifficultyProfile {
   allowDreadnought: boolean;
   allowGrenader: boolean;
   dreadnoughtPerPlayer?: boolean;
+  phantomPerPlayer?: boolean;
+  grenaderPerPlayer?: boolean;
+  perPlayerIncomeMult?: number; // extra income fraction per additional player (e.g. 0.15 = +15%/player)
+  nemesisHpMult?: number; // base Nemesis HP multiplier (e.g. 1.25 = 1500 HP)
+  nemesisPerPlayerHpMult?: number; // extra HP fraction per additional player (e.g. 0.25 = +300 HP/player)
   perUnitCapMult?: Partial<Record<"minion_ship" | "tower" | "missile_tower" | "phantom_ship" | "dreadnought" | "grenader", number>>;
   initialSpawns: {
     minions: number;
@@ -98,21 +103,26 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
   hard: {
     key: "hard",
     label: "Hard",
-    playerBaseHpMult: 1,
+    playerBaseHpMult: 0.85,
     enemyIncomeMult: 1,
     enemyBuildCooldownMult: 1,
     subBaseMaxTowers: 2,
-    enemyCapMult: 1,
-    enemyRangeMult: 1,
-    enemyFireRateMult: 1,
-    enemyMoveSpeedMult: 1,
+    enemyCapMult: 1.3,
+    enemyRangeMult: 1.15,
+    enemyFireRateMult: 1.2,
+    enemyMoveSpeedMult: 1.1,
     enemyAccelMult: 1,
-    enemyAggroMult: 1,
+    enemyAggroMult: 1.25,
     allowMissileTowers: true,
     allowPhantoms: true,
     allowDreadnought: true,
     allowGrenader: true,
     dreadnoughtPerPlayer: true,
+    phantomPerPlayer: true,
+    grenaderPerPlayer: true,
+    perPlayerIncomeMult: 0.15,
+    nemesisHpMult: 1.25,
+    nemesisPerPlayerHpMult: 0.25,
     perUnitCapMult: {
       minion_ship: 1,
       tower: 1,
@@ -122,12 +132,12 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
       grenader: 1,
     },
     initialSpawns: {
-      minions: 2,
+      minions: 4,
       towers: 2,
       missileTowers: 1,
-      phantoms: 3,
+      phantoms: 1,
       dreadnought: 1,
-      grenader: 2,
+      grenader: 1,
     },
   },
 };

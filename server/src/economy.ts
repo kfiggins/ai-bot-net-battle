@@ -47,9 +47,10 @@ export class Economy {
   private readonly buildCooldownTicks: number;
   recentlyBuilt: RecentBuild[] = [];
 
-  // Dynamic state set each tick by room (sub-base bonuses)
+  // Dynamic state set each tick by room (sub-base bonuses, player count)
   dynamicCapBonuses: Record<string, number> = {};
   towerAnchors: Array<{ x: number; y: number; maxDist: number }> = [];
+  playerCount = 1;
 
   constructor(profile: DifficultyProfile = getDifficultyProfile("hard")) {
     this.profile = profile;
@@ -58,8 +59,10 @@ export class Economy {
   }
 
   update(sim: Simulation, ai: AIManager): void {
-    // Accrue income
-    this.balance += this.incomePerTick;
+    // Accrue income (scaled by player count if profile enables it)
+    const perPlayerMult = this.profile.perPlayerIncomeMult ?? 0;
+    const incomeMult = 1 + perPlayerMult * Math.max(0, this.playerCount - 1);
+    this.balance += this.incomePerTick * incomeMult;
 
     // Collect resources from minion orb pickups
     if (sim.pendingEnemyResources > 0) {

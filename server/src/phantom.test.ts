@@ -13,15 +13,27 @@ import {
   WORLD_WIDTH,
   WORLD_HEIGHT,
   ENEMY_TEAM,
+  getDifficultyProfile,
 } from "shared";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
+// Baseline profile with 1.0x multipliers for mechanic tests
+const baselineProfile = {
+  ...getDifficultyProfile("hard"),
+  enemyCapMult: 1,
+  enemyFireRateMult: 1,
+  enemyRangeMult: 1,
+  enemyMoveSpeedMult: 1,
+  enemyAccelMult: 1,
+  enemyAggroMult: 1,
+};
+
 function makeSimWithMothership(): { sim: Simulation; ai: AIManager } {
   const sim = new Simulation();
-  const ai = new AIManager();
+  const ai = new AIManager(baselineProfile);
   const msX = WORLD_WIDTH / 2;
   const msY = WORLD_HEIGHT / 2;
   // Simulate mothership at center so patrol center is set
@@ -303,7 +315,7 @@ describe("Phantom Ship — economy", () => {
 
   it("deducts the correct cost from balance", () => {
     const sim = new Simulation();
-    const economy = new Economy();
+    const economy = new Economy(baselineProfile);
     economy.balance = 1000;
 
     const before = economy.balance;
@@ -313,8 +325,8 @@ describe("Phantom Ship — economy", () => {
 
   it("respects the unit cap of 5", () => {
     const sim = new Simulation();
-    const ai = new AIManager();
-    const economy = new Economy();
+    const ai = new AIManager(baselineProfile);
+    const economy = new Economy(baselineProfile);
     economy.balance = 100000;
 
     // Spawn 5 phantoms directly so they count toward the cap
@@ -329,8 +341,8 @@ describe("Phantom Ship — economy", () => {
 
   it("spawns a phantom entity when the build queue resolves", () => {
     const sim = new Simulation();
-    const ai = new AIManager();
-    const economy = new Economy();
+    const ai = new AIManager(baselineProfile);
+    const economy = new Economy(baselineProfile);
     economy.balance = 1000;
 
     economy.requestBuild({ unitKind: "phantom_ship" }, sim);

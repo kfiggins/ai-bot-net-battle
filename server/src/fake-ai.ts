@@ -71,7 +71,7 @@ export class FakeAI {
     }
 
     // Priority 1: defense near mothership if low tower count.
-    const desiredTowers = this.profile.key === "hard" ? 3 : this.profile.key === "normal" ? 2 : 1;
+    const desiredTowers = this.profile.key === "hard" ? 5 : this.profile.key === "normal" ? 2 : 1;
     const towers = sim.getEntitiesByKind("tower").length;
     if (towers < desiredTowers && sim.tick >= this.nextTowerTick) {
       const p = this.pickTowerPos(mothershipPos);
@@ -89,7 +89,7 @@ export class FakeAI {
     }
 
     // Priority 2: build a missile tower if we can afford one and don't have one yet.
-    const maxMissileTowers = this.profile.key === "hard" ? 2 : this.profile.key === "normal" ? 1 : 0;
+    const maxMissileTowers = this.profile.key === "hard" ? 3 : this.profile.key === "normal" ? 1 : 0;
     const missileTowers = sim.getEntitiesByKind("missile_tower").length;
     if (this.profile.allowMissileTowers && missileTowers < maxMissileTowers && economy.balance >= UNIT_COSTS.missile_tower && sim.tick >= this.nextMissileTowerTick) {
       const p = this.pickTowerPos(mothershipPos);
@@ -121,7 +121,7 @@ export class FakeAI {
     }
 
     // Priority 4: deploy a phantom if the mothership is alive and we can afford one.
-    const maxPhantoms = this.profile.key === "hard" ? 5 : this.profile.key === "normal" ? 2 : 0;
+    const maxPhantoms = this.profile.key === "hard" ? 7 : this.profile.key === "normal" ? 2 : 0;
     const phantoms = sim.getEntitiesByKind("phantom_ship").length;
     if (this.profile.allowPhantoms && phantoms < maxPhantoms && economy.balance >= UNIT_COSTS.phantom_ship && sim.tick >= this.nextPhantomTick) {
       const result = economy.requestBuild(
@@ -134,9 +134,8 @@ export class FakeAI {
       }
     }
 
-    // Priority 5: deploy a dreadnought if we can afford one (late-game threat).
-    const dreadnoughts = sim.getEntitiesByKind("dreadnought").length;
-    if (this.profile.allowDreadnought && dreadnoughts < 1 && economy.balance >= UNIT_COSTS.dreadnought && sim.tick >= this.nextDreadnoughtTick) {
+    // Priority 5: deploy a dreadnought if we can afford one (economy cap enforces limit).
+    if (this.profile.allowDreadnought && economy.balance >= UNIT_COSTS.dreadnought && sim.tick >= this.nextDreadnoughtTick) {
       const result = economy.requestBuild(
         { unitKind: "dreadnought" },
         sim,

@@ -70,6 +70,8 @@ export class BossManager {
   private deathRingCooldown: number = 0;
   private deathRingAngle: number = 0;
   private nemesisTeleportThreshold: number = 0; // next HP boundary that triggers a teleport
+  private nemesisScaledHp: number = NEMESIS_HP; // actual HP after difficulty/player scaling
+  playerCount = 1; // set by room each tick
 
   spawnMothership(sim: Simulation): Entity {
     const entityId = uuid();
@@ -87,22 +89,32 @@ export class BossManager {
   }
 
   spawnNemesis(sim: Simulation, pos: { x: number; y: number }): Entity {
+    // Scale Nemesis HP by difficulty and player count
+    const hpMult = this.profile.nemesisHpMult ?? 1;
+    const perPlayerMult = this.profile.nemesisPerPlayerHpMult ?? 0;
+    const scaledHp = Math.round(NEMESIS_HP * (hpMult + perPlayerMult * Math.max(0, this.playerCount - 1)));
+    this.nemesisScaledHp = scaledHp;
+
     const entityId = uuid();
     const entity: Entity = {
       id: entityId,
       kind: "nemesis",
       pos: { x: pos.x, y: pos.y },
       vel: { x: 0, y: 0 },
-      hp: NEMESIS_HP,
+      hp: scaledHp,
       team: ENEMY_TEAM,
     };
     sim.entities.set(entityId, entity);
     this.nemesisId = entityId;
     this.spiralAngle = 0;
-    this.spiralFireCooldown = NEMESIS_SPIRAL_FIRE_COOLDOWN_TICKS;
-    this.missileFireCooldown = NEMESIS_MISSILE_COOLDOWN_TICKS;
-    this.nemesisTeleportThreshold = NEMESIS_HP * 0.8; // teleport at 80%, 60%, 40%, 20%
+    this.spiralFireCooldown = this.scaleCooldown(NEMESIS_SPIRAL_FIRE_COOLDOWN_TICKS);
+    this.missileFireCooldown = this.scaleCooldown(NEMESIS_MISSILE_COOLDOWN_TICKS);
+    this.nemesisTeleportThreshold = scaledHp * 0.8; // teleport at 80%, 60%, 40%, 20%
     return entity;
+  }
+
+  private scaleCooldown(baseTicks: number): number {
+    return Math.max(1, Math.round(baseTicks / this.profile.enemyFireRateMult));
   }
 
   spawnSubBases(sim: Simulation, ai: AIManager): void {
@@ -302,7 +314,7 @@ export class BossManager {
     if (this.nemesisTeleportThreshold > 0 && nemesis.hp <= this.nemesisTeleportThreshold) {
       // Advance past all crossed thresholds (handles large single-tick damage)
       while (nemesis.hp <= this.nemesisTeleportThreshold && this.nemesisTeleportThreshold > 0) {
-        this.nemesisTeleportThreshold -= NEMESIS_HP * 0.2;
+        this.nemesisTeleportThreshold -= this.nemesisScaledHp * 0.2;
       }
       nemesis.pos.x = NEMESIS_RADIUS + Math.random() * (WORLD_WIDTH - 2 * NEMESIS_RADIUS);
       nemesis.pos.y = NEMESIS_RADIUS + Math.random() * (WORLD_HEIGHT - 2 * NEMESIS_RADIUS);
@@ -369,7 +381,7 @@ export class BossManager {
         sim.spawnBullet(nemesis, this.nemesisId, angle, NEMESIS_BULLET_DAMAGE, NEMESIS_SPIRAL_BULLET_SPEED);
       }
       this.spiralAngle += NEMESIS_SPIRAL_ROTATE_PER_SHOT;
-      this.spiralFireCooldown = NEMESIS_SPIRAL_FIRE_COOLDOWN_TICKS;
+      this.spiralFireCooldown = this.scaleCooldown(NEMESIS_SPIRAL_FIRE_COOLDOWN_TICKS);
     }
 
     // Per-player homing missile fire (one per player every 2 seconds)
@@ -382,7 +394,7 @@ export class BossManager {
         const aimAngle = Math.atan2(dy, dx);
         sim.spawnMissile(nemesis, this.nemesisId, aimAngle);
       }
-      this.missileFireCooldown = NEMESIS_MISSILE_COOLDOWN_TICKS;
+      this.missileFireCooldown = this.scaleCooldown(NEMESIS_MISSILE_COOLDOWN_TICKS);
     }
   }
 
