@@ -22,6 +22,7 @@ export interface DifficultyProfile {
     towers: number;
     missileTowers: number;
     phantoms: number;
+    dreadnought?: number;
   };
 }
 
@@ -114,6 +115,7 @@ export const DIFFICULTY_PROFILES: Record<GameDifficulty, DifficultyProfile> = {
       towers: 2,
       missileTowers: 1,
       phantoms: 3,
+      dreadnought: 1,
     },
   },
 };

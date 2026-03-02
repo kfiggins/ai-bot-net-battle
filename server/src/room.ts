@@ -349,6 +349,13 @@ export class Room {
         this.ai.registerEntity(p.id);
       }
     }
+
+    if (profile.allowDreadnought && profile.initialSpawns.dreadnought) {
+      for (let i = 0; i < profile.initialSpawns.dreadnought; i++) {
+        const mt = this.sim.spawnEnemy("dreadnought", cx + 100 + i * 40, cy - 300 + i * 20);
+        this.ai.registerEntity(mt.id);
+      }
+    }
   }
 
   private startTickLoop(): void {
