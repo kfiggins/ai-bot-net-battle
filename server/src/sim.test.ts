@@ -1166,20 +1166,23 @@ describe("stat upgrades", () => {
     sim.awardXP(ps, moreXP);
     expect(ps.level).toBe(15);
     expect(ps.cannons).toBe(4);
+
+    // Level to 20
+    let finalXP = 0;
+    for (let lvl = 15; lvl < 20; lvl++) finalXP += xpForLevel(lvl);
+    sim.awardXP(ps, finalXP);
+    expect(ps.level).toBe(20);
+    expect(ps.cannons).toBe(5);
   });
 
-  it("total pending upgrade points across full leveling is 12", () => {
+  it("total pending upgrade points across full leveling is 15", () => {
     sim.addPlayer("p1");
     const ps = sim.players.get("p1")!;
     sim.awardXP(ps, 999999);
     expect(ps.level).toBe(MAX_LEVEL);
-    // 14 level-ups total (2-15), 3 milestones (5,10,15) → 11 stat points
-    // Wait: levels 2,3,4,6,7,8,9,11,12,13,14 = 11 non-milestone levels + 3 milestones = 14 total
-    // Actually: level 1→15 is 14 level-ups. Milestones at 5,10,15 = 3 auto-cannon. So 14-3=11 pending.
-    // Hmm, let me recount: levels you reach = 2,3,4,5,6,7,8,9,10,11,12,13,14,15 = 14 level-ups
-    // Milestones: 5,10,15 = 3 cannon upgrades (no pending point)
-    // Non-milestones: 2,3,4,6,7,8,9,11,12,13,14 = 11 stat points
-    expect(ps.pendingUpgrades).toBe(11);
+    // Level 1→20 = 19 level-ups. Milestones at 5,10,15,20 grant cannon upgrades.
+    // 19 total level-ups - 4 milestones = 15 pending stat points.
+    expect(ps.pendingUpgrades).toBe(15);
   });
 
   it("applyUpgrade succeeds and increments stat", () => {

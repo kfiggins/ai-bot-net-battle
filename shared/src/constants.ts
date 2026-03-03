@@ -120,10 +120,10 @@ export const ORB_INITIAL_COUNT = 100;        // orbs pre-seeded at game start
 export const MINION_ORB_RESOURCE = 10;       // mothership resources per orb collected
 
 // XP & Leveling
-export const MAX_LEVEL = 15;
+export const MAX_LEVEL = 20;
 export const XP_BASE = 10;
 export const XP_SCALING = 1.5;
-export const MILESTONE_LEVELS = [5, 10, 15];
+export const MILESTONE_LEVELS = [5, 10, 15, 20];
 
 /** XP needed to advance from `level` to `level+1` */
 export function xpForLevel(level: number): number {
@@ -151,6 +151,7 @@ export const CANNON_MILESTONES: Record<number, number> = {
   5: 2,   // level 5 → double cannon
   10: 3,  // level 10 → triple cannon
   15: 4,  // level 15 → quad cannon
+  20: 5,  // level 20 → penta cannon
 };
 export const CANNON_SPREAD_ANGLE = 0.15; // radians between each cannon (~8.6 degrees)
 export const CANNON_LENGTH = 18;         // px from player center to cannon tip
