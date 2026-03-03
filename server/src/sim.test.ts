@@ -1121,7 +1121,7 @@ describe("stat upgrades", () => {
   it("player starts with zero upgrades, 1 cannon, 0 pending", () => {
     sim.addPlayer("p1");
     const ps = sim.players.get("p1")!;
-    expect(ps.upgrades).toEqual({ damage: 0, speed: 0, health: 0, fire_rate: 0 });
+    expect(ps.upgrades).toEqual({ damage: 0, speed: 0, health: 0, fire_rate: 0, bullet_size: 0 });
     expect(ps.cannons).toBe(1);
     expect(ps.pendingUpgrades).toBe(0);
   });
@@ -1494,7 +1494,7 @@ describe("upgrade death reset", () => {
 
     expect(ps.level).toBe(1);
     expect(ps.xp).toBe(0);
-    expect(ps.upgrades).toEqual({ damage: 0, speed: 0, health: 0, fire_rate: 0 });
+    expect(ps.upgrades).toEqual({ damage: 0, speed: 0, health: 0, fire_rate: 0, bullet_size: 0 });
     expect(ps.cannons).toBe(1);
     expect(ps.pendingUpgrades).toBe(0);
   });
@@ -1522,7 +1522,7 @@ describe("upgrade death reset", () => {
     const snapshot = sim.getSnapshot();
     const playerEntity = snapshot.entities.find(e => e.kind === "player_ship");
     expect(playerEntity).toBeDefined();
-    expect(playerEntity!.upgrades).toEqual({ damage: 1, speed: 0, health: 0, fire_rate: 0 });
+    expect(playerEntity!.upgrades).toEqual({ damage: 1, speed: 0, health: 0, fire_rate: 0, bullet_size: 0 });
     expect(playerEntity!.cannons).toBe(1);
     expect(playerEntity!.pendingUpgrades).toBe(0);
   });

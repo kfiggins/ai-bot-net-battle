@@ -49,6 +49,7 @@ import {
   SPEED_PER_UPGRADE,
   HEALTH_PER_UPGRADE,
   FIRE_RATE_PER_UPGRADE,
+  BULLET_SIZE_PER_UPGRADE,
   CANNON_MILESTONES,
   CANNON_SPREAD_ANGLE,
   UpgradeType,
@@ -214,7 +215,7 @@ export class Simulation {
       xp: 0,
       level: 1,
       xpToNext: xpForLevel(1),
-      upgrades: { damage: 0, speed: 0, health: 0, fire_rate: 0 },
+      upgrades: { damage: 0, speed: 0, health: 0, fire_rate: 0, bullet_size: 0 },
       cannons: 1,
       pendingUpgrades: 0,
       baseHp: this.playerBaseHp,
@@ -464,7 +465,7 @@ export class Simulation {
       player.xpToNext = xpForLevel(1);
       player.fireCooldown = 0;
       player.missileCooldown = 0;
-      player.upgrades = { damage: 0, speed: 0, health: 0, fire_rate: 0 };
+      player.upgrades = { damage: 0, speed: 0, health: 0, fire_rate: 0, bullet_size: 0 };
       player.cannons = 1;
       player.pendingUpgrades = 0;
       // entity.vel already reset to {0,0} at respawn entity creation above
@@ -481,6 +482,7 @@ export class Simulation {
       const effectiveAccel = PLAYER_ACCEL + player.upgrades.speed * ACCEL_PER_SPEED_UPGRADE;
       const effectiveCooldown = Math.max(1, FIRE_COOLDOWN_TICKS - player.upgrades.fire_rate * FIRE_RATE_PER_UPGRADE);
       const effectiveDamage = BULLET_DAMAGE + player.upgrades.damage * DAMAGE_PER_UPGRADE;
+      const effectiveBulletRadius = BULLET_RADIUS + player.upgrades.bullet_size * BULLET_SIZE_PER_UPGRADE;
 
       // Compute thrust direction from input
       let tx = 0;
@@ -526,7 +528,7 @@ export class Simulation {
         player.fireCooldown--;
       }
       if (input.fire && player.fireCooldown <= 0) {
-        this.fireMultiCannon(entity, player.id, input.aimAngle, player.cannons, effectiveDamage, player.upgrades.speed);
+        this.fireMultiCannon(entity, player.id, input.aimAngle, player.cannons, effectiveDamage, effectiveBulletRadius, player.upgrades.speed);
         player.fireCooldown = effectiveCooldown;
       }
 
@@ -542,12 +544,12 @@ export class Simulation {
     }
   }
 
-  private fireMultiCannon(owner: Entity, ownerId: string, aimAngle: number, cannons: number, damage: number, speedUpgrades: number = 0): void {
+  private fireMultiCannon(owner: Entity, ownerId: string, aimAngle: number, cannons: number, damage: number, bulletRadius: number, speedUpgrades: number = 0): void {
     const angles = getCannonAngles(aimAngle, cannons);
     const half = (cannons - 1) / 2;
     for (let i = 0; i < cannons; i++) {
       const lateralOffset = (i - half) * CANNON_OFFSET_LATERAL;
-      this.spawnBullet(owner, ownerId, angles[i], damage, BULLET_SPEED, lateralOffset);
+      this.spawnBullet(owner, ownerId, angles[i], damage, BULLET_SPEED, lateralOffset, bulletRadius);
     }
 
     // Apply recoil impulse directly to entity velocity (opposite to aim direction).
@@ -564,7 +566,8 @@ export class Simulation {
     aimAngle: number,
     damage: number = BULLET_DAMAGE,
     speed: number = BULLET_SPEED,
-    lateralOffset: number = 0
+    lateralOffset: number = 0,
+    bulletRadius: number = BULLET_RADIUS
   ): Entity {
     const entityId = uuid();
     const vx = Math.cos(aimAngle) * speed;
@@ -578,13 +581,14 @@ export class Simulation {
       id: entityId,
       kind: "bullet",
       pos: {
-        x: owner.pos.x + Math.cos(aimAngle) * (ownerRadius + BULLET_RADIUS + 2) + Math.cos(perpAngle) * lateralOffset + owner.vel.x * this.dt,
-        y: owner.pos.y + Math.sin(aimAngle) * (ownerRadius + BULLET_RADIUS + 2) + Math.sin(perpAngle) * lateralOffset + owner.vel.y * this.dt,
+        x: owner.pos.x + Math.cos(aimAngle) * (ownerRadius + bulletRadius + 2) + Math.cos(perpAngle) * lateralOffset + owner.vel.x * this.dt,
+        y: owner.pos.y + Math.sin(aimAngle) * (ownerRadius + bulletRadius + 2) + Math.sin(perpAngle) * lateralOffset + owner.vel.y * this.dt,
       },
       vel: { x: vx, y: vy },
       hp: BULLET_HP,
       team: owner.team,
       ownerKind: owner.ownerKind ?? owner.kind,
+      bulletRadius,
     };
     this.entities.set(entityId, entity);
     this.bullets.set(entityId, {
@@ -722,10 +726,10 @@ export class Simulation {
       if (
         distSq > BULLET_MAX_RANGE * BULLET_MAX_RANGE ||
         bullet.ttl <= 0 ||
-        entity.pos.x < -BULLET_RADIUS ||
-        entity.pos.x > WORLD_WIDTH + BULLET_RADIUS ||
-        entity.pos.y < -BULLET_RADIUS ||
-        entity.pos.y > WORLD_HEIGHT + BULLET_RADIUS
+        entity.pos.x < -(entity.bulletRadius ?? BULLET_RADIUS) ||
+        entity.pos.x > WORLD_WIDTH + (entity.bulletRadius ?? BULLET_RADIUS) ||
+        entity.pos.y < -(entity.bulletRadius ?? BULLET_RADIUS) ||
+        entity.pos.y > WORLD_HEIGHT + (entity.bulletRadius ?? BULLET_RADIUS)
       ) {
         entity.hp = 0;
       }
@@ -912,7 +916,7 @@ export class Simulation {
 
         const targetRadius = entityRadius(target.kind);
 
-        if (circlesOverlap(bulletEntity.pos, BULLET_RADIUS, target.pos, targetRadius)) {
+        if (circlesOverlap(bulletEntity.pos, bulletEntity.bulletRadius ?? BULLET_RADIUS, target.pos, targetRadius)) {
           const damage = applyDirectionalArmor(target, bulletEntity.pos, bulletState.damage);
           target.hp -= damage;
           if (target.kind === "player_ship") this.notifyPlayerDamaged(target.id);

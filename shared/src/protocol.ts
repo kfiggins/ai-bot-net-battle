@@ -16,6 +16,7 @@ export const UpgradesSchema = z.object({
   speed: z.number().int(),
   health: z.number().int(),
   fire_rate: z.number().int(),
+  bullet_size: z.number().int(),
 });
 export type Upgrades = z.infer<typeof UpgradesSchema>;
 
@@ -39,6 +40,7 @@ export const EntitySchema = z.object({
   pendingUpgrades: z.number().int().optional(),
   aimAngle: z.number().optional(),
   ownerKind: z.string().optional(),
+  bulletRadius: z.number().optional(),
   missileCooldown: z.number().int().optional(),
 });
 export type Entity = z.infer<typeof EntitySchema>;
@@ -174,7 +176,7 @@ export type AgentCommand = z.infer<typeof AgentCommandSchema>;
 export const PlayerUpgradeMessageSchema = z.object({
   v: z.literal(1),
   type: z.literal("player_upgrade"),
-  stat: z.enum(["damage", "speed", "health", "fire_rate"]),
+  stat: z.enum(["damage", "speed", "health", "fire_rate", "bullet_size"]),
 });
 export type PlayerUpgradeMessage = z.infer<typeof PlayerUpgradeMessageSchema>;
 

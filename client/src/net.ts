@@ -140,7 +140,7 @@ export class NetClient {
   }
 
   /** Send stat upgrade choice to server */
-  sendUpgrade(stat: "damage" | "speed" | "health" | "fire_rate"): void {
+  sendUpgrade(stat: "damage" | "speed" | "health" | "fire_rate" | "bullet_size"): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ v: 1, type: "player_upgrade", stat }));
     }

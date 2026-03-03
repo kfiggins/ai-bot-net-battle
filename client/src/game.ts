@@ -119,7 +119,7 @@ export class GameScene extends Phaser.Scene {
     this.audio.playMusic("music_match_loop");
     this.hud.setDebugEnabled(this.net.debugLogEnabled);
     this.hud.setUpgradeHandler((stat) => {
-      this.net.sendUpgrade(stat as "damage" | "speed" | "health" | "fire_rate");
+      this.net.sendUpgrade(stat as "damage" | "speed" | "health" | "fire_rate" | "bullet_size");
     });
     this.matchStartMs = performance.now();
     this.victoryShown = false;
@@ -937,7 +937,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     const color = getColor(entity);
-    const radius = getRadius(entity.kind);
+    const radius = entity.kind === "bullet" ? (entity.bulletRadius ?? getRadius(entity.kind)) : getRadius(entity.kind);
     const circle = this.add.circle(entity.pos.x, entity.pos.y, radius, color);
     if (entity.kind === "energy_orb") {
       circle.setAlpha(0.7);

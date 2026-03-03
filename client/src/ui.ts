@@ -134,7 +134,7 @@ export class HUD {
     }).setOrigin(0.5).setDepth(200).setScrollFactor(0).setVisible(false);
 
     // Upgrade panel (bottom-center, above XP bar)
-    const panelW = 440;
+    const panelW = 550;
     const panelH = 60;
     const panelX = VIEWPORT_WIDTH / 2;
     const panelY = VIEWPORT_HEIGHT - 80;
@@ -147,8 +147,8 @@ export class HUD {
       fontFamily: "monospace",
     }).setOrigin(0.5).setDepth(151).setScrollFactor(0).setVisible(false);
 
-    const statLabels = ["DMG", "SPD", "HP", "FIRE"];
-    const statKeys = ["damage", "speed", "health", "fire_rate"];
+    const statLabels = ["DMG", "SPD", "HP", "FIRE", "SIZE"];
+    const statKeys = ["damage", "speed", "health", "fire_rate", "bullet_size"];
     const btnWidth = 90;
     const totalWidth = statLabels.length * btnWidth + (statLabels.length - 1) * 10;
     const startX = panelX - totalWidth / 2 + btnWidth / 2;
@@ -293,8 +293,8 @@ export class HUD {
       this.upgradePanelTitle.setText(`CHOOSE UPGRADE (${pendingUpgrades} point${pendingUpgrades > 1 ? "s" : ""})`);
     }
 
-    const statKeys: (keyof Upgrades)[] = ["damage", "speed", "health", "fire_rate"];
-    const statLabels = ["DMG", "SPD", "HP", "FIRE"];
+    const statKeys: (keyof Upgrades)[] = ["damage", "speed", "health", "fire_rate", "bullet_size"];
+    const statLabels = ["DMG", "SPD", "HP", "FIRE", "SIZE"];
     for (let i = 0; i < this.upgradeButtons.length; i++) {
       const btn = this.upgradeButtons[i];
       btn.setVisible(show);
@@ -493,7 +493,7 @@ function getMaxHp(entity: Entity): number {
     case "player_ship": {
       const healthUpgrades = entity.upgrades?.health ?? 0;
       const baseHp = entity.baseHp ?? 100;
-      return baseHp + healthUpgrades * 20;
+      return baseHp + healthUpgrades * 30;
     }
     case "minion_ship": return 30;
     case "phantom_ship": return 20;

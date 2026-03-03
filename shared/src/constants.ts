@@ -134,7 +134,7 @@ export const SERVER_PORT = parseInt(process.env.WS_PORT ?? "3000", 10);
 export const CLIENT_PORT = 5173;
 
 // Stat Upgrades
-export const UPGRADE_TYPES = ["damage", "speed", "health", "fire_rate"] as const;
+export const UPGRADE_TYPES = ["damage", "speed", "health", "fire_rate", "bullet_size"] as const;
 export type UpgradeType = (typeof UPGRADE_TYPES)[number];
 export const MAX_UPGRADE_PER_STAT = 5;
 
@@ -144,6 +144,7 @@ export const SPEED_PER_UPGRADE = 30;    // +25 px/s per point raises max speed c
 export const ACCEL_PER_SPEED_UPGRADE = 70; // +40 px/s² per speed level (base 800 → max 1000)
 export const HEALTH_PER_UPGRADE = 30;   // +20 max HP per point (base 100 → max 200)
 export const FIRE_RATE_PER_UPGRADE = 1.2; // -1 tick off cooldown per point (base 6 → min 1)
+export const BULLET_SIZE_PER_UPGRADE = 0.35; // modest growth per point (+0.35 radius, +1.75 max at 5)
 export const RECOIL_REDUCTION_PER_SPEED_UPGRADE = 0.15; // 15% recoil reduction per speed level (max 5 → 25% of base)
 
 // Cannon Milestones
