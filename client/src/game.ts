@@ -34,6 +34,13 @@ export class GameScene extends Phaser.Scene {
   private tabKey!: Phaser.Input.Keyboard.Key;
   private minimap!: MiniMap;
   private soundToggle!: Phaser.GameObjects.Text;
+  private volumePanel!: Phaser.GameObjects.Rectangle;
+  private volumeTrack!: Phaser.GameObjects.Rectangle;
+  private volumeFill!: Phaser.GameObjects.Rectangle;
+  private volumeKnob!: Phaser.GameObjects.Arc;
+  private volumeLabel!: Phaser.GameObjects.Text;
+  private volumePanelVisibleMs = 0;
+  private volumeDragging = false;
   private predictedMaxSpeed = PLAYER_MAX_SPEED;
   private predictedLevel = 1;
   private latestBotResources: number | undefined;
@@ -158,7 +165,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.soundToggle = this.add
-      .text(VIEWPORT_WIDTH - 100, 10, "SOUND: FULL", {
+      .text(VIEWPORT_WIDTH - 100, 10, "SOUND", {
         fontSize: "13px",
         color: "#111122",
         fontFamily: "monospace",
@@ -170,7 +177,49 @@ export class GameScene extends Phaser.Scene {
       .setDepth(200)
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
-    this.soundToggle.on("pointerdown", () => this.cycleAudioLevel());
+    this.soundToggle.on("pointerdown", () => this.toggleVolumePanel());
+
+    const panelX = VIEWPORT_WIDTH - 185;
+    const panelY = 38;
+    this.volumePanel = this.add.rectangle(panelX, panelY, 170, 48, 0x000000, 0.75)
+      .setOrigin(0, 0)
+      .setDepth(200)
+      .setScrollFactor(0)
+      .setVisible(false);
+    this.volumeLabel = this.add.text(panelX + 8, panelY + 6, "VOL 100%", {
+      fontSize: "11px",
+      color: "#9ad1ff",
+      fontFamily: "monospace",
+    }).setDepth(201).setScrollFactor(0).setVisible(false);
+    this.volumeTrack = this.add.rectangle(panelX + 10, panelY + 28, 130, 8, 0x334155, 1)
+      .setOrigin(0, 0)
+      .setDepth(201)
+      .setScrollFactor(0)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true });
+    this.volumeFill = this.add.rectangle(panelX + 10, panelY + 28, 130, 8, 0x66d9ff, 1)
+      .setOrigin(0, 0)
+      .setDepth(201)
+      .setScrollFactor(0)
+      .setVisible(false);
+    this.volumeKnob = this.add.circle(panelX + 140, panelY + 32, 6, 0xe2e8f0)
+      .setDepth(202)
+      .setScrollFactor(0)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true });
+
+    this.volumeTrack.on("pointerdown", (p: Phaser.Input.Pointer) => this.setVolumeFromPointer(p));
+    this.volumeKnob.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      this.volumeDragging = true;
+      this.setVolumeFromPointer(p);
+    });
+    this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
+      if (this.volumeDragging && this.volumePanel.visible) this.setVolumeFromPointer(p);
+    });
+    this.input.on("pointerup", () => {
+      this.volumeDragging = false;
+    });
+
     this.refreshAudioUI();
 
     // mouseWorldPos is updated every frame in update() so it stays
@@ -417,52 +466,57 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
+    if (this.volumePanelVisibleMs > 0) {
+      this.volumePanelVisibleMs -= dt;
+      if (this.volumePanelVisibleMs <= 0 && !this.volumeDragging) {
+        this.setVolumePanelVisible(false);
+      }
+    }
+
     this.vfx.update(dt);
   }
 
-  private cycleAudioLevel(): void {
-    const s = this.audio.getSettings();
-    const muted = !s.sfxEnabled && !s.musicEnabled;
-    const low = s.sfxEnabled && s.musicEnabled && s.sfxVolume <= 0.5 && s.musicVolume <= 0.5;
+  private toggleVolumePanel(): void {
+    const next = !this.volumePanel.visible;
+    this.setVolumePanelVisible(next);
+    if (next) this.volumePanelVisibleMs = 3000;
+  }
 
-    if (muted) {
-      // MUTE -> FULL
-      this.audio.setSfxEnabled(true);
-      this.audio.setMusicEnabled(true);
-      this.audio.setSfxVolume(1);
-      this.audio.setMusicVolume(1);
-      this.audio.playMusic("music_match_loop");
-    } else if (low) {
-      // LOW -> MUTE
-      this.audio.setSfxEnabled(false);
-      this.audio.setMusicEnabled(false);
-    } else {
-      // FULL -> LOW
-      this.audio.setSfxEnabled(true);
-      this.audio.setMusicEnabled(true);
-      this.audio.setSfxVolume(0.45);
-      this.audio.setMusicVolume(0.35);
-    }
+  private setVolumePanelVisible(visible: boolean): void {
+    this.volumePanel.setVisible(visible);
+    this.volumeTrack.setVisible(visible);
+    this.volumeFill.setVisible(visible);
+    this.volumeKnob.setVisible(visible);
+    this.volumeLabel.setVisible(visible);
+    if (!visible) this.volumeDragging = false;
+  }
 
+  private setVolumeFromPointer(pointer: Phaser.Input.Pointer): void {
+    const left = this.volumeTrack.x;
+    const width = this.volumeTrack.width;
+    const t = Phaser.Math.Clamp((pointer.x - left) / width, 0, 1);
+
+    this.audio.setSfxEnabled(true);
+    this.audio.setMusicEnabled(true);
+    this.audio.setSfxVolume(t);
+    this.audio.setMusicVolume(t);
     this.refreshAudioUI();
+
+    this.volumePanelVisibleMs = 3000;
   }
 
   private refreshAudioUI(): void {
     if (!this.soundToggle) return;
     const s = this.audio.getSettings();
-    const muted = !s.sfxEnabled && !s.musicEnabled;
-    const low = s.sfxEnabled && s.musicEnabled && s.sfxVolume <= 0.5 && s.musicVolume <= 0.5;
+    const vol = Math.round(Math.max(s.sfxVolume, s.musicVolume) * 100);
 
-    if (muted) {
-      this.soundToggle.setText("SOUND: MUTE");
-      this.soundToggle.setStyle({ backgroundColor: "#4a5568", color: "#d1d5db" });
-    } else if (low) {
-      this.soundToggle.setText("SOUND: LOW");
-      this.soundToggle.setStyle({ backgroundColor: "#f6ad55", color: "#111122" });
-    } else {
-      this.soundToggle.setText("SOUND: FULL");
-      this.soundToggle.setStyle({ backgroundColor: "#66d9ff", color: "#111122" });
-    }
+    this.soundToggle.setText("SOUND");
+    this.soundToggle.setStyle({ backgroundColor: "#66d9ff", color: "#111122" });
+
+    this.volumeLabel.setText(`VOL ${vol}%`);
+    const w = Math.max(2, (this.volumeTrack.width * vol) / 100);
+    this.volumeFill.setDisplaySize(w, this.volumeFill.height);
+    this.volumeKnob.setPosition(this.volumeTrack.x + (this.volumeTrack.width * vol) / 100, this.volumeKnob.y);
   }
 
   /** Draw agar.io-style grid lines across the entire world */
