@@ -30,6 +30,8 @@ export class HUD {
   private lastCannons = 1;
   private onUpgradeChoice: ((stat: string) => void) | null = null;
   private missileCooldownText: Phaser.GameObjects.Text;
+  private boostBarGfx: Phaser.GameObjects.Graphics;
+  private boostLabel: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -204,6 +206,15 @@ export class HUD {
       fontFamily: "monospace",
       fontStyle: "bold",
     }).setOrigin(0.5, 0).setDepth(101).setScrollFactor(0);
+
+    // Boost bar (left side, skinny vertical)
+    this.boostBarGfx = scene.add.graphics().setDepth(102).setScrollFactor(0);
+    this.boostLabel = scene.add.text(24, VIEWPORT_HEIGHT / 2 - 70, "BOOST", {
+      fontSize: "10px",
+      color: "#66ddff",
+      fontFamily: "monospace",
+      fontStyle: "bold",
+    }).setOrigin(0.5, 0).setDepth(102).setScrollFactor(0);
   }
 
   updatePhase(phase: PhaseInfo | undefined): void {
@@ -332,6 +343,26 @@ export class HUD {
       this.cannonCountText.setText(`x${cannons}`);
     } else {
       this.cannonCountText.setText("");
+    }
+  }
+
+  updateBoost(boostEnergy: number, boostMaxEnergy: number): void {
+    const barX = 14;
+    const barY = VIEWPORT_HEIGHT / 2 - 50;
+    const barW = 12;
+    const barH = 120;
+    const ratio = boostMaxEnergy > 0 ? Math.max(0, Math.min(1, boostEnergy / boostMaxEnergy)) : 0;
+
+    this.boostBarGfx.clear();
+    this.boostBarGfx.fillStyle(0x111111, 0.8);
+    this.boostBarGfx.fillRect(barX, barY, barW, barH);
+    this.boostBarGfx.lineStyle(1, 0x55ccff, 0.9);
+    this.boostBarGfx.strokeRect(barX, barY, barW, barH);
+
+    const fillH = Math.floor((barH - 2) * ratio);
+    if (fillH > 0) {
+      this.boostBarGfx.fillStyle(0x33bbff, 0.95);
+      this.boostBarGfx.fillRect(barX + 1, barY + barH - 1 - fillH, barW - 2, fillH);
     }
   }
 
@@ -483,6 +514,8 @@ export class HUD {
     this.cannonNotifyText.destroy();
     this.cannonCountText.destroy();
     this.missileCooldownText.destroy();
+    this.boostBarGfx.destroy();
+    this.boostLabel.destroy();
     for (const gfx of this.healthBars.values()) gfx.destroy();
     this.healthBars.clear();
   }

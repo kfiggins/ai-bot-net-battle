@@ -200,6 +200,14 @@ export const PHANTOM_KILL_XP = 20;                  // XP awarded to the shooter
 // Boost particles
 export const BOOST_PARTICLE_THRESHOLD = 30; // px/s — min speed to emit boost particles on AI/remote entities
 
+// Player boost system
+export const BOOST_MAX_ENERGY = 100;
+export const BOOST_DRAIN_PER_SECOND = 30;          // full tank in ~3.3s of continuous boost
+export const BOOST_REGEN_DELAY_TICKS = 5 * TICK_RATE; // starts recharging 5s after last boost use
+export const BOOST_REGEN_PER_SECOND = 20;          // full recharge in 5s once regen starts
+export const BOOST_ACCEL = 520;                    // base forward acceleration while boosting
+export const BOOST_ACCEL_PER_LEVEL = 16;           // extra accel each level
+
 // Sub-Base — secondary defensive structures around mothership
 export const SUB_BASE_HP = 300;
 export const SUB_BASE_RADIUS = 30;

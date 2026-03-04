@@ -42,6 +42,8 @@ import {
   ACCEL_PER_SPEED_UPGRADE,
   CANNON_OFFSET_LATERAL,
   BULLET_RADIUS,
+  BOOST_MAX_ENERGY,
+  BOOST_REGEN_DELAY_TICKS,
 } from "shared";
 
 describe("Simulation", () => {
@@ -2079,6 +2081,45 @@ describe("player right-click missile", () => {
     sim.update(); // removes dead, respawns
 
     expect(ps.missileCooldown).toBe(0);
+  });
+});
+
+describe("boost system", () => {
+  it("consumes boost energy when boost input is held", () => {
+    const sim = new Simulation();
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, fireMissile: false, boost: true, aimAngle: 0,
+    });
+    sim.update();
+
+    expect(ps.boostEnergy).toBeLessThan(BOOST_MAX_ENERGY);
+  });
+
+  it("starts regen after delay when not boosting", () => {
+    const sim = new Simulation();
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+
+    // Spend some boost
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, fireMissile: false, boost: true, aimAngle: 0,
+    });
+    for (let i = 0; i < 10; i++) sim.update();
+    const afterSpend = ps.boostEnergy;
+
+    // Stop boosting and wait out delay
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, fireMissile: false, boost: false, aimAngle: 0,
+    });
+    for (let i = 0; i < BOOST_REGEN_DELAY_TICKS + TICK_RATE; i++) sim.update();
+
+    expect(ps.boostEnergy).toBeGreaterThan(afterSpend);
   });
 });
 

@@ -103,6 +103,12 @@ import {
   INTERCEPTOR_RADIUS,
   INTERCEPTOR_KILL_XP,
   INTERCEPTOR_BODY_COLLISION_DAMAGE,
+  BOOST_MAX_ENERGY,
+  BOOST_DRAIN_PER_SECOND,
+  BOOST_REGEN_DELAY_TICKS,
+  BOOST_REGEN_PER_SECOND,
+  BOOST_ACCEL,
+  BOOST_ACCEL_PER_LEVEL,
 } from "shared";
 
 export interface PlayerState {
@@ -123,6 +129,8 @@ export interface PlayerState {
   pendingUpgrades: number;
   baseHp: number;
   lastDamageTick: number;
+  boostEnergy: number;
+  lastBoostUseTick: number;
 }
 
 export interface BulletState {
@@ -206,6 +214,7 @@ export class Simulation {
         right: false,
         fire: false,
         fireMissile: false,
+        boost: false,
         aimAngle: 0,
       },
       fireCooldown: 0,
@@ -220,6 +229,8 @@ export class Simulation {
       pendingUpgrades: 0,
       baseHp: this.playerBaseHp,
       lastDamageTick: 0,
+      boostEnergy: BOOST_MAX_ENERGY,
+      lastBoostUseTick: -BOOST_REGEN_DELAY_TICKS,
     };
     this.players.set(playerId, playerState);
     this.playerByEntityId.set(entityId, playerState);
@@ -468,6 +479,8 @@ export class Simulation {
       player.upgrades = { damage: 0, speed: 0, health: 0, fire_rate: 0, bullet_size: 0 };
       player.cannons = 1;
       player.pendingUpgrades = 0;
+      player.boostEnergy = BOOST_MAX_ENERGY;
+      player.lastBoostUseTick = this.tick;
       // entity.vel already reset to {0,0} at respawn entity creation above
     }
   }
@@ -483,6 +496,7 @@ export class Simulation {
       const effectiveCooldown = Math.max(1, FIRE_COOLDOWN_TICKS - player.upgrades.fire_rate * FIRE_RATE_PER_UPGRADE);
       const effectiveDamage = BULLET_DAMAGE + player.upgrades.damage * DAMAGE_PER_UPGRADE;
       const effectiveBulletRadius = BULLET_RADIUS + player.upgrades.bullet_size * BULLET_SIZE_PER_UPGRADE;
+      const boostAccel = BOOST_ACCEL + player.level * BOOST_ACCEL_PER_LEVEL;
 
       // Compute thrust direction from input
       let tx = 0;
@@ -514,6 +528,19 @@ export class Simulation {
         entity.vel.y *= PLAYER_BRAKE_FRICTION;
         if (Math.abs(entity.vel.x) < 0.1) entity.vel.x = 0;
         if (Math.abs(entity.vel.y) < 0.1) entity.vel.y = 0;
+      }
+
+      // Shift boost: forward burst along aim direction, consumes boost energy
+      if (input.boost && player.boostEnergy > 0) {
+        const drain = BOOST_DRAIN_PER_SECOND * this.dt;
+        const spent = Math.min(player.boostEnergy, drain);
+        const ratio = spent / drain;
+        entity.vel.x += Math.cos(input.aimAngle) * boostAccel * this.dt * ratio;
+        entity.vel.y += Math.sin(input.aimAngle) * boostAccel * this.dt * ratio;
+        player.boostEnergy -= spent;
+        player.lastBoostUseTick = this.tick;
+      } else if (this.tick - player.lastBoostUseTick >= BOOST_REGEN_DELAY_TICKS) {
+        player.boostEnergy = Math.min(BOOST_MAX_ENERGY, player.boostEnergy + BOOST_REGEN_PER_SECOND * this.dt);
       }
 
       entity.pos.x += entity.vel.x * this.dt;
@@ -1067,6 +1094,8 @@ export class Simulation {
             cannons: ps.cannons,
             pendingUpgrades: ps.pendingUpgrades,
             aimAngle: ps.input.aimAngle,
+            boostEnergy: ps.boostEnergy,
+            boostMaxEnergy: BOOST_MAX_ENERGY,
             missileCooldown: ps.missileCooldown,
           };
         }

@@ -15,6 +15,7 @@ export class GameScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd!: { w: Phaser.Input.Keyboard.Key; a: Phaser.Input.Keyboard.Key; s: Phaser.Input.Keyboard.Key; d: Phaser.Input.Keyboard.Key };
   private fireKey!: Phaser.Input.Keyboard.Key;
+  private boostKey!: Phaser.Input.Keyboard.Key;
   private mouseWorldPos = { x: 0, y: 0 };
   private vfx!: VFXManager;
   private hud!: HUD;
@@ -111,6 +112,7 @@ export class GameScene extends Phaser.Scene {
       d: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     };
     this.fireKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    this.boostKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
 
     this.vfx = new VFXManager(this);
     this.hud = new HUD(this);
@@ -199,6 +201,7 @@ export class GameScene extends Phaser.Scene {
       right: this.cursors.right.isDown || this.wasd.d.isDown,
       fire: this.fireKey.isDown || this.input.activePointer.leftButtonDown(),
       fireMissile: this.input.activePointer.rightButtonDown(),
+      boost: this.boostKey.isDown,
       aimAngle: 0, // set below after prediction
     };
 
@@ -363,6 +366,7 @@ export class GameScene extends Phaser.Scene {
             this.predictedMaxSpeed = PLAYER_MAX_SPEED + (selfEntity.upgrades.speed ?? 0) * SPEED_PER_UPGRADE;
           }
           this.hud.updateMissileCooldown(selfEntity.missileCooldown ?? 0);
+          this.hud.updateBoost(selfEntity.boostEnergy ?? 0, selfEntity.boostMaxEnergy ?? 100);
         }
       }
     }
