@@ -2184,6 +2184,61 @@ describe("player right-click missile", () => {
 
     expect(ps.missileCharges).toBe(1);
   });
+
+  it("fires one missile per tick when fireMissile stays true (server fires every tick it receives true)", () => {
+    // This documents why the client must edge-detect right-click:
+    // the server fires once per tick while fireMissile=true, so holding
+    // the button would drain all charges instantly without client-side edge detection.
+    const player = sim.addPlayer("p1");
+    player.pos = { x: 500, y: 500 };
+    player.vel = { x: 0, y: 0 };
+    const ps = sim.players.get("p1")!;
+    ps.missileCharges = PLAYER_MISSILE_MAX_CHARGES; // 3 charges
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, fireMissile: true, aimAngle: 0,
+    });
+
+    sim.update();
+    expect(ps.missileCharges).toBe(2); // 1 fired
+    sim.update();
+    expect(ps.missileCharges).toBe(1); // 2 fired
+    sim.update();
+    expect(ps.missileCharges).toBe(0); // 3 fired — all gone from holding button
+
+    const missiles = Array.from(sim.entities.values()).filter(e => e.kind === "missile");
+    expect(missiles.length).toBe(3);
+  });
+
+  it("fires exactly one missile when fireMissile is true for a single tick then false (edge-detected press)", () => {
+    // This is the correct client behavior: send fireMissile=true for one tick only,
+    // then false for subsequent ticks while the button is held.
+    const player = sim.addPlayer("p1");
+    player.pos = { x: 500, y: 500 };
+    player.vel = { x: 0, y: 0 };
+    const ps = sim.players.get("p1")!;
+    ps.missileCharges = PLAYER_MISSILE_MAX_CHARGES; // 3 charges available
+
+    // Tick 1: button press (edge)
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, fireMissile: true, aimAngle: 0,
+    });
+    sim.update();
+    expect(ps.missileCharges).toBe(2);
+
+    // Ticks 2-5: button still held, but client sends false (edge-detected)
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, fireMissile: false, aimAngle: 0,
+    });
+    for (let i = 0; i < 4; i++) sim.update();
+
+    expect(ps.missileCharges).toBe(2); // still 2 — only one rocket fired
+    const missiles = Array.from(sim.entities.values()).filter(e => e.kind === "missile");
+    expect(missiles.length).toBe(1);
+  });
 });
 
 describe("boost system", () => {

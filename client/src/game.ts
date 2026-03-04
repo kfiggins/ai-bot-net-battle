@@ -260,7 +260,7 @@ export class GameScene extends Phaser.Scene {
       left: this.cursors.left.isDown || this.wasd.a.isDown,
       right: this.cursors.right.isDown || this.wasd.d.isDown,
       fire: this.fireKey.isDown || this.input.activePointer.leftButtonDown(),
-      fireMissile: this.input.activePointer.rightButtonDown(),
+      fireMissile: this.input.activePointer.rightButtonDown() && !this.wasFiringMissile,
       boost: this.boostKey.isDown,
       aimAngle: 0, // set below after prediction
     };
