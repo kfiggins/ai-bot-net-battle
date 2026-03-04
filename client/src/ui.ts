@@ -36,25 +36,30 @@ export class HUD {
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
 
-    this.phaseText = scene.add.text(10, 10, "", {
-      fontSize: "18px",
+    this.phaseText = scene.add.text(VIEWPORT_WIDTH / 2, 50, "", {
+      fontSize: "20px",
       color: "#ffffff",
       fontFamily: "monospace",
-      backgroundColor: "#00000088",
-      padding: { x: 8, y: 4 },
+      backgroundColor: "#000000cc",
+      padding: { x: 12, y: 6 },
     });
-    this.phaseText.setDepth(100);
+    this.phaseText.setOrigin(0.5, 0);
+    this.phaseText.setDepth(200);
     this.phaseText.setScrollFactor(0);
+    this.phaseText.setVisible(false);
 
-    this.objectiveText = scene.add.text(10, 40, "", {
-      fontSize: "14px",
+    this.objectiveText = scene.add.text(VIEWPORT_WIDTH / 2, 90, "", {
+      fontSize: "15px",
       color: "#cccccc",
       fontFamily: "monospace",
-      backgroundColor: "#00000088",
-      padding: { x: 8, y: 4 },
+      backgroundColor: "#000000cc",
+      padding: { x: 12, y: 6 },
+      align: "center",
     });
-    this.objectiveText.setDepth(100);
+    this.objectiveText.setOrigin(0.5, 0);
+    this.objectiveText.setDepth(200);
     this.objectiveText.setScrollFactor(0);
+    this.objectiveText.setVisible(false);
 
     this.matchOverText = scene.add.text(
       scene.cameras.main.width / 2,
@@ -242,6 +247,11 @@ export class HUD {
       this.matchOverText.setText("VICTORY!");
       this.matchOverText.setVisible(true);
     }
+  }
+
+  setPhaseVisible(visible: boolean): void {
+    this.phaseText.setVisible(visible);
+    this.objectiveText.setVisible(visible);
   }
 
   updateXP(level: number, xp: number, xpToNext: number): void {

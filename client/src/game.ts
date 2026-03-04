@@ -6,6 +6,7 @@ import { VFXManager } from "./vfx.js";
 import { HUD } from "./ui.js";
 import { AudioManager } from "./audio.js";
 import { computeTeammateArrow } from "./teammate-arrows.js";
+import { MiniMap } from "./minimap.js";
 
 export class GameScene extends Phaser.Scene {
   private net!: NetClient;
@@ -30,7 +31,8 @@ export class GameScene extends Phaser.Scene {
   private matchStartMs = 0;
   private victoryShown = false;
   private cameraPos: { x: number; y: number } | null = null;
-  private modeText!: Phaser.GameObjects.Text;
+  private tabKey!: Phaser.Input.Keyboard.Key;
+  private minimap!: MiniMap;
   private predictedMaxSpeed = PLAYER_MAX_SPEED;
   private predictedLevel = 1;
   private latestBotResources: number | undefined;
@@ -114,6 +116,7 @@ export class GameScene extends Phaser.Scene {
     };
     this.fireKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.boostKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
+    this.tabKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.TAB);
 
     this.vfx = new VFXManager(this);
     this.hud = new HUD(this);
@@ -129,17 +132,7 @@ export class GameScene extends Phaser.Scene {
     this.predictedMaxSpeed = PLAYER_MAX_SPEED;
     this.predictedVel = { x: 0, y: 0 };
 
-    this.modeText = this.add
-      .text(10, 10, `Mode: ${this.net.currentMode === "external_agent" ? "Agent ON" : "Kids AI"}`, {
-        fontSize: "14px",
-        color: "#7dd3fc",
-        fontFamily: "monospace",
-        backgroundColor: "#00000088",
-        padding: { x: 8, y: 4 },
-      })
-      .setOrigin(0, 0)
-      .setDepth(200)
-      .setScrollFactor(0);
+    this.minimap = new MiniMap(this);
 
     // Leave Game button (top-right, viewport-relative)
     const leaveBtn = this.add
@@ -363,6 +356,10 @@ export class GameScene extends Phaser.Scene {
       this.hud.updateHealthBars(entities);
       this.hud.updateDebug(entities, this.latestBotResources);
 
+      // Update mini-map
+      const selfForMap = selfId ? entities.find((e) => e.id === selfId) : undefined;
+      this.minimap.update(entities, selfForMap?.pos ?? this.cameraPos ?? { x: 2000, y: 2000 }, selfId);
+
       // Update XP bar and upgrades for local player
       if (selfId) {
         const selfEntity = entities.find((e) => e.id === selfId);
@@ -387,6 +384,7 @@ export class GameScene extends Phaser.Scene {
 
     const phase = this.interpolator.getPhaseInfo();
     this.hud.updatePhase(phase);
+    this.hud.setPhaseVisible(this.tabKey.isDown);
 
     if (phase?.matchOver && !this.victoryShown) {
       this.victoryShown = true;
