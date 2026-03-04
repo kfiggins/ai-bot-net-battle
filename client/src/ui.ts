@@ -376,19 +376,24 @@ export class HUD {
     }
   }
 
-  updateMissileCooldown(cooldownTicks: number): void {
+  updateMissileCooldown(charges: number, rechargeTimer: number): void {
     if (this.victoryActive) {
       this.missileCooldownText.setVisible(false);
       return;
     }
 
     this.missileCooldownText.setVisible(true);
-    if (cooldownTicks <= 0) {
-      this.missileCooldownText.setText("MISSILE: READY");
+    const MAX = 3;
+    if (charges >= MAX) {
+      this.missileCooldownText.setText(`MISSILE: ${"●".repeat(charges)}`);
+      this.missileCooldownText.setColor("#ff8800");
+    } else if (charges > 0) {
+      const seconds = Math.ceil(rechargeTimer / TICK_RATE);
+      this.missileCooldownText.setText(`MISSILE: ${"●".repeat(charges)}${"○".repeat(MAX - charges)} ${seconds}s`);
       this.missileCooldownText.setColor("#ff8800");
     } else {
-      const seconds = Math.ceil(cooldownTicks / TICK_RATE);
-      this.missileCooldownText.setText(`MISSILE: ${seconds}s`);
+      const seconds = Math.ceil(rechargeTimer / TICK_RATE);
+      this.missileCooldownText.setText(`MISSILE: ${"○".repeat(MAX)} ${seconds}s`);
       this.missileCooldownText.setColor("#888888");
     }
   }

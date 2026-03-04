@@ -67,6 +67,7 @@ import {
   ACCEL_PER_SPEED_UPGRADE,
   CANNON_OFFSET_LATERAL,
   PLAYER_MISSILE_COOLDOWN_TICKS,
+  PLAYER_MISSILE_MAX_CHARGES,
   PLAYER_MISSILE_DAMAGE_MULT,
   SUB_BASE_HP,
   SUB_BASE_RADIUS,
@@ -118,7 +119,8 @@ export interface PlayerState {
   entityId: string;
   input: PlayerInputData;
   fireCooldown: number;
-  missileCooldown: number;
+  missileCharges: number;
+  missileRechargeTimer: number;
   label?: string;
   playerIndex?: number;
   // XP & leveling
@@ -220,7 +222,8 @@ export class Simulation {
         aimAngle: 0,
       },
       fireCooldown: 0,
-      missileCooldown: 0,
+      missileCharges: 1,
+      missileRechargeTimer: PLAYER_MISSILE_COOLDOWN_TICKS,
       label,
       playerIndex,
       xp: 0,
@@ -477,7 +480,8 @@ export class Simulation {
       player.level = 1;
       player.xpToNext = xpForLevel(1);
       player.fireCooldown = 0;
-      player.missileCooldown = 0;
+      player.missileCharges = 1;
+      player.missileRechargeTimer = PLAYER_MISSILE_COOLDOWN_TICKS;
       player.upgrades = { damage: 0, speed: 0, health: 0, fire_rate: 0, bullet_size: 0 };
       player.cannons = 1;
       player.pendingUpgrades = 0;
@@ -565,14 +569,21 @@ export class Simulation {
         player.fireCooldown = effectiveCooldown;
       }
 
-      // Handle right-click missile
-      if (player.missileCooldown > 0) {
-        player.missileCooldown--;
+      // Handle right-click missile charges (recharge up to max 3)
+      if (player.missileCharges < PLAYER_MISSILE_MAX_CHARGES) {
+        player.missileRechargeTimer--;
+        if (player.missileRechargeTimer <= 0) {
+          player.missileCharges++;
+          player.missileRechargeTimer = PLAYER_MISSILE_COOLDOWN_TICKS;
+        }
       }
-      if (input.fireMissile && player.missileCooldown <= 0) {
+      if (input.fireMissile && player.missileCharges > 0) {
         const missileDamage = effectiveDamage * PLAYER_MISSILE_DAMAGE_MULT;
         this.spawnMissile(entity, player.id, input.aimAngle, missileDamage);
-        player.missileCooldown = PLAYER_MISSILE_COOLDOWN_TICKS;
+        player.missileCharges--;
+        if (player.missileCharges < PLAYER_MISSILE_MAX_CHARGES) {
+          player.missileRechargeTimer = PLAYER_MISSILE_COOLDOWN_TICKS;
+        }
       }
     }
   }
@@ -1102,7 +1113,8 @@ export class Simulation {
             aimAngle: ps.input.aimAngle,
             boostEnergy: ps.boostEnergy,
             boostMaxEnergy: BOOST_MAX_ENERGY,
-            missileCooldown: ps.missileCooldown,
+            missileCharges: ps.missileCharges,
+            missileRechargeTimer: ps.missileRechargeTimer,
           };
         }
       }

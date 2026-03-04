@@ -45,7 +45,8 @@ export const MISSILE_DAMAGE = 15;
 export const MISSILE_TURN_RATE = 1; // radians per second
 
 // Player right-click missile
-export const PLAYER_MISSILE_COOLDOWN_TICKS = 900; // 30 seconds at 30Hz
+export const PLAYER_MISSILE_COOLDOWN_TICKS = 900; // 30 seconds per charge at 30Hz
+export const PLAYER_MISSILE_MAX_CHARGES = 3;
 export const PLAYER_MISSILE_DAMAGE_MULT = 5;      // 5x effective bullet damage
 
 export const MOTHERSHIP_HP = 500;

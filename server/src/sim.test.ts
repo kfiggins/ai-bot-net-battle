@@ -44,6 +44,8 @@ import {
   BULLET_RADIUS,
   BOOST_MAX_ENERGY,
   BOOST_REGEN_DELAY_TICKS,
+  PLAYER_MISSILE_COOLDOWN_TICKS,
+  PLAYER_MISSILE_MAX_CHARGES,
 } from "shared";
 
 describe("Simulation", () => {
@@ -1954,7 +1956,30 @@ describe("player right-click missile", () => {
     expect(missiles[0].team).toBe(1);
   });
 
-  it("respects 30-second cooldown", () => {
+  it("starts with 1 charge", () => {
+    sim.addPlayer("p1");
+    const ps = sim.players.get("p1")!;
+    expect(ps.missileCharges).toBe(1);
+  });
+
+  it("cannot fire when charges are 0", () => {
+    const player = sim.addPlayer("p1");
+    player.pos = { x: 500, y: 500 };
+    player.vel = { x: 0, y: 0 };
+    const ps = sim.players.get("p1")!;
+    ps.missileCharges = 0;
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, fireMissile: true, aimAngle: 0,
+    });
+    sim.update();
+
+    const missiles = Array.from(sim.entities.values()).filter(e => e.kind === "missile");
+    expect(missiles.length).toBe(0);
+  });
+
+  it("consumes a charge on fire and cannot fire again when out", () => {
     const player = sim.addPlayer("p1");
     player.pos = { x: 500, y: 500 };
     player.vel = { x: 0, y: 0 };
@@ -1969,10 +1994,86 @@ describe("player right-click missile", () => {
     let missiles = Array.from(sim.entities.values()).filter(e => e.kind === "missile");
     expect(missiles.length).toBe(1);
 
-    // Second attempt immediately should not fire a new missile
+    // Second attempt immediately should not fire (charges exhausted)
     sim.update();
     missiles = Array.from(sim.entities.values()).filter(e => e.kind === "missile");
     expect(missiles.length).toBe(1);
+  });
+
+  it("can fire up to 3 times when fully charged", () => {
+    const player = sim.addPlayer("p1");
+    player.pos = { x: 500, y: 500 };
+    player.vel = { x: 0, y: 0 };
+    const ps = sim.players.get("p1")!;
+    ps.missileCharges = PLAYER_MISSILE_MAX_CHARGES;
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, fireMissile: true, aimAngle: 0,
+    });
+    sim.update();
+    expect(ps.missileCharges).toBe(2);
+    sim.update();
+    expect(ps.missileCharges).toBe(1);
+    sim.update();
+    expect(ps.missileCharges).toBe(0);
+    sim.update();
+    expect(ps.missileCharges).toBe(0); // capped at 0, no negative
+  });
+
+  it("recharges 1 charge after 30 seconds when below max", () => {
+    const player = sim.addPlayer("p1");
+    player.pos = { x: 500, y: 500 };
+    player.vel = { x: 0, y: 0 };
+    const ps = sim.players.get("p1")!;
+    ps.missileCharges = 0;
+    ps.missileRechargeTimer = PLAYER_MISSILE_COOLDOWN_TICKS;
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, fireMissile: false, aimAngle: 0,
+    });
+
+    // Advance (PLAYER_MISSILE_COOLDOWN_TICKS - 1) ticks — should not have recharged yet
+    for (let i = 0; i < PLAYER_MISSILE_COOLDOWN_TICKS - 1; i++) sim.update();
+    expect(ps.missileCharges).toBe(0);
+
+    // One more tick to complete the recharge
+    sim.update();
+    expect(ps.missileCharges).toBe(1);
+  });
+
+  it("does not recharge beyond max 3 charges", () => {
+    const player = sim.addPlayer("p1");
+    player.pos = { x: 500, y: 500 };
+    player.vel = { x: 0, y: 0 };
+    const ps = sim.players.get("p1")!;
+    ps.missileCharges = PLAYER_MISSILE_MAX_CHARGES;
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, fireMissile: false, aimAngle: 0,
+    });
+
+    // Advance well past one recharge period
+    for (let i = 0; i < PLAYER_MISSILE_COOLDOWN_TICKS + 100; i++) sim.update();
+    expect(ps.missileCharges).toBe(PLAYER_MISSILE_MAX_CHARGES);
+  });
+
+  it("resets timer on fire so next charge takes another 30s", () => {
+    const player = sim.addPlayer("p1");
+    player.pos = { x: 500, y: 500 };
+    player.vel = { x: 0, y: 0 };
+    const ps = sim.players.get("p1")!;
+    ps.missileCharges = 2;
+
+    sim.setInput("p1", {
+      up: false, down: false, left: false, right: false,
+      fire: false, fireMissile: true, aimAngle: 0,
+    });
+    sim.update(); // fires, charges: 1, timer reset to PLAYER_MISSILE_COOLDOWN_TICKS
+    expect(ps.missileCharges).toBe(1);
+    expect(ps.missileRechargeTimer).toBe(PLAYER_MISSILE_COOLDOWN_TICKS);
   });
 
   it("missile deals 5x effective bullet damage", () => {
@@ -2042,7 +2143,7 @@ describe("player right-click missile", () => {
     expect(enemy.hp).toBe(initialHp - expectedDamage);
   });
 
-  it("includes missileCooldown in snapshot", () => {
+  it("includes missileCharges and missileRechargeTimer in snapshot", () => {
     sim.addPlayer("p1");
     const ps = sim.players.get("p1")!;
     const entity = sim.entities.get(ps.entityId)!;
@@ -2058,29 +2159,30 @@ describe("player right-click missile", () => {
     const snapshot = sim.getSnapshot();
     const playerEntity = snapshot.entities.find(e => e.kind === "player_ship");
     expect(playerEntity).toBeDefined();
-    expect(playerEntity!.missileCooldown).toBeGreaterThan(0);
+    expect(playerEntity!.missileCharges).toBe(0);
+    expect(playerEntity!.missileRechargeTimer).toBeGreaterThan(0);
   });
 
-  it("resets missileCooldown on death/respawn", () => {
+  it("resets missileCharges to 1 on death/respawn", () => {
     sim.addPlayer("p1");
     const ps = sim.players.get("p1")!;
     const entity = sim.entities.get(ps.entityId)!;
     entity.pos = { x: 500, y: 500 };
     entity.vel = { x: 0, y: 0 };
 
-    // Fire missile to start cooldown
+    // Fire missile to exhaust the 1 starting charge
     sim.setInput("p1", {
       up: false, down: false, left: false, right: false,
       fire: false, fireMissile: true, aimAngle: 0,
     });
     sim.update();
-    expect(ps.missileCooldown).toBeGreaterThan(0);
+    expect(ps.missileCharges).toBe(0);
 
     // Kill the player
     entity.hp = 0;
     sim.update(); // removes dead, respawns
 
-    expect(ps.missileCooldown).toBe(0);
+    expect(ps.missileCharges).toBe(1);
   });
 });
 

@@ -43,7 +43,8 @@ export const EntitySchema = z.object({
   bulletRadius: z.number().optional(),
   boostEnergy: z.number().optional(),
   boostMaxEnergy: z.number().optional(),
-  missileCooldown: z.number().int().optional(),
+  missileCharges: z.number().int().optional(),
+  missileRechargeTimer: z.number().int().optional(),
 });
 export type Entity = z.infer<typeof EntitySchema>;
 

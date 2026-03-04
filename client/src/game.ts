@@ -393,7 +393,7 @@ export class GameScene extends Phaser.Scene {
             // Update predicted max speed cap for client-side prediction
             this.predictedMaxSpeed = PLAYER_MAX_SPEED + (selfEntity.upgrades.speed ?? 0) * SPEED_PER_UPGRADE;
           }
-          this.hud.updateMissileCooldown(selfEntity.missileCooldown ?? 0);
+          this.hud.updateMissileCooldown(selfEntity.missileCharges ?? 1, selfEntity.missileRechargeTimer ?? 900);
           this.hud.updateBoost(selfEntity.boostEnergy ?? 0, selfEntity.boostMaxEnergy ?? 100);
         }
       }
