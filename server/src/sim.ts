@@ -109,6 +109,8 @@ import {
   BOOST_REGEN_PER_SECOND,
   BOOST_ACCEL,
   BOOST_ACCEL_PER_LEVEL,
+  BOOST_SPEED_BONUS,
+  BOOST_SPEED_BONUS_PER_LEVEL,
 } from "shared";
 
 export interface PlayerState {
@@ -497,6 +499,7 @@ export class Simulation {
       const effectiveDamage = BULLET_DAMAGE + player.upgrades.damage * DAMAGE_PER_UPGRADE;
       const effectiveBulletRadius = BULLET_RADIUS + player.upgrades.bullet_size * BULLET_SIZE_PER_UPGRADE;
       const boostAccel = BOOST_ACCEL + player.level * BOOST_ACCEL_PER_LEVEL;
+      const boostSpeedBonus = BOOST_SPEED_BONUS + player.level * BOOST_SPEED_BONUS_PER_LEVEL;
 
       // Compute thrust direction from input
       let tx = 0;
@@ -507,7 +510,6 @@ export class Simulation {
       if (input.right) tx += 1;
 
       const hasInput = tx !== 0 || ty !== 0;
-
       if (hasInput) {
         // Normalize thrust direction and apply acceleration
         const mag = Math.sqrt(tx * tx + ty * ty);
@@ -515,13 +517,6 @@ export class Simulation {
         ty /= mag;
         entity.vel.x += tx * effectiveAccel * this.dt;
         entity.vel.y += ty * effectiveAccel * this.dt;
-
-        // Clamp to max speed (recoil impulses applied later can exceed this)
-        const speed = Math.sqrt(entity.vel.x * entity.vel.x + entity.vel.y * entity.vel.y);
-        if (speed > effectiveMaxSpeed) {
-          entity.vel.x = (entity.vel.x / speed) * effectiveMaxSpeed;
-          entity.vel.y = (entity.vel.y / speed) * effectiveMaxSpeed;
-        }
       } else {
         // No input — apply brake friction to decelerate
         entity.vel.x *= PLAYER_BRAKE_FRICTION;
@@ -530,17 +525,28 @@ export class Simulation {
         if (Math.abs(entity.vel.y) < 0.1) entity.vel.y = 0;
       }
 
-      // Shift boost: forward burst along aim direction, consumes boost energy
-      if (input.boost && player.boostEnergy > 0) {
+      // Shift boost: burst in movement direction (or aim if stationary), consumes boost energy
+      const boosting = input.boost && player.boostEnergy > 0;
+      if (boosting) {
         const drain = BOOST_DRAIN_PER_SECOND * this.dt;
         const spent = Math.min(player.boostEnergy, drain);
         const ratio = spent / drain;
-        entity.vel.x += Math.cos(input.aimAngle) * boostAccel * this.dt * ratio;
-        entity.vel.y += Math.sin(input.aimAngle) * boostAccel * this.dt * ratio;
+        const dirX = hasInput ? tx : Math.cos(input.aimAngle);
+        const dirY = hasInput ? ty : Math.sin(input.aimAngle);
+        entity.vel.x += dirX * boostAccel * this.dt * ratio;
+        entity.vel.y += dirY * boostAccel * this.dt * ratio;
         player.boostEnergy -= spent;
         player.lastBoostUseTick = this.tick;
       } else if (this.tick - player.lastBoostUseTick >= BOOST_REGEN_DELAY_TICKS) {
         player.boostEnergy = Math.min(BOOST_MAX_ENERGY, player.boostEnergy + BOOST_REGEN_PER_SECOND * this.dt);
+      }
+
+      // Clamp speed after movement + boost. While boosting, allow speed above normal cap.
+      const speed = Math.sqrt(entity.vel.x * entity.vel.x + entity.vel.y * entity.vel.y);
+      const maxSpeedThisTick = boosting ? (effectiveMaxSpeed + boostSpeedBonus) : effectiveMaxSpeed;
+      if (speed > maxSpeedThisTick) {
+        entity.vel.x = (entity.vel.x / speed) * maxSpeedThisTick;
+        entity.vel.y = (entity.vel.y / speed) * maxSpeedThisTick;
       }
 
       entity.pos.x += entity.vel.x * this.dt;

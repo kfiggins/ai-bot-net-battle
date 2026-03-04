@@ -207,6 +207,8 @@ export const BOOST_REGEN_DELAY_TICKS = 5 * TICK_RATE; // starts recharging 5s af
 export const BOOST_REGEN_PER_SECOND = 20;          // full recharge in 5s once regen starts
 export const BOOST_ACCEL = 520;                    // base forward acceleration while boosting
 export const BOOST_ACCEL_PER_LEVEL = 16;           // extra accel each level
+export const BOOST_SPEED_BONUS = 180;              // extra speed cap while boosting
+export const BOOST_SPEED_BONUS_PER_LEVEL = 6;      // additional boost cap per level
 
 // Sub-Base — secondary defensive structures around mothership
 export const SUB_BASE_HP = 300;

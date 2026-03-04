@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { Entity, PlayerInputData, WORLD_WIDTH, WORLD_HEIGHT, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, GRID_SPACING, PLAYER_MAX_SPEED, PLAYER_ACCEL, PLAYER_BRAKE_FRICTION, SPEED_PER_UPGRADE, ORB_RADIUS, CANNON_LENGTH, CANNON_WIDTH, CANNON_OFFSET_LATERAL, CANNON_SPREAD_ANGLE, BOOST_PARTICLE_THRESHOLD, PLAYER_RADIUS, DREADNOUGHT_TURRET_BASE_ANGLES, DREADNOUGHT_TURRET_OFFSET, DREADNOUGHT_TURRET_COUNT, DREADNOUGHT_TURRET_ARC, DREADNOUGHT_BIG_CANNON_SPEED, DREADNOUGHT_TURRET_BULLET_RADIUS, GRENADE_BLAST_RADIUS } from "shared";
+import { Entity, PlayerInputData, WORLD_WIDTH, WORLD_HEIGHT, VIEWPORT_WIDTH, VIEWPORT_HEIGHT, GRID_SPACING, PLAYER_MAX_SPEED, PLAYER_ACCEL, PLAYER_BRAKE_FRICTION, SPEED_PER_UPGRADE, ORB_RADIUS, CANNON_LENGTH, CANNON_WIDTH, CANNON_OFFSET_LATERAL, CANNON_SPREAD_ANGLE, BOOST_PARTICLE_THRESHOLD, PLAYER_RADIUS, DREADNOUGHT_TURRET_BASE_ANGLES, DREADNOUGHT_TURRET_OFFSET, DREADNOUGHT_TURRET_COUNT, DREADNOUGHT_TURRET_ARC, DREADNOUGHT_BIG_CANNON_SPEED, DREADNOUGHT_TURRET_BULLET_RADIUS, GRENADE_BLAST_RADIUS, BOOST_ACCEL, BOOST_ACCEL_PER_LEVEL, BOOST_SPEED_BONUS, BOOST_SPEED_BONUS_PER_LEVEL } from "shared";
 import { NetClient } from "./net.js";
 import { SnapshotInterpolator, InterpolatedEntity } from "./interpolation.js";
 import { VFXManager } from "./vfx.js";
@@ -32,6 +32,7 @@ export class GameScene extends Phaser.Scene {
   private cameraPos: { x: number; y: number } | null = null;
   private modeText!: Phaser.GameObjects.Text;
   private predictedMaxSpeed = PLAYER_MAX_SPEED;
+  private predictedLevel = 1;
   private latestBotResources: number | undefined;
   private cannonSprites: Map<string, Phaser.GameObjects.Rectangle[]> = new Map();
   private grenadeBlastCircles: Map<string, Phaser.GameObjects.Arc> = new Map();
@@ -221,11 +222,6 @@ export class GameScene extends Phaser.Scene {
         ty /= mag;
         this.predictedVel.x += tx * PLAYER_ACCEL * dtSec;
         this.predictedVel.y += ty * PLAYER_ACCEL * dtSec;
-        const speed = Math.sqrt(this.predictedVel.x ** 2 + this.predictedVel.y ** 2);
-        if (speed > this.predictedMaxSpeed) {
-          this.predictedVel.x = (this.predictedVel.x / speed) * this.predictedMaxSpeed;
-          this.predictedVel.y = (this.predictedVel.y / speed) * this.predictedMaxSpeed;
-        }
         // Boost particles for local player (opposite to thrust direction)
         this.vfx.boostParticle(
           this.predictedPos.x, this.predictedPos.y,
@@ -236,6 +232,23 @@ export class GameScene extends Phaser.Scene {
         this.predictedVel.y *= PLAYER_BRAKE_FRICTION;
         if (Math.abs(this.predictedVel.x) < 0.1) this.predictedVel.x = 0;
         if (Math.abs(this.predictedVel.y) < 0.1) this.predictedVel.y = 0;
+      }
+
+      const boostAccel = BOOST_ACCEL + this.predictedLevel * BOOST_ACCEL_PER_LEVEL;
+      const boostSpeedBonus = BOOST_SPEED_BONUS + this.predictedLevel * BOOST_SPEED_BONUS_PER_LEVEL;
+      const boosting = !!input.boost;
+      if (boosting) {
+        const dirX = hasThrust ? tx : Math.cos(this.localAimAngle);
+        const dirY = hasThrust ? ty : Math.sin(this.localAimAngle);
+        this.predictedVel.x += dirX * boostAccel * dtSec;
+        this.predictedVel.y += dirY * boostAccel * dtSec;
+      }
+
+      const speed = Math.sqrt(this.predictedVel.x ** 2 + this.predictedVel.y ** 2);
+      const maxSpeedThisTick = boosting ? (this.predictedMaxSpeed + boostSpeedBonus) : this.predictedMaxSpeed;
+      if (speed > maxSpeedThisTick) {
+        this.predictedVel.x = (this.predictedVel.x / speed) * maxSpeedThisTick;
+        this.predictedVel.y = (this.predictedVel.y / speed) * maxSpeedThisTick;
       }
 
       this.predictedPos.x = Math.max(0, Math.min(WORLD_WIDTH, this.predictedPos.x + this.predictedVel.x * dtSec));
@@ -355,6 +368,7 @@ export class GameScene extends Phaser.Scene {
         const selfEntity = entities.find((e) => e.id === selfId);
         if (selfEntity) {
           const currentLevel = selfEntity.level ?? 1;
+          this.predictedLevel = currentLevel;
           if (currentLevel > this.previousLevel) {
             this.audio.play("progress_level_up");
           }
