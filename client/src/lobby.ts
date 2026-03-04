@@ -27,6 +27,7 @@ export class LobbyScene extends Phaser.Scene {
   private difficultyLabel!: Phaser.GameObjects.Text;
   private devLogToggle!: Phaser.GameObjects.Text;
   private devLogLabel!: Phaser.GameObjects.Text;
+  private soundToggle!: Phaser.GameObjects.Text;
   private mode: AgentControlMode = "builtin_fake_ai";
   private difficulty: GameDifficulty = "normal";
   private players: LobbyPlayer[] = [];
@@ -131,6 +132,22 @@ export class LobbyScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    this.soundToggle = this.add
+      .text(VIEWPORT_WIDTH - 24, VIEWPORT_HEIGHT - 196, "SOUND: FULL", {
+        fontSize: "14px",
+        color: "#111122",
+        fontFamily: "monospace",
+        fontStyle: "bold",
+        backgroundColor: "#66d9ff",
+        padding: { x: 12, y: 5 },
+      })
+      .setOrigin(1, 0.5)
+      .setInteractive({ useHandCursor: true });
+
+    this.soundToggle.on("pointerdown", () => {
+      this.cycleAudioLevel();
+    });
+
     this.modeLabel = this.add
       .text(VIEWPORT_WIDTH - 24, VIEWPORT_HEIGHT - 72, "Agent Mode", {
         fontSize: "13px",
@@ -221,6 +238,7 @@ export class LobbyScene extends Phaser.Scene {
     this.refreshModeUI();
     this.refreshDifficultyUI();
     this.refreshDevLogUI();
+    this.refreshAudioUI();
 
     this.net.setWelcomeHandler((lobby) => {
       this.mode = lobby.mode;
@@ -300,6 +318,51 @@ export class LobbyScene extends Phaser.Scene {
       color: "#111122",
     });
     this.devLogLabel.setText(`Dev Log (${on ? "Shown" : "Hidden"})`);
+  }
+
+  private cycleAudioLevel(): void {
+    const s = this.audio.getSettings();
+    const muted = !s.sfxEnabled && !s.musicEnabled;
+    const low = s.sfxEnabled && s.musicEnabled && s.sfxVolume <= 0.5 && s.musicVolume <= 0.5;
+
+    if (muted) {
+      // MUTE -> FULL
+      this.audio.setSfxEnabled(true);
+      this.audio.setMusicEnabled(true);
+      this.audio.setSfxVolume(1);
+      this.audio.setMusicVolume(1);
+      this.audio.playMusic("music_lobby_loop");
+    } else if (low) {
+      // LOW -> MUTE
+      this.audio.setSfxEnabled(false);
+      this.audio.setMusicEnabled(false);
+    } else {
+      // FULL -> LOW
+      this.audio.setSfxEnabled(true);
+      this.audio.setMusicEnabled(true);
+      this.audio.setSfxVolume(0.45);
+      this.audio.setMusicVolume(0.35);
+    }
+
+    this.refreshAudioUI();
+  }
+
+  private refreshAudioUI(): void {
+    if (!this.soundToggle) return;
+    const s = this.audio.getSettings();
+    const muted = !s.sfxEnabled && !s.musicEnabled;
+    const low = s.sfxEnabled && s.musicEnabled && s.sfxVolume <= 0.5 && s.musicVolume <= 0.5;
+
+    if (muted) {
+      this.soundToggle.setText("SOUND: MUTE");
+      this.soundToggle.setStyle({ backgroundColor: "#4a5568", color: "#d1d5db" });
+    } else if (low) {
+      this.soundToggle.setText("SOUND: LOW");
+      this.soundToggle.setStyle({ backgroundColor: "#f6ad55", color: "#111122" });
+    } else {
+      this.soundToggle.setText("SOUND: FULL");
+      this.soundToggle.setStyle({ backgroundColor: "#66d9ff", color: "#111122" });
+    }
   }
 
   private renderPlayerList(): void {

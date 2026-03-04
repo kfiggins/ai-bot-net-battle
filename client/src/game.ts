@@ -33,6 +33,7 @@ export class GameScene extends Phaser.Scene {
   private cameraPos: { x: number; y: number } | null = null;
   private tabKey!: Phaser.Input.Keyboard.Key;
   private minimap!: MiniMap;
+  private soundToggle!: Phaser.GameObjects.Text;
   private predictedMaxSpeed = PLAYER_MAX_SPEED;
   private predictedLevel = 1;
   private latestBotResources: number | undefined;
@@ -155,6 +156,22 @@ export class GameScene extends Phaser.Scene {
       this.net.disconnect();
       this.scene.start("NameEntryScene");
     });
+
+    this.soundToggle = this.add
+      .text(VIEWPORT_WIDTH - 100, 10, "SOUND: FULL", {
+        fontSize: "13px",
+        color: "#111122",
+        fontFamily: "monospace",
+        fontStyle: "bold",
+        backgroundColor: "#66d9ff",
+        padding: { x: 8, y: 4 },
+      })
+      .setOrigin(1, 0)
+      .setDepth(200)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true });
+    this.soundToggle.on("pointerdown", () => this.cycleAudioLevel());
+    this.refreshAudioUI();
 
     // mouseWorldPos is updated every frame in update() so it stays
     // correct as the camera scrolls (even while the pointer is held down).
@@ -401,6 +418,51 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.vfx.update(dt);
+  }
+
+  private cycleAudioLevel(): void {
+    const s = this.audio.getSettings();
+    const muted = !s.sfxEnabled && !s.musicEnabled;
+    const low = s.sfxEnabled && s.musicEnabled && s.sfxVolume <= 0.5 && s.musicVolume <= 0.5;
+
+    if (muted) {
+      // MUTE -> FULL
+      this.audio.setSfxEnabled(true);
+      this.audio.setMusicEnabled(true);
+      this.audio.setSfxVolume(1);
+      this.audio.setMusicVolume(1);
+      this.audio.playMusic("music_match_loop");
+    } else if (low) {
+      // LOW -> MUTE
+      this.audio.setSfxEnabled(false);
+      this.audio.setMusicEnabled(false);
+    } else {
+      // FULL -> LOW
+      this.audio.setSfxEnabled(true);
+      this.audio.setMusicEnabled(true);
+      this.audio.setSfxVolume(0.45);
+      this.audio.setMusicVolume(0.35);
+    }
+
+    this.refreshAudioUI();
+  }
+
+  private refreshAudioUI(): void {
+    if (!this.soundToggle) return;
+    const s = this.audio.getSettings();
+    const muted = !s.sfxEnabled && !s.musicEnabled;
+    const low = s.sfxEnabled && s.musicEnabled && s.sfxVolume <= 0.5 && s.musicVolume <= 0.5;
+
+    if (muted) {
+      this.soundToggle.setText("SOUND: MUTE");
+      this.soundToggle.setStyle({ backgroundColor: "#4a5568", color: "#d1d5db" });
+    } else if (low) {
+      this.soundToggle.setText("SOUND: LOW");
+      this.soundToggle.setStyle({ backgroundColor: "#f6ad55", color: "#111122" });
+    } else {
+      this.soundToggle.setText("SOUND: FULL");
+      this.soundToggle.setStyle({ backgroundColor: "#66d9ff", color: "#111122" });
+    }
   }
 
   /** Draw agar.io-style grid lines across the entire world */
