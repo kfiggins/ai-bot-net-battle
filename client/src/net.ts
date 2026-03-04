@@ -22,7 +22,7 @@ export class NetClient {
   roomId: string | null = null;
   currentMode: AgentControlMode = "builtin_fake_ai";
   currentDifficulty: GameDifficulty = "normal";
-  debugLogEnabled = true;
+  debugLogEnabled = false;
   private reconnectToken: string | null = null;
   private targetRoomId: string = "default";
   private displayName: string = "Player";

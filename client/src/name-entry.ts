@@ -2,12 +2,14 @@ import Phaser from "phaser";
 import { VIEWPORT_WIDTH, VIEWPORT_HEIGHT } from "shared";
 import { Starfield } from "./starfield.js";
 import { AudioManager } from "./audio.js";
+import { AnimatedTitle } from "./title-fx.js";
 
 const CLIENT_VERSION = "v0.0.2";
 const MAX_NAME_LENGTH = 20;
 
 export class NameEntryScene extends Phaser.Scene {
   private starfield!: Starfield;
+  private animatedTitle!: AnimatedTitle;
   private nameInput = "";
   private inputText!: Phaser.GameObjects.Text;
   private cursorText!: Phaser.GameObjects.Text;
@@ -27,15 +29,8 @@ export class NameEntryScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor("#111122");
     this.starfield = new Starfield(this, VIEWPORT_WIDTH, VIEWPORT_HEIGHT);
 
-    // Title
-    this.add
-      .text(cx, 130, "AI BOT NET BATTLE", {
-        fontSize: "48px",
-        color: "#00ff88",
-        fontFamily: "monospace",
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5);
+    // Animated title
+    this.animatedTitle = AnimatedTitle.create(this, cx, 130);
 
     // Prompt
     this.add
@@ -163,6 +158,7 @@ export class NameEntryScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     this.starfield.update(delta);
+    this.animatedTitle.update(delta);
   }
 
   private submitName(): void {

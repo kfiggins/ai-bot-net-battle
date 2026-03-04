@@ -3,6 +3,7 @@ import { AgentControlMode, GameDifficulty, LobbyPlayer, VIEWPORT_WIDTH, VIEWPORT
 import { NetClient } from "./net.js";
 import { Starfield } from "./starfield.js";
 import { AudioManager } from "./audio.js";
+import { AnimatedTitle } from "./title-fx.js";
 
 const PLAYER_COLORS = [0x88ff00, 0x00ddcc, 0xff8800, 0xff44aa, 0xffee00, 0xffffff, 0x003399, 0x222222];
 const CLIENT_VERSION = "v0.0.2";
@@ -13,6 +14,7 @@ function colorToHex(color: number): string {
 
 export class LobbyScene extends Phaser.Scene {
   private starfield!: Starfield;
+  private animatedTitle!: AnimatedTitle;
   private audio!: AudioManager;
   private net!: NetClient;
   private playerListTexts: Phaser.GameObjects.Text[] = [];
@@ -59,15 +61,8 @@ export class LobbyScene extends Phaser.Scene {
       this.audio.playMusic("music_lobby_loop");
     }
 
-    // Title
-    this.add
-      .text(VIEWPORT_WIDTH / 2, 120, "AI BOT NET BATTLE", {
-        fontSize: "48px",
-        color: "#00ff88",
-        fontFamily: "monospace",
-        fontStyle: "bold",
-      })
-      .setOrigin(0.5);
+    // Animated title
+    this.animatedTitle = AnimatedTitle.create(this, VIEWPORT_WIDTH / 2, 120);
 
     // Subtitle
     this.statusText = this.add
@@ -251,10 +246,6 @@ export class LobbyScene extends Phaser.Scene {
     });
 
     this.net.setLobbyUpdateHandler((msg) => {
-      this.mode = msg.mode;
-      this.difficulty = msg.difficulty;
-      this.refreshModeUI();
-      this.refreshDifficultyUI();
       this.players = msg.players;
       this.renderPlayerList();
     });
@@ -276,6 +267,7 @@ export class LobbyScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     this.starfield.update(delta);
+    this.animatedTitle.update(delta);
   }
 
   private refreshModeUI(): void {
