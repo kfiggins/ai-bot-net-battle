@@ -204,7 +204,6 @@ export class LobbyScene extends Phaser.Scene {
     this.devLogToggle.on("pointerdown", () => {
       if (!this.net) return;
       this.net.debugLogEnabled = !this.net.debugLogEnabled;
-      localStorage.setItem("debugLogEnabled", this.net.debugLogEnabled ? "1" : "0");
       this.refreshDevLogUI();
     });
 
@@ -218,10 +217,7 @@ export class LobbyScene extends Phaser.Scene {
     }
     this.mode = this.net.currentMode;
     this.difficulty = this.net.currentDifficulty;
-    const storedDebug = localStorage.getItem("debugLogEnabled");
-    if (storedDebug !== null) {
-      this.net.debugLogEnabled = storedDebug === "1";
-    }
+    this.net.debugLogEnabled = false; // always default OFF on lobby load
     this.refreshModeUI();
     this.refreshDifficultyUI();
     this.refreshDevLogUI();
